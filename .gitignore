@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+.env.local
+*.log
+.expo/
+ios/
+android/
+__pycache__/
+.DS_Store
+*.tgz
