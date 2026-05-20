@@ -152,10 +152,18 @@ export async function signup(req: Request, res: Response): Promise<void> {
       [userId],
     );
 
-    // Send verification email
-    await sendVerificationEmail(email, verificationCode);
-
-    res.status(201).json({ message: 'Account created. Check your email for verification code.' });
+    // In dev mode (no real SMTP), auto-verify the user
+    const devMode = config.smtp.pass === 'placeholder_for_now';
+    if (devMode) {
+      await query(
+        'UPDATE users SET is_verified = true, verification_code = NULL, verification_expires = NULL WHERE id = $1',
+        [userId],
+      );
+      res.status(201).json({ message: 'Account created and auto-verified (dev mode).' });
+    } else {
+      await sendVerificationEmail(email, verificationCode);
+      res.status(201).json({ message: 'Account created. Check your email for verification code.' });
+    }
   } catch (err) {
     console.error('Signup error:', err);
     res.status(500).json({ error: 'Internal server error.' });
@@ -247,7 +255,10 @@ export async function resendCode(req: Request, res: Response): Promise<void> {
       [verificationCode, codeExpiry, user.id],
     );
 
-    await sendVerificationEmail(email, verificationCode);
+    const devMode = config.smtp.pass === 'placeholder_for_now';
+    if (!devMode) {
+      await sendVerificationEmail(email, verificationCode);
+    }
 
     res.json({ message: 'New verification code sent.' });
   } catch (err) {
@@ -370,7 +381,10 @@ export async function forgotPassword(req: Request, res: Response): Promise<void>
         [resetCode, codeExpiry, result.rows[0].id],
       );
 
-      await sendPasswordResetEmail(email, resetCode);
+      const devMode = config.smtp.pass === 'placeholder_for_now';
+      if (!devMode) {
+        await sendPasswordResetEmail(email, resetCode);
+      }
     }
 
     res.json({ message: 'If that email is registered, a reset code has been sent.' });
