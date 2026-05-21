@@ -750,7 +750,7 @@ export default function MapScreen() {
               <TouchableOpacity
                 style={[styles.shieldBtn, shieldIsActive && styles.shieldBtnActive]}
                 onPress={handleBuyShield}
-                disabled={session.shieldsRemaining === 0 || shieldIsActive}
+                disabled={shieldIsActive}
               >
                 <Ionicons
                   name="shield"
@@ -758,7 +758,7 @@ export default function MapScreen() {
                   color={shieldIsActive ? colors.background : colors.primary}
                 />
                 <Text style={[styles.shieldBtnText, shieldIsActive && { color: colors.background }]}>
-                  {shieldIsActive ? 'SHIELDED' : `SHIELD (${session.shieldsRemaining})`}
+                  {shieldIsActive ? 'SHIELDED' : 'BUY SHIELD — $1'}
                 </Text>
               </TouchableOpacity>
             </View>

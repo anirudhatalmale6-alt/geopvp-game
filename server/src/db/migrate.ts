@@ -98,6 +98,8 @@ CREATE TABLE IF NOT EXISTS payout_methods (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT false;
+
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON game_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_active ON game_sessions(is_active) WHERE is_active = true;
 CREATE INDEX IF NOT EXISTS idx_sessions_location ON game_sessions(latitude, longitude) WHERE is_active = true;

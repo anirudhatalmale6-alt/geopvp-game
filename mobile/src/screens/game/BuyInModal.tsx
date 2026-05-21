@@ -167,12 +167,6 @@ export default function BuyInModal({ visible, onClose, onSessionCreated }: BuyIn
               <Text style={styles.summaryLabel}>Coins</Text>
               <Text style={[styles.summaryValue, { color: colors.gold }]}>{selectedTier.coins}</Text>
             </View>
-            <View style={styles.summaryDivider} />
-            <View style={styles.summaryItem}>
-              <Ionicons name="shield" size={16} color={colors.primary} />
-              <Text style={styles.summaryLabel}>Shields</Text>
-              <Text style={[styles.summaryValue, { color: colors.primary }]}>3</Text>
-            </View>
           </View>
 
           {error ? (

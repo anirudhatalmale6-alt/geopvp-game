@@ -7,6 +7,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import authRoutes from './routes/auth';
 import gameRoutes from './routes/game';
 import walletRoutes from './routes/wallet';
+import adminRoutes from './routes/admin';
 import { setupGameSocket } from './socket/gameSocket';
 
 const app = express();
@@ -23,6 +24,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/game', gameRoutes);
 app.use('/api/wallet', walletRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {

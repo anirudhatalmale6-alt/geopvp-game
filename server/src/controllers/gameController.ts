@@ -55,7 +55,6 @@ export async function createGameSession(req: AuthRequest, res: Response): Promis
     const tierCents = tierDollars * 100;
     const tier = getCoinTier(tierCents);
     const mapCoins = tierDollars * 10; // 10 coins per dollar
-    const maxShields = config.maxShieldsPerBuyin;
 
     // Deduct from wallet (or allow negative balance for now — game mechanics TBD)
     const walletResult = await query(
@@ -64,18 +63,17 @@ export async function createGameSession(req: AuthRequest, res: Response): Promis
     );
 
     if (walletResult.rows.length === 0) {
-      // Auto-create wallet
       await query(`INSERT INTO wallets (user_id, balance) VALUES ($1, 0) ON CONFLICT DO NOTHING`, [userId]);
     }
 
-    // Create session
+    // Create session — shields start at 0, purchased separately
     const sessionResult = await query(
       `INSERT INTO game_sessions (
          user_id, buyin_amount, coin_tier, map_coins,
          shields_purchased, shields_remaining
-       ) VALUES ($1, $2, $3, $4, $5, $5)
+       ) VALUES ($1, $2, $3, $4, 0, 0)
        RETURNING *`,
-      [userId, tierCents, tier.name, mapCoins, maxShields],
+      [userId, tierCents, tier.name, mapCoins],
     );
 
     const session = sessionResult.rows[0];
@@ -86,23 +84,6 @@ export async function createGameSession(req: AuthRequest, res: Response): Promis
        VALUES ($1, 'buyin', $2, $3)`,
       [userId, -tierCents, `Buy-in: $${tierDollars} ${tier.name} tier`],
     );
-
-    // Auto-generate 5 coin drops near the player's last known location
-    // (Best-effort: silently skip if no location yet)
-    try {
-      const locResult = await query(
-        `SELECT latitude, longitude FROM game_sessions
-         WHERE user_id = $1 AND latitude IS NOT NULL
-         ORDER BY created_at DESC LIMIT 1`,
-        [userId],
-      );
-      if (locResult.rows.length > 0) {
-        const { latitude, longitude } = locResult.rows[0];
-        await generateCoinDrops(parseFloat(latitude), parseFloat(longitude), userId, 5);
-      }
-    } catch {
-      // Location not available yet — coin drops will be generated on first location update
-    }
 
     res.status(201).json({ session: formatSession(session) });
   } catch (err) {
@@ -151,15 +132,6 @@ export async function updatePlayerLocation(req: AuthRequest, res: Response): Pro
     const { latitude, longitude } = parsed.data;
     const userId = req.user!.id;
 
-    // Check if this is the first location update for this session (no existing lat/lng)
-    const existing = await query(
-      `SELECT id, latitude FROM game_sessions
-       WHERE user_id = $1 AND is_active = true LIMIT 1`,
-      [userId],
-    );
-
-    const isFirstLocation = existing.rows.length > 0 && !existing.rows[0].latitude;
-
     const result = await query(
       `UPDATE game_sessions
        SET latitude = $1, longitude = $2, last_location_update = now()
@@ -171,11 +143,6 @@ export async function updatePlayerLocation(req: AuthRequest, res: Response): Pro
     if (result.rows.length === 0) {
       res.status(404).json({ error: 'No active session found.' });
       return;
-    }
-
-    // If this is the player's first location update for this session, generate coin drops
-    if (isFirstLocation) {
-      generateCoinDrops(latitude, longitude, userId, 5).catch(() => {});
     }
 
     res.json({ ok: true });
@@ -460,34 +427,27 @@ export async function buyShield(req: AuthRequest, res: Response): Promise<void> 
 
     const session = sessionResult.rows[0];
 
-    if (session.shields_remaining <= 0) {
-      res.status(400).json({ error: 'No shields remaining for this session.' });
-      return;
-    }
-
-    // Check if shield is already active
     if (session.shield_active_until && new Date(session.shield_active_until) > new Date()) {
       res.status(400).json({ error: 'Shield is already active.' });
       return;
     }
 
+    const SHIELD_COST_CENTS = 100; // $1 per shield
     const shieldExpiry = new Date(Date.now() + config.shieldDurationMinutes * 60 * 1000);
 
     const updated = await query(
       `UPDATE game_sessions
-       SET shields_remaining = shields_remaining - 1,
-           shields_purchased = shields_purchased + 1,
+       SET shields_purchased = shields_purchased + 1,
            shield_active_until = $1
        WHERE id = $2
        RETURNING *`,
       [shieldExpiry, session.id],
     );
 
-    // Record transaction
     await query(
       `INSERT INTO transactions (user_id, type, amount, description)
-       VALUES ($1, 'shield', 0, $2)`,
-      [userId, `Shield activated for ${config.shieldDurationMinutes} minutes`],
+       VALUES ($1, 'shield', $2, $3)`,
+      [userId, -SHIELD_COST_CENTS, `Shield purchased ($1) — active for ${config.shieldDurationMinutes} minutes`],
     );
 
     res.json({ session: formatSession(updated.rows[0]) });
