@@ -140,6 +140,9 @@ function LeafletMap({ lat, lng, nearbyPlayers, session, coinDrops }: {
     text-shadow:0 0 4px rgba(0,0,0,0.9);
     pointer-events:none;
   }
+  .leaflet-marker-icon{
+    transition:transform 0.8s ease-out !important;
+  }
   .leaflet-control-attribution{display:none!important}
   .leaflet-control-zoom{display:none!important}
   .radius-circle{
@@ -159,8 +162,8 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
 var playerIcon = L.divIcon({className:'',html:'<div class="player-pulse"></div><div class="player-marker"></div>',iconSize:[14,14],iconAnchor:[7,7]});
 var playerMarker = L.marker([0,0],{icon:playerIcon}).addTo(map);
 var radiusCircle = null;
-var enemyMarkers = [];
-var coinMarkers = [];
+var enemyMarkers = {};
+var coinMarkers = {};
 
 function makeEnemyIcon(en){
   var cls = en.shielded ? 'enemy-marker shielded' : 'enemy-marker';
@@ -183,7 +186,11 @@ window.addEventListener('message',function(e){
     var d = JSON.parse(e.data);
 
     if(d.type==='update'||d.type==='init'){
-      map.setView([d.lat,d.lng], d.type==='init'?16:map.getZoom(), {animate:true,duration:0.5});
+      if(d.type==='init'){
+        map.setView([d.lat,d.lng],16,{animate:false});
+      } else {
+        map.panTo([d.lat,d.lng],{animate:true,duration:1.0,easeLinearity:0.25});
+      }
       playerMarker.setLatLng([d.lat,d.lng]);
 
       if(d.hasSession && !radiusCircle){
@@ -194,49 +201,68 @@ window.addEventListener('message',function(e){
         if(!d.hasSession){map.removeLayer(radiusCircle);radiusCircle=null;}
       }
 
-      // Update enemy markers
-      enemyMarkers.forEach(function(m){map.removeLayer(m)});
-      enemyMarkers=[];
+      // Update enemy markers — reuse existing for smooth transitions
+      var currentEnemyIds = {};
       if(d.enemies){
         d.enemies.forEach(function(en){
-          var icon = makeEnemyIcon(en);
-          var m = L.marker([en.lat,en.lng],{icon:icon}).addTo(map);
-          // Attach click handler — send attackPlayer message to parent
-          (function(enemy){
-            m.on('click',function(){
-              window.parent.postMessage(JSON.stringify({
-                type:'attackPlayer',
-                sessionId:enemy.sid,
-                username:enemy.name,
-                coins:enemy.coins,
-                shielded:enemy.shielded
-              }),'*');
-            });
-          })(en);
-          enemyMarkers.push(m);
+          currentEnemyIds[en.sid] = true;
+          if(enemyMarkers[en.sid]){
+            // Update position — CSS transition makes it smooth
+            enemyMarkers[en.sid].setLatLng([en.lat,en.lng]);
+            enemyMarkers[en.sid].setIcon(makeEnemyIcon(en));
+          } else {
+            var icon = makeEnemyIcon(en);
+            var m = L.marker([en.lat,en.lng],{icon:icon}).addTo(map);
+            (function(enemy){
+              m.on('click',function(){
+                window.parent.postMessage(JSON.stringify({
+                  type:'attackPlayer',
+                  sessionId:enemy.sid,
+                  username:enemy.name,
+                  coins:enemy.coins,
+                  shielded:enemy.shielded
+                }),'*');
+              });
+            })(en);
+            enemyMarkers[en.sid] = m;
+          }
         });
       }
+      // Remove markers for players who left
+      Object.keys(enemyMarkers).forEach(function(sid){
+        if(!currentEnemyIds[sid]){
+          map.removeLayer(enemyMarkers[sid]);
+          delete enemyMarkers[sid];
+        }
+      });
 
-      // Update coin drop markers
-      coinMarkers.forEach(function(m){map.removeLayer(m)});
-      coinMarkers=[];
+      // Update coin drop markers — reuse existing for smooth transitions
+      var currentCoinIds = {};
       if(d.coins){
         d.coins.forEach(function(c){
-          var icon = makeCoinIcon(c.amount);
-          var m = L.marker([c.lat,c.lng],{icon:icon}).addTo(map);
-          // Attach click handler — send collectCoin message to parent
-          (function(coin){
-            m.on('click',function(){
-              window.parent.postMessage(JSON.stringify({
-                type:'collectCoin',
-                id:coin.id,
-                amount:coin.amount
-              }),'*');
-            });
-          })(c);
-          coinMarkers.push(m);
+          currentCoinIds[c.id] = true;
+          if(!coinMarkers[c.id]){
+            var icon = makeCoinIcon(c.amount);
+            var m = L.marker([c.lat,c.lng],{icon:icon}).addTo(map);
+            (function(coin){
+              m.on('click',function(){
+                window.parent.postMessage(JSON.stringify({
+                  type:'collectCoin',
+                  id:coin.id,
+                  amount:coin.amount
+                }),'*');
+              });
+            })(c);
+            coinMarkers[c.id] = m;
+          }
         });
       }
+      Object.keys(coinMarkers).forEach(function(id){
+        if(!currentCoinIds[id]){
+          map.removeLayer(coinMarkers[id]);
+          delete coinMarkers[id];
+        }
+      });
 
       if(d.type==='init'){
         window.parent.postMessage(JSON.stringify({type:'ready'}),'*');

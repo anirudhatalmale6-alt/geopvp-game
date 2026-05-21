@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -17,14 +17,36 @@ interface TierOption {
   dollars: number;
   coins: number;
   label: string;
+  color: string;
   highlight?: boolean;
 }
 
 const TIERS: TierOption[] = [
-  { dollars: 1,  coins: 10,  label: 'COPPER' },
-  { dollars: 5,  coins: 50,  label: 'BRONZE', highlight: true },
-  { dollars: 10, coins: 100, label: 'SILVER' },
-  { dollars: 20, coins: 200, label: 'GOLD' },
+  { dollars: 1,  coins: 10,  label: 'COPPER',      color: '#b87333' },
+  { dollars: 2,  coins: 20,  label: 'TIN',         color: '#8a9597' },
+  { dollars: 3,  coins: 30,  label: 'IRON',        color: '#6a6a6a' },
+  { dollars: 4,  coins: 40,  label: 'NICKEL',      color: '#7a7a7a' },
+  { dollars: 5,  coins: 50,  label: 'BRONZE',      color: '#cd7f32', highlight: true },
+  { dollars: 6,  coins: 60,  label: 'BRASS',       color: '#b5a642' },
+  { dollars: 7,  coins: 70,  label: 'SILVER',      color: '#c0c0c0' },
+  { dollars: 8,  coins: 80,  label: 'ELECTRUM',    color: '#d4c675' },
+  { dollars: 9,  coins: 90,  label: 'GOLD',        color: '#ffd700' },
+  { dollars: 10, coins: 100, label: 'ROSE GOLD',   color: '#e8a090', highlight: true },
+  { dollars: 11, coins: 110, label: 'PALLADIUM',   color: '#ced0ce' },
+  { dollars: 12, coins: 120, label: 'PLATINUM',    color: '#e5e4e2' },
+  { dollars: 13, coins: 130, label: 'OPAL',        color: '#d4eaf7' },
+  { dollars: 14, coins: 140, label: 'TOPAZ',       color: '#ffc87c' },
+  { dollars: 15, coins: 150, label: 'AMETHYST',    color: '#9966cc' },
+  { dollars: 16, coins: 160, label: 'AQUAMARINE',  color: '#7fffd4' },
+  { dollars: 17, coins: 170, label: 'EMERALD',     color: '#50c878' },
+  { dollars: 18, coins: 180, label: 'PEARL',       color: '#f0ead6' },
+  { dollars: 19, coins: 190, label: 'SAPPHIRE',    color: '#0f52ba' },
+  { dollars: 20, coins: 200, label: 'ALEXANDRITE', color: '#008b8b', highlight: true },
+  { dollars: 21, coins: 210, label: 'RUBY',        color: '#e0115f' },
+  { dollars: 22, coins: 220, label: 'BLACK OPAL',  color: '#1a1a2e' },
+  { dollars: 23, coins: 230, label: 'TANZANITE',   color: '#4d4dff' },
+  { dollars: 24, coins: 240, label: 'RED BERYL',   color: '#c41e3a' },
+  { dollars: 25, coins: 250, label: 'DIAMOND',     color: '#b9f2ff' },
 ];
 
 interface BuyInModalProps {
@@ -34,9 +56,10 @@ interface BuyInModalProps {
 }
 
 export default function BuyInModal({ visible, onClose, onSessionCreated }: BuyInModalProps) {
-  const [selectedTier, setSelectedTier] = useState<TierOption>(TIERS[1]);
+  const [selectedTier, setSelectedTier] = useState<TierOption>(TIERS[4]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
 
   const handleBuyIn = async () => {
     setLoading(true);
@@ -52,6 +75,9 @@ export default function BuyInModal({ visible, onClose, onSessionCreated }: BuyIn
     }
   };
 
+  const tierColor = selectedTier.color;
+  const isDarkTier = selectedTier.label === 'BLACK OPAL' || selectedTier.label === 'IRON' || selectedTier.label === 'NICKEL';
+
   return (
     <Modal
       visible={visible}
@@ -64,8 +90,8 @@ export default function BuyInModal({ visible, onClose, onSessionCreated }: BuyIn
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
-              <View style={styles.headerIcon}>
-                <Ionicons name="flash" size={20} color={colors.primary} />
+              <View style={[styles.headerIcon, { backgroundColor: tierColor + '30' }]}>
+                <Ionicons name="flash" size={20} color={tierColor} />
               </View>
               <Text style={styles.title}>START HUNTING</Text>
             </View>
@@ -76,67 +102,64 @@ export default function BuyInModal({ visible, onClose, onSessionCreated }: BuyIn
 
           <Text style={styles.subtitle}>Select your buy-in tier to enter the battlefield</Text>
 
-          {/* Tier grid */}
-          <View style={styles.tiersGrid}>
+          {/* Scrollable tier grid */}
+          <ScrollView
+            ref={scrollRef}
+            style={styles.tiersScroll}
+            contentContainerStyle={styles.tiersGrid}
+            showsVerticalScrollIndicator={false}
+          >
             {TIERS.map((tier) => {
               const isSelected = selectedTier.dollars === tier.dollars;
+              const isDark = tier.label === 'BLACK OPAL' || tier.label === 'IRON' || tier.label === 'NICKEL';
               return (
                 <TouchableOpacity
                   key={tier.dollars}
                   style={[
                     styles.tierCard,
-                    isSelected && styles.tierCardSelected,
-                    tier.highlight && !isSelected && styles.tierCardHighlight,
+                    { borderColor: isSelected ? tier.color : colors.border },
+                    isSelected && { backgroundColor: tier.color + '18' },
                   ]}
                   onPress={() => setSelectedTier(tier)}
                   activeOpacity={0.8}
                 >
                   {tier.highlight && (
-                    <View style={styles.popularBadge}>
-                      <Text style={styles.popularText}>POPULAR</Text>
+                    <View style={[styles.popularBadge, { backgroundColor: tier.color }]}>
+                      <Text style={[styles.popularText, isDark && { color: '#fff' }]}>
+                        {tier.dollars === 5 ? 'POPULAR' : tier.dollars === 10 ? 'VALUE' : 'PREMIUM'}
+                      </Text>
                     </View>
                   )}
-                  <Text style={[styles.tierLabel, isSelected && styles.tierLabelSelected]}>
+                  <View style={[styles.tierDot, { backgroundColor: tier.color }]} />
+                  <Text style={[
+                    styles.tierLabel,
+                    isSelected && { color: tier.color },
+                  ]}>
                     {tier.label}
                   </Text>
-                  <Text style={[styles.tierPrice, isSelected && styles.tierPriceSelected]}>
+                  <Text style={[
+                    styles.tierPrice,
+                    isSelected && { color: tier.color },
+                  ]}>
                     ${tier.dollars}
                   </Text>
-                  <View style={styles.coinsRow}>
-                    <Ionicons
-                      name="logo-bitcoin"
-                      size={14}
-                      color={isSelected ? colors.gold : colors.textMuted}
-                    />
-                    <Text style={[styles.coinsText, isSelected && styles.coinsTextSelected]}>
-                      {tier.coins} coins
-                    </Text>
-                  </View>
-                  <View style={styles.shieldsRow}>
-                    {[0, 1, 2].map((i) => (
-                      <Ionicons
-                        key={i}
-                        name="shield"
-                        size={12}
-                        color={isSelected ? colors.primary : colors.textMuted}
-                        style={{ marginRight: 2 }}
-                      />
-                    ))}
-                    <Text style={[styles.shieldsLabel, isSelected && styles.shieldsLabelSelected]}>
-                      3 shields
-                    </Text>
-                  </View>
+                  <Text style={[
+                    styles.coinsText,
+                    isSelected && { color: tier.color },
+                  ]}>
+                    {tier.coins} coins
+                  </Text>
                 </TouchableOpacity>
               );
             })}
-          </View>
+          </ScrollView>
 
           {/* Summary bar */}
-          <View style={styles.summaryBar}>
+          <View style={[styles.summaryBar, { borderColor: tierColor + '40' }]}>
             <View style={styles.summaryItem}>
               <Ionicons name="cash-outline" size={16} color={colors.textSecondary} />
               <Text style={styles.summaryLabel}>Buy-in</Text>
-              <Text style={styles.summaryValue}>${selectedTier.dollars}.00</Text>
+              <Text style={[styles.summaryValue, { color: tierColor }]}>${selectedTier.dollars}.00</Text>
             </View>
             <View style={styles.summaryDivider} />
             <View style={styles.summaryItem}>
@@ -161,7 +184,7 @@ export default function BuyInModal({ visible, onClose, onSessionCreated }: BuyIn
 
           {/* CTA Button */}
           <TouchableOpacity
-            style={[styles.buyBtn, loading && styles.buyBtnDisabled]}
+            style={[styles.buyBtn, { backgroundColor: tierColor }, loading && styles.buyBtnDisabled]}
             onPress={handleBuyIn}
             disabled={loading}
             activeOpacity={0.85}
@@ -170,8 +193,10 @@ export default function BuyInModal({ visible, onClose, onSessionCreated }: BuyIn
               <ActivityIndicator color={colors.background} size="small" />
             ) : (
               <>
-                <Ionicons name="flash" size={18} color={colors.background} style={{ marginRight: 8 }} />
-                <Text style={styles.buyBtnText}>ENTER BATTLEFIELD — ${selectedTier.dollars}</Text>
+                <Ionicons name="flash" size={18} color={isDarkTier ? '#fff' : colors.background} style={{ marginRight: 8 }} />
+                <Text style={[styles.buyBtnText, isDarkTier && { color: '#fff' }]}>
+                  ENTER BATTLEFIELD — ${selectedTier.dollars}
+                </Text>
               </>
             )}
           </TouchableOpacity>
@@ -199,6 +224,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     width: '100%',
     maxWidth: 440,
+    maxHeight: '90%',
     borderWidth: 1,
     borderColor: colors.primary + '40',
     ...(Platform.OS === 'web' ? { boxShadow: `0 0 40px ${colors.primary}20` } : {}),
@@ -218,7 +244,6 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: borderRadius.sm,
-    backgroundColor: colors.primary + '20',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -234,90 +259,66 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: fontSize.sm,
     color: colors.textSecondary,
+    marginBottom: spacing.sm,
+  },
+  tiersScroll: {
+    maxHeight: 320,
     marginBottom: spacing.md,
   },
   tiersGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
+    gap: spacing.xs,
+    paddingBottom: spacing.xs,
   },
   tierCard: {
-    flex: 1,
-    minWidth: '45%',
+    width: '31%',
     backgroundColor: colors.surfaceLight,
     borderRadius: borderRadius.md,
-    padding: spacing.md,
+    padding: spacing.sm,
     borderWidth: 1,
-    borderColor: colors.border,
     position: 'relative',
-  },
-  tierCardSelected: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primary + '15',
-  },
-  tierCardHighlight: {
-    borderColor: colors.gold + '60',
+    alignItems: 'center',
+    minHeight: 80,
+    justifyContent: 'center',
   },
   popularBadge: {
     position: 'absolute',
     top: -1,
     right: -1,
-    backgroundColor: colors.gold,
     borderTopRightRadius: borderRadius.md,
     borderBottomLeftRadius: borderRadius.sm,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
   },
   popularText: {
-    fontSize: 8,
+    fontSize: 6,
     fontWeight: '900',
     color: colors.background,
-    letterSpacing: 1,
+    letterSpacing: 0.5,
+  },
+  tierDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginBottom: 3,
   },
   tierLabel: {
-    fontSize: fontSize.xs,
-    fontWeight: '700',
+    fontSize: 8,
+    fontWeight: '800',
     color: colors.textMuted,
-    letterSpacing: 2,
-    marginBottom: 4,
-  },
-  tierLabelSelected: {
-    color: colors.primary,
+    letterSpacing: 1,
+    textAlign: 'center',
   },
   tierPrice: {
-    fontSize: fontSize.xxl,
+    fontSize: fontSize.lg,
     fontWeight: '900',
     color: colors.text,
-    marginBottom: 4,
-  },
-  tierPriceSelected: {
-    color: colors.primary,
-  },
-  coinsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 4,
   },
   coinsText: {
-    fontSize: fontSize.xs,
+    fontSize: 8,
     color: colors.textMuted,
-  },
-  coinsTextSelected: {
-    color: colors.gold,
-  },
-  shieldsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  shieldsLabel: {
-    fontSize: 10,
-    color: colors.textMuted,
-    marginLeft: 2,
-  },
-  shieldsLabelSelected: {
-    color: colors.primary,
+    fontWeight: '600',
   },
   summaryBar: {
     flexDirection: 'row',
@@ -366,7 +367,6 @@ const styles = StyleSheet.create({
     color: colors.error,
   },
   buyBtn: {
-    backgroundColor: colors.primary,
     borderRadius: borderRadius.md,
     paddingVertical: spacing.md,
     flexDirection: 'row',
