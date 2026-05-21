@@ -295,7 +295,7 @@ export default function ProfileScreen() {
         <Text style={styles.logoutText}>LOG OUT</Text>
       </TouchableOpacity>
 
-      <Text style={styles.version}>GeoPVP v1.0.0</Text>
+      <Text style={styles.version}>CoinProwl v1.0.0</Text>
     </ScrollView>
   );
 }

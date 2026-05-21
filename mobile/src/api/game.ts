@@ -1,5 +1,5 @@
 /**
- * Game API functions for GeoPVP
+ * Game API functions for CoinProwl
  */
 
 import { api } from './client';

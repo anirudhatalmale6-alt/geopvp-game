@@ -64,7 +64,7 @@ export default function MainTabs() {
         name="Map"
         component={MapScreen}
         options={{
-          title: 'BATTLEFIELD',
+          title: 'COINPROWL',
           tabBarLabel: 'MAP',
         }}
       />

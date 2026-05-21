@@ -326,7 +326,7 @@ export default function MapScreen() {
       <View style={styles.centered}>
         <Ionicons name="location-outline" size={48} color={colors.textMuted} />
         <Text style={styles.permissionTitle}>LOCATION ACCESS REQUIRED</Text>
-        <Text style={styles.permissionSub}>Enable location permission to play GeoPVP</Text>
+        <Text style={styles.permissionSub}>Enable location permission to play CoinProwl</Text>
       </View>
     );
   }

@@ -55,7 +55,7 @@ function MainStack() {
 function LoadingScreen() {
   return (
     <View style={styles.loadingContainer}>
-      <Text style={styles.loadingTitle}>GEOPVP</Text>
+      <Text style={styles.loadingTitle}>COINPROWL</Text>
       <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 24 }} />
     </View>
   );

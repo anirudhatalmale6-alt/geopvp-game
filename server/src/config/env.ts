@@ -55,7 +55,7 @@ export const config: AppConfig = {
     pass: required('SMTP_PASS'),
     from: optional('SMTP_FROM', ''),
   },
-  appName: optional('APP_NAME', 'GeoPVP'),
+  appName: optional('APP_NAME', 'CoinProwl'),
   attackRadiusMiles: parseFloat(optional('ATTACK_RADIUS_MILES', '0.25')),
   shieldPriceCents: optionalInt('SHIELD_PRICE_CENTS', 99),
   shieldDurationMinutes: optionalInt('SHIELD_DURATION_MINUTES', 10),

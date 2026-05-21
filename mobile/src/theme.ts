@@ -1,5 +1,5 @@
 /**
- * GeoApp Theme Constants
+ * CoinProwl Theme Constants
  * Dark gaming-oriented theme with cyan/teal primary and pink/red secondary accents.
  */
 
