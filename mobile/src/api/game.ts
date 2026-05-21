@@ -43,6 +43,20 @@ export interface AttackResult {
   message: string;
 }
 
+export interface CoinDrop {
+  id: string;
+  amount: number;
+  latitude: number;
+  longitude: number;
+  createdAt: string;
+}
+
+export interface CollectResult {
+  collected: boolean;
+  amount: number;
+  mapCoins: number;
+}
+
 export interface WalletData {
   balance: number;
   userId: string;
@@ -109,6 +123,24 @@ export async function attackPlayer(targetSessionId: string): Promise<AttackResul
 export async function buyShield(): Promise<GameSession> {
   const { data } = await api.post<{ session: GameSession }>('/game/shield');
   return data.session;
+}
+
+// ---------------------------------------------------------------------------
+// Coin Drop API
+// ---------------------------------------------------------------------------
+
+export async function getCoinDrops(): Promise<CoinDrop[]> {
+  try {
+    const { data } = await api.get<{ coins: CoinDrop[] }>('/game/coins');
+    return data.coins;
+  } catch {
+    return [];
+  }
+}
+
+export async function collectCoinDrop(dropId: string): Promise<CollectResult> {
+  const { data } = await api.post<CollectResult>(`/game/coins/${dropId}/collect`);
+  return data;
 }
 
 // ---------------------------------------------------------------------------

@@ -10,6 +10,8 @@ import {
   buyShield,
   getWallet,
   getTransactions,
+  getActiveCoinDrops,
+  collectCoinDrop,
 } from '../controllers/gameController';
 
 const router = Router();
@@ -27,5 +29,9 @@ router.get('/nearby', getNearbyPlayers);
 router.get('/players', getAllPlayers);
 router.post('/attack', attackPlayer);
 router.post('/shield', buyShield);
+
+// Coin drop routes
+router.get('/coins', getActiveCoinDrops);
+router.post('/coins/:id/collect', collectCoinDrop);
 
 export default router;

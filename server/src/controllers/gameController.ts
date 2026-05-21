@@ -87,6 +87,23 @@ export async function createGameSession(req: AuthRequest, res: Response): Promis
       [userId, -tierCents, `Buy-in: $${tierDollars} ${tier.name} tier`],
     );
 
+    // Auto-generate 5 coin drops near the player's last known location
+    // (Best-effort: silently skip if no location yet)
+    try {
+      const locResult = await query(
+        `SELECT latitude, longitude FROM game_sessions
+         WHERE user_id = $1 AND latitude IS NOT NULL
+         ORDER BY created_at DESC LIMIT 1`,
+        [userId],
+      );
+      if (locResult.rows.length > 0) {
+        const { latitude, longitude } = locResult.rows[0];
+        await generateCoinDrops(parseFloat(latitude), parseFloat(longitude), userId, 5);
+      }
+    } catch {
+      // Location not available yet — coin drops will be generated on first location update
+    }
+
     res.status(201).json({ session: formatSession(session) });
   } catch (err) {
     console.error('createGameSession error:', err);
@@ -134,6 +151,15 @@ export async function updatePlayerLocation(req: AuthRequest, res: Response): Pro
     const { latitude, longitude } = parsed.data;
     const userId = req.user!.id;
 
+    // Check if this is the first location update for this session (no existing lat/lng)
+    const existing = await query(
+      `SELECT id, latitude FROM game_sessions
+       WHERE user_id = $1 AND is_active = true LIMIT 1`,
+      [userId],
+    );
+
+    const isFirstLocation = existing.rows.length > 0 && !existing.rows[0].latitude;
+
     const result = await query(
       `UPDATE game_sessions
        SET latitude = $1, longitude = $2, last_location_update = now()
@@ -145,6 +171,11 @@ export async function updatePlayerLocation(req: AuthRequest, res: Response): Pro
     if (result.rows.length === 0) {
       res.status(404).json({ error: 'No active session found.' });
       return;
+    }
+
+    // If this is the player's first location update for this session, generate coin drops
+    if (isFirstLocation) {
+      generateCoinDrops(latitude, longitude, userId, 5).catch(() => {});
     }
 
     res.json({ ok: true });
@@ -525,6 +556,188 @@ export async function getTransactions(req: AuthRequest, res: Response): Promise<
     res.json({ transactions });
   } catch (err) {
     console.error('getTransactions error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Coin drops helpers
+// ---------------------------------------------------------------------------
+
+function randomOffset(maxDegrees: number): number {
+  return (Math.random() * 2 - 1) * maxDegrees;
+}
+
+/** Generate 3-5 coin drops near a given lat/lng and insert them into the DB. */
+export async function generateCoinDrops(
+  lat: number,
+  lng: number,
+  createdBy: string,
+  count = Math.floor(Math.random() * 3) + 3, // 3–5
+): Promise<void> {
+  for (let i = 0; i < count; i++) {
+    const dropLat = lat + randomOffset(0.005);
+    const dropLng = lng + randomOffset(0.005);
+    const amount = Math.floor(Math.random() * 5) + 1; // 1–5 coins
+    await query(
+      `INSERT INTO coin_drops (amount, latitude, longitude, created_by, is_active)
+       VALUES ($1, $2, $3, $4, true)`,
+      [amount, dropLat, dropLng, createdBy],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/game/coins  — get active coin drops near player
+// ---------------------------------------------------------------------------
+
+export async function getActiveCoinDrops(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const userId = req.user!.id;
+
+    // Get current player location
+    const mySession = await query(
+      `SELECT latitude, longitude FROM game_sessions
+       WHERE user_id = $1 AND is_active = true AND latitude IS NOT NULL
+       ORDER BY created_at DESC LIMIT 1`,
+      [userId],
+    );
+
+    if (mySession.rows.length === 0 || !mySession.rows[0].latitude) {
+      res.json({ coins: [] });
+      return;
+    }
+
+    const { latitude: myLat, longitude: myLng } = mySession.rows[0];
+    const delta = 0.01; // ~1 km bounding box
+
+    const result = await query(
+      `SELECT id, amount, latitude, longitude, created_at
+       FROM coin_drops
+       WHERE is_active = true
+         AND latitude BETWEEN $1 AND $2
+         AND longitude BETWEEN $3 AND $4`,
+      [myLat - delta, myLat + delta, myLng - delta, myLng + delta],
+    );
+
+    const coins = result.rows.map((row) => ({
+      id: row.id,
+      amount: parseInt(row.amount, 10),
+      latitude: parseFloat(row.latitude),
+      longitude: parseFloat(row.longitude),
+      createdAt: row.created_at,
+    }));
+
+    res.json({ coins });
+  } catch (err) {
+    console.error('getActiveCoinDrops error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/game/coins/:id/collect  — collect a coin drop
+// ---------------------------------------------------------------------------
+
+// Distance in meters (Haversine)
+function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const EARTH_RADIUS_M = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return EARTH_RADIUS_M * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+const COLLECT_RADIUS_METERS = 50;
+
+export async function collectCoinDrop(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const { id: dropId } = req.params;
+    const userId = req.user!.id;
+
+    // Fetch player location from active session
+    const sessionResult = await query(
+      `SELECT id, latitude, longitude FROM game_sessions
+       WHERE user_id = $1 AND is_active = true LIMIT 1`,
+      [userId],
+    );
+
+    if (sessionResult.rows.length === 0) {
+      res.status(400).json({ error: 'No active session. Start a session to collect coins.' });
+      return;
+    }
+
+    const session = sessionResult.rows[0];
+    if (!session.latitude || !session.longitude) {
+      res.status(400).json({ error: 'Location not available yet.' });
+      return;
+    }
+
+    // Fetch coin drop
+    const dropResult = await query(
+      `SELECT id, amount, latitude, longitude, is_active, picked_up_by
+       FROM coin_drops WHERE id = $1`,
+      [dropId],
+    );
+
+    if (dropResult.rows.length === 0) {
+      res.status(404).json({ error: 'Coin drop not found.' });
+      return;
+    }
+
+    const drop = dropResult.rows[0];
+
+    if (!drop.is_active || drop.picked_up_by) {
+      res.status(409).json({ error: 'Coin already collected.' });
+      return;
+    }
+
+    // Validate proximity
+    const dist = distanceMeters(
+      parseFloat(session.latitude), parseFloat(session.longitude),
+      parseFloat(drop.latitude), parseFloat(drop.longitude),
+    );
+
+    if (dist > COLLECT_RADIUS_METERS) {
+      res.status(400).json({
+        error: `Too far away (${Math.round(dist)}m). Must be within ${COLLECT_RADIUS_METERS}m.`,
+      });
+      return;
+    }
+
+    // Mark collected + add coins to session
+    await Promise.all([
+      query(
+        `UPDATE coin_drops SET is_active = false, picked_up_by = $1, picked_up_at = now() WHERE id = $2`,
+        [userId, dropId],
+      ),
+      query(
+        `UPDATE game_sessions SET map_coins = map_coins + $1 WHERE id = $2`,
+        [drop.amount, session.id],
+      ),
+      query(
+        `INSERT INTO transactions (user_id, type, amount, description)
+         VALUES ($1, 'coin_collect', $2, $3)`,
+        [userId, drop.amount, `Collected ${drop.amount} coin${drop.amount !== 1 ? 's' : ''} from map`],
+      ),
+    ]);
+
+    // Return updated session coins
+    const updatedSession = await query(
+      `SELECT map_coins FROM game_sessions WHERE id = $1`,
+      [session.id],
+    );
+
+    res.json({
+      collected: true,
+      amount: drop.amount,
+      mapCoins: parseInt(updatedSession.rows[0].map_coins, 10),
+    });
+  } catch (err) {
+    console.error('collectCoinDrop error:', err);
     res.status(500).json({ error: 'Internal server error.' });
   }
 }

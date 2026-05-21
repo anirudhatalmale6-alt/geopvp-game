@@ -7,6 +7,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import authRoutes from './routes/auth';
 import gameRoutes from './routes/game';
 import walletRoutes from './routes/wallet';
+import { setupGameSocket } from './socket/gameSocket';
 
 const app = express();
 
@@ -52,13 +53,8 @@ const io = new SocketIOServer(server, {
   },
 });
 
-io.on('connection', (socket) => {
-  console.log(`[Socket.io] Client connected: ${socket.id}`);
-
-  socket.on('disconnect', (reason) => {
-    console.log(`[Socket.io] Client disconnected: ${socket.id} (${reason})`);
-  });
-});
+// Wire up game socket handlers (auth + player:location + players:update)
+setupGameSocket(io);
 
 // ---------------------------------------------------------------------------
 // Start

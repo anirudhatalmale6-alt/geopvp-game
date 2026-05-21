@@ -14,13 +14,16 @@ import { colors, spacing, borderRadius, fontSize } from '../../theme';
 import {
   getActiveSession,
   updateLocation,
-  getNearbyPlayers,
   getAllPlayers,
   attackPlayer,
   buyShield,
+  getCoinDrops,
+  collectCoinDrop,
   GameSession,
   NearbyPlayer,
+  CoinDrop,
 } from '../../api/game';
+import { connectSocket, disconnectSocket, emitLocation, onPlayersUpdate } from '../../api/socket';
 import BuyInModal from './BuyInModal';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -43,11 +46,16 @@ const MAP_CSS = `
   }
 `;
 
-function LeafletMap({ lat, lng, nearbyPlayers, session }: {
+// ---------------------------------------------------------------------------
+// Leaflet iframe
+// ---------------------------------------------------------------------------
+
+function LeafletMap({ lat, lng, nearbyPlayers, session, coinDrops }: {
   lat: number;
   lng: number;
   nearbyPlayers: NearbyPlayer[];
   session: GameSession | null;
+  coinDrops: CoinDrop[];
 }) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [ready, setReady] = useState(false);
@@ -76,19 +84,32 @@ function LeafletMap({ lat, lng, nearbyPlayers, session }: {
     0%{transform:scale(1);opacity:0.6}
     100%{transform:scale(2.5);opacity:0}
   }
+  @keyframes coin-pulse{
+    0%{transform:scale(1);opacity:0.8;box-shadow:0 0 0 0 rgba(255,215,0,0.7)}
+    70%{transform:scale(1.2);opacity:1;box-shadow:0 0 0 10px rgba(255,215,0,0)}
+    100%{transform:scale(1);opacity:0.8;box-shadow:0 0 0 0 rgba(255,215,0,0)}
+  }
   .enemy-marker{
-    width:12px;height:12px;border-radius:50%;
+    width:16px;height:16px;border-radius:50%;
     background:#ff1744;border:2px solid #ff1744;
     box-shadow:0 0 8px #ff1744;
     position:relative;
+    cursor:pointer;
+  }
+  .enemy-marker:hover{
+    transform:scale(1.3);
+    box-shadow:0 0 16px #ff1744;
   }
   .enemy-marker.shielded{
     background:#7c4dff;border-color:#7c4dff;
     box-shadow:0 0 8px #7c4dff;
   }
+  .enemy-marker.shielded:hover{
+    box-shadow:0 0 16px #7c4dff;
+  }
   .enemy-info{
     display:flex;flex-direction:column;align-items:center;
-    margin-top:2px;
+    margin-top:2px;pointer-events:none;
   }
   .enemy-name{
     color:#ff1744;font-size:10px;font-weight:700;
@@ -100,7 +121,25 @@ function LeafletMap({ lat, lng, nearbyPlayers, session }: {
     color:#ffd700;font-size:9px;font-weight:600;
     text-shadow:0 0 4px rgba(0,0,0,0.8);
   }
-  .leaflet-tile-pane{}
+  .coin-marker{
+    width:18px;height:18px;border-radius:50%;
+    background:#ffd700;border:2px solid #ffb300;
+    box-shadow:0 0 10px #ffd700,0 0 20px #ffd70060;
+    display:flex;align-items:center;justify-content:center;
+    font-size:10px;font-weight:900;color:#0a0e1a;
+    animation:coin-pulse 1.8s ease-out infinite;
+    cursor:pointer;
+    user-select:none;
+  }
+  .coin-marker:hover{
+    transform:scale(1.4);
+    box-shadow:0 0 20px #ffd700;
+  }
+  .coin-amount{
+    color:#ffd700;font-size:9px;font-weight:700;
+    text-shadow:0 0 4px rgba(0,0,0,0.9);
+    pointer-events:none;
+  }
   .leaflet-control-attribution{display:none!important}
   .leaflet-control-zoom{display:none!important}
   .radius-circle{
@@ -121,12 +160,30 @@ var playerIcon = L.divIcon({className:'',html:'<div class="player-pulse"></div><
 var playerMarker = L.marker([0,0],{icon:playerIcon}).addTo(map);
 var radiusCircle = null;
 var enemyMarkers = [];
+var coinMarkers = [];
+
+function makeEnemyIcon(en){
+  var cls = en.shielded ? 'enemy-marker shielded' : 'enemy-marker';
+  var html = '<div class="'+cls+'" data-sid="'+en.sid+'"></div>'
+    +'<div class="enemy-info">'
+    +'<span class="enemy-name">'+en.name+'</span>'
+    +'<span class="enemy-coins">'+en.coins+'⛄</span>'
+    +'</div>';
+  return L.divIcon({className:'',html:html,iconSize:[16,42],iconAnchor:[8,8]});
+}
+
+function makeCoinIcon(amount){
+  var html = '<div class="coin-marker">C</div>'
+    +'<div class="coin-amount" style="text-align:center;margin-top:1px;">'+amount+'</div>';
+  return L.divIcon({className:'',html:html,iconSize:[18,32],iconAnchor:[9,9]});
+}
 
 window.addEventListener('message',function(e){
   try{
     var d = JSON.parse(e.data);
-    if(d.type==='update'){
-      map.setView([d.lat,d.lng],map.getZoom(),{animate:true,duration:0.5});
+
+    if(d.type==='update'||d.type==='init'){
+      map.setView([d.lat,d.lng], d.type==='init'?16:map.getZoom(), {animate:true,duration:0.5});
       playerMarker.setLatLng([d.lat,d.lng]);
 
       if(d.hasSession && !radiusCircle){
@@ -137,22 +194,53 @@ window.addEventListener('message',function(e){
         if(!d.hasSession){map.removeLayer(radiusCircle);radiusCircle=null;}
       }
 
+      // Update enemy markers
       enemyMarkers.forEach(function(m){map.removeLayer(m)});
       enemyMarkers=[];
       if(d.enemies){
         d.enemies.forEach(function(en){
-          var cls = en.shielded ? 'enemy-marker shielded' : 'enemy-marker';
-          var html = '<div class="'+cls+'"></div><div class="enemy-info"><span class="enemy-name">'+en.name+'</span><span class="enemy-coins">'+en.coins+' coins</span></div>';
-          var icon = L.divIcon({className:'',html:html,iconSize:[12,12],iconAnchor:[6,6]});
+          var icon = makeEnemyIcon(en);
           var m = L.marker([en.lat,en.lng],{icon:icon}).addTo(map);
+          // Attach click handler — send attackPlayer message to parent
+          (function(enemy){
+            m.on('click',function(){
+              window.parent.postMessage(JSON.stringify({
+                type:'attackPlayer',
+                sessionId:enemy.sid,
+                username:enemy.name,
+                coins:enemy.coins,
+                shielded:enemy.shielded
+              }),'*');
+            });
+          })(en);
           enemyMarkers.push(m);
         });
       }
-    }
-    if(d.type==='init'){
-      map.setView([d.lat,d.lng],16);
-      playerMarker.setLatLng([d.lat,d.lng]);
-      window.parent.postMessage(JSON.stringify({type:'ready'}),'*');
+
+      // Update coin drop markers
+      coinMarkers.forEach(function(m){map.removeLayer(m)});
+      coinMarkers=[];
+      if(d.coins){
+        d.coins.forEach(function(c){
+          var icon = makeCoinIcon(c.amount);
+          var m = L.marker([c.lat,c.lng],{icon:icon}).addTo(map);
+          // Attach click handler — send collectCoin message to parent
+          (function(coin){
+            m.on('click',function(){
+              window.parent.postMessage(JSON.stringify({
+                type:'collectCoin',
+                id:coin.id,
+                amount:coin.amount
+              }),'*');
+            });
+          })(c);
+          coinMarkers.push(m);
+        });
+      }
+
+      if(d.type==='init'){
+        window.parent.postMessage(JSON.stringify({type:'ready'}),'*');
+      }
     }
   }catch(ex){}
 });
@@ -182,13 +270,20 @@ window.parent.postMessage(JSON.stringify({type:'ready'}),'*');
       shielded: p.shieldActive,
       sid: p.sessionId,
     }));
+    const coins = coinDrops.map(c => ({
+      id: c.id,
+      lat: c.latitude,
+      lng: c.longitude,
+      amount: c.amount,
+    }));
     iframeRef.current.contentWindow.postMessage(JSON.stringify({
       type: ready ? 'update' : 'init',
       lat, lng,
       hasSession: !!session,
       enemies,
+      coins,
     }), '*');
-  }, [lat, lng, nearbyPlayers, session, ready]);
+  }, [lat, lng, nearbyPlayers, coinDrops, session, ready]);
 
   return (
     <iframe
@@ -207,18 +302,33 @@ window.parent.postMessage(JSON.stringify({type:'ready'}),'*');
   );
 }
 
+// ---------------------------------------------------------------------------
+// Main MapScreen
+// ---------------------------------------------------------------------------
+
 export default function MapScreen() {
   const [session, setSession] = useState<GameSession | null>(null);
   const [nearbyPlayers, setNearbyPlayers] = useState<NearbyPlayer[]>([]);
+  const [coinDrops, setCoinDrops] = useState<CoinDrop[]>([]);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationPermission, setLocationPermission] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [showBuyIn, setShowBuyIn] = useState(false);
-  const [attackTarget, setAttackTarget] = useState<NearbyPlayer | null>(null);
+
+  // Attack confirmation overlay
+  const [attackTarget, setAttackTarget] = useState<{
+    sessionId: string;
+    username: string;
+    coins: number;
+    shielded: boolean;
+  } | null>(null);
   const [attackResult, setAttackResult] = useState<string | null>(null);
+
   const [statusMessage, setStatusMessage] = useState<string>('LIVE MAP');
   const locationSub = useRef<Location.LocationSubscription | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const coinPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const socketUnsubRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (Platform.OS === 'web' && MAP_CSS) {
@@ -229,6 +339,9 @@ export default function MapScreen() {
     }
   }, []);
 
+  // -------------------------------------------------------------------------
+  // Location permission + GPS watch
+  // -------------------------------------------------------------------------
   useEffect(() => {
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -251,6 +364,9 @@ export default function MapScreen() {
     return () => { locationSub.current?.remove(); };
   }, []);
 
+  // -------------------------------------------------------------------------
+  // Initial session fetch
+  // -------------------------------------------------------------------------
   const refreshSession = useCallback(async () => {
     try {
       const s = await getActiveSession();
@@ -265,12 +381,69 @@ export default function MapScreen() {
     })();
   }, [refreshSession]);
 
+  // -------------------------------------------------------------------------
+  // Socket.io — real-time player movement
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    if (!session || !location) return;
+
+    let alive = true;
+
+    (async () => {
+      await connectSocket();
+      if (!alive) return;
+
+      // Subscribe to players:update events
+      const unsub = onPlayersUpdate((data) => {
+        // Update that specific player's position in the list
+        setNearbyPlayers((prev) => {
+          const existing = prev.find(p => p.id === data.userId);
+          if (existing) {
+            return prev.map(p =>
+              p.id === data.userId
+                ? { ...p, latitude: data.lat, longitude: data.lng }
+                : p,
+            );
+          }
+          // New player appeared — will be picked up on next REST poll
+          return prev;
+        });
+      });
+      socketUnsubRef.current = unsub;
+    })();
+
+    return () => {
+      alive = false;
+      if (socketUnsubRef.current) {
+        socketUnsubRef.current();
+        socketUnsubRef.current = null;
+      }
+    };
+  }, [session?.id]);
+
+  // Emit location via socket whenever GPS updates
+  useEffect(() => {
+    if (!session || !location) return;
+    emitLocation(location.lat, location.lng);
+  }, [location?.lat, location?.lng, session?.id]);
+
+  // Disconnect socket when session ends
+  useEffect(() => {
+    if (!session) {
+      disconnectSocket();
+    }
+  }, [session]);
+
+  // -------------------------------------------------------------------------
+  // REST polling — player list (reduced to 30s since socket handles live moves)
+  // -------------------------------------------------------------------------
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current);
     if (!session || !location) return;
 
     const poll = async () => {
       try {
+        // Still send REST location update as fallback
         await updateLocation(location.lat, location.lng);
         const players = await getAllPlayers();
         setNearbyPlayers(players);
@@ -279,28 +452,108 @@ export default function MapScreen() {
     };
 
     poll();
-    pollRef.current = setInterval(poll, 10_000);
+    // Poll every 30s — socket handles the in-between updates
+    pollRef.current = setInterval(poll, 30_000);
 
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
   }, [session?.id, location?.lat, location?.lng]);
 
-  const handleAttack = async (player: NearbyPlayer) => {
+  // -------------------------------------------------------------------------
+  // Coin drops — fetch every 15s
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    if (coinPollRef.current) clearInterval(coinPollRef.current);
+    if (!session || !location) return;
+
+    const fetchCoins = async () => {
+      try {
+        const drops = await getCoinDrops();
+        setCoinDrops(drops);
+      } catch {}
+    };
+
+    fetchCoins();
+    coinPollRef.current = setInterval(fetchCoins, 15_000);
+
+    return () => {
+      if (coinPollRef.current) clearInterval(coinPollRef.current);
+    };
+  }, [session?.id, location?.lat, location?.lng]);
+
+  // -------------------------------------------------------------------------
+  // iframe postMessage handler — attack + collect events from Leaflet
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+
+    const handler = (e: MessageEvent) => {
+      try {
+        const d = JSON.parse(e.data);
+
+        if (d.type === 'attackPlayer') {
+          setAttackTarget({
+            sessionId: d.sessionId,
+            username: d.username,
+            coins: d.coins,
+            shielded: !!d.shielded,
+          });
+        }
+
+        if (d.type === 'collectCoin') {
+          handleCollectCoin(d.id, d.amount);
+        }
+      } catch {}
+    };
+
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.id]);
+
+  // -------------------------------------------------------------------------
+  // Attack handler
+  // -------------------------------------------------------------------------
+  const handleAttack = async () => {
+    if (!attackTarget) return;
+    const target = attackTarget;
+    setAttackTarget(null);
+
     try {
-      const result = await attackPlayer(player.sessionId);
+      const result = await attackPlayer(target.sessionId);
       setAttackResult(result.success
-        ? `ATTACK SUCCESS! Stole ${result.coinsStolen} coins from ${player.username}!`
-        : `ATTACK BLOCKED! ${player.username} had a shield.`);
+        ? `ATTACK SUCCESS! Stole ${result.coinsStolen} coins from ${target.username}!`
+        : `ATTACK BLOCKED! ${target.username} had a shield.`);
       await refreshSession();
       setTimeout(() => setAttackResult(null), 4000);
     } catch (err: any) {
       setAttackResult(`Attack failed: ${err.message}`);
       setTimeout(() => setAttackResult(null), 3000);
     }
-    setAttackTarget(null);
   };
 
+  // -------------------------------------------------------------------------
+  // Coin collect handler
+  // -------------------------------------------------------------------------
+  const handleCollectCoin = async (dropId: string, amount: number) => {
+    try {
+      const result = await collectCoinDrop(dropId);
+      setAttackResult(`+${result.amount} COIN${result.amount !== 1 ? 'S' : ''} COLLECTED!`);
+      // Remove from local state immediately
+      setCoinDrops(prev => prev.filter(c => c.id !== dropId));
+      // Update session coin count
+      setSession(prev => prev ? { ...prev, mapCoins: result.mapCoins } : prev);
+      setTimeout(() => setAttackResult(null), 3000);
+    } catch (err: any) {
+      setAttackResult(err.message?.includes('Too far') ? 'MOVE CLOSER TO COLLECT!' : 'Already collected!');
+      setTimeout(() => setAttackResult(null), 2500);
+    }
+  };
+
+  // -------------------------------------------------------------------------
+  // Shield handler
+  // -------------------------------------------------------------------------
   const handleBuyShield = async () => {
     try {
       const updated = await buyShield();
@@ -312,6 +565,9 @@ export default function MapScreen() {
     ? new Date(session.shieldActiveUntil) > new Date()
     : false;
 
+  // -------------------------------------------------------------------------
+  // Render
+  // -------------------------------------------------------------------------
   if (loading) {
     return (
       <View style={styles.centered}>
@@ -340,6 +596,7 @@ export default function MapScreen() {
           lng={location.lng}
           nearbyPlayers={nearbyPlayers}
           session={session}
+          coinDrops={coinDrops}
         />
       )}
 
@@ -381,6 +638,13 @@ export default function MapScreen() {
               </Text>
               <Text style={styles.hudLabel}>NEARBY</Text>
             </View>
+            <View style={styles.hudCard}>
+              <Text style={{ fontSize: 16 }}>💰</Text>
+              <Text style={[styles.hudValue, { color: coinDrops.length > 0 ? colors.gold : colors.text }]}>
+                {coinDrops.length}
+              </Text>
+              <Text style={styles.hudLabel}>DROPS</Text>
+            </View>
           </View>
         )}
 
@@ -394,35 +658,46 @@ export default function MapScreen() {
           </View>
         )}
 
-        {/* Attack result toast */}
+        {/* Result toast (attacks + coin collects) */}
         {attackResult && (
-          <View style={styles.toastBanner}>
+          <View style={[
+            styles.toastBanner,
+            attackResult.includes('COIN') && { borderColor: colors.gold + '60' },
+          ]}>
             <Ionicons
-              name={attackResult.includes('SUCCESS') ? 'checkmark-circle' : 'close-circle'}
+              name={
+                attackResult.includes('SUCCESS') || attackResult.includes('COIN')
+                  ? 'checkmark-circle'
+                  : 'close-circle'
+              }
               size={16}
-              color={attackResult.includes('SUCCESS') ? colors.success : colors.error}
+              color={
+                attackResult.includes('COIN')
+                  ? colors.gold
+                  : attackResult.includes('SUCCESS') ? colors.success : colors.error
+              }
             />
             <Text style={styles.toastText}>{attackResult}</Text>
           </View>
         )}
 
-        {/* Attack confirmation panel */}
+        {/* Attack confirmation overlay — shown when enemy marker is tapped */}
         {attackTarget && (
-          <View style={styles.attackPanel}>
+          <View style={styles.attackPanel} pointerEvents="auto">
             <Text style={styles.attackPanelTitle}>ATTACK TARGET</Text>
             <Text style={styles.attackPanelName}>{attackTarget.username.toUpperCase()}</Text>
-            <Text style={styles.attackPanelCoins}>{attackTarget.mapCoins} coins</Text>
-            {attackTarget.shieldActive && (
+            <Text style={styles.attackPanelCoins}>{attackTarget.coins} coins</Text>
+            {attackTarget.shielded && (
               <View style={styles.shieldWarning}>
                 <Ionicons name="shield" size={14} color={colors.warning} />
-                <Text style={styles.shieldWarningText}>SHIELD ACTIVE</Text>
+                <Text style={styles.shieldWarningText}>SHIELD ACTIVE — ATTACK BLOCKED</Text>
               </View>
             )}
             <View style={styles.attackPanelBtns}>
               <TouchableOpacity style={styles.cancelBtn} onPress={() => setAttackTarget(null)}>
                 <Text style={styles.cancelBtnText}>CANCEL</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.attackConfirmBtn} onPress={() => handleAttack(attackTarget)}>
+              <TouchableOpacity style={styles.attackConfirmBtn} onPress={handleAttack}>
                 <Ionicons name="flash" size={16} color="#fff" />
                 <Text style={styles.attackConfirmText}>ATTACK</Text>
               </TouchableOpacity>
@@ -434,7 +709,7 @@ export default function MapScreen() {
         <View style={{ flex: 1 }} />
 
         {/* Action buttons at bottom */}
-        <View style={styles.actionRow}>
+        <View style={styles.actionRow} pointerEvents="auto">
           {!session ? (
             <TouchableOpacity
               style={styles.startBtn}
@@ -617,7 +892,7 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   attackPanel: {
-    backgroundColor: 'rgba(17, 24, 39, 0.95)',
+    backgroundColor: 'rgba(17, 24, 39, 0.97)',
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     marginTop: spacing.md,
