@@ -140,6 +140,102 @@ export async function getStats(req: AuthRequest, res: Response): Promise<void> {
   }
 }
 
+export async function listUsers(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    if (!(await requireAdmin(req, res))) return;
+
+    const result = await query(
+      `SELECT u.id, u.username, u.email, u.is_admin, u.is_verified, u.created_at,
+              gs.map_coins, gs.coin_tier, gs.buyin_amount, gs.is_active as has_active_session,
+              gs.latitude, gs.longitude, gs.last_location_update
+       FROM users u
+       LEFT JOIN game_sessions gs ON gs.user_id = u.id AND gs.is_active = true
+       ORDER BY u.created_at DESC`,
+    );
+
+    const users = result.rows.map((r) => ({
+      id: r.id,
+      username: r.username,
+      email: r.email,
+      isAdmin: r.is_admin,
+      isVerified: r.is_verified,
+      createdAt: r.created_at,
+      activeSession: r.has_active_session ? {
+        mapCoins: parseInt(r.map_coins || '0', 10),
+        coinTier: r.coin_tier,
+        buyinAmount: parseInt(r.buyin_amount || '0', 10),
+        latitude: r.latitude ? parseFloat(r.latitude) : null,
+        longitude: r.longitude ? parseFloat(r.longitude) : null,
+        lastLocationUpdate: r.last_location_update,
+      } : null,
+    }));
+
+    res.json({ users, count: users.length });
+  } catch (err) {
+    console.error('listUsers error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+export async function toggleAdmin(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    if (!(await requireAdmin(req, res))) return;
+
+    const { id } = req.params;
+    const result = await query(
+      `UPDATE users SET is_admin = NOT is_admin WHERE id = $1 RETURNING id, username, is_admin`,
+      [id],
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: 'User not found.' });
+      return;
+    }
+
+    res.json({ user: result.rows[0] });
+  } catch (err) {
+    console.error('toggleAdmin error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+export async function getActivePlayers(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    if (!(await requireAdmin(req, res))) return;
+
+    const result = await query(
+      `SELECT gs.id as session_id, gs.user_id, gs.latitude, gs.longitude,
+              gs.map_coins, gs.coin_tier, gs.buyin_amount, gs.shield_active_until,
+              gs.last_location_update, gs.created_at,
+              u.username, u.email
+       FROM game_sessions gs
+       JOIN users u ON u.id = gs.user_id
+       WHERE gs.is_active = true AND gs.latitude IS NOT NULL
+       ORDER BY gs.last_location_update DESC`,
+    );
+
+    const players = result.rows.map((r) => ({
+      sessionId: r.session_id,
+      userId: r.user_id,
+      username: r.username,
+      email: r.email,
+      latitude: parseFloat(r.latitude),
+      longitude: parseFloat(r.longitude),
+      mapCoins: parseInt(r.map_coins, 10),
+      coinTier: r.coin_tier,
+      buyinAmount: parseInt(r.buyin_amount, 10),
+      shieldActive: r.shield_active_until ? new Date(r.shield_active_until) > new Date() : false,
+      lastLocationUpdate: r.last_location_update,
+      sessionStart: r.created_at,
+    }));
+
+    res.json({ players, count: players.length });
+  } catch (err) {
+    console.error('getActivePlayers error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
 function formatDrop(row: Record<string, any>) {
   return {
     id: row.id,

@@ -32,12 +32,18 @@ app.get('/health', (_req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Serve admin dashboard
+// ---------------------------------------------------------------------------
+const adminPath = path.resolve(__dirname, '../public/admin');
+app.use('/admin', express.static(adminPath));
+
+// ---------------------------------------------------------------------------
 // Serve web build (static files from mobile/dist)
 // ---------------------------------------------------------------------------
 const webDistPath = path.resolve(__dirname, '../../mobile/dist');
 app.use(express.static(webDistPath));
 app.get('*', (_req, res, next) => {
-  if (_req.path.startsWith('/api') || _req.path === '/health' || _req.path.startsWith('/socket.io')) {
+  if (_req.path.startsWith('/api') || _req.path === '/health' || _req.path.startsWith('/socket.io') || _req.path.startsWith('/admin')) {
     return next();
   }
   res.sendFile(path.join(webDistPath, 'index.html'));
