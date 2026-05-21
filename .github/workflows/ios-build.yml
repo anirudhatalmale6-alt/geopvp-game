@@ -147,14 +147,9 @@ jobs:
           ASC_KEY_ID: "9N5FFCA4C9"
           ASC_ISSUER_ID: "af651b63-096b-4071-b781-b421f383c27d"
         run: |
-          ASC_KEY_PATH=$RUNNER_TEMP/AuthKey.p8
-          echo -n "$ASC_KEY_BASE64" | base64 --decode -o $ASC_KEY_PATH
-          
-          xcrun notarytool store-credentials "AC_PASSWORD" \
-            --key $ASC_KEY_PATH \
-            --key-id $ASC_KEY_ID \
-            --issuer $ASC_ISSUER_ID 2>/dev/null || true
-          
+          mkdir -p ~/private_keys
+          echo -n "$ASC_KEY_BASE64" | base64 --decode -o ~/private_keys/AuthKey_${ASC_KEY_ID}.p8
+
           xcrun altool --upload-app \
             --type ios \
             --file "$RUNNER_TEMP/export/CoinProwl.ipa" \
