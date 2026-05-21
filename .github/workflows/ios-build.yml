@@ -18,22 +18,11 @@ jobs:
 
       - name: Select Xcode and install iOS platform
         run: |
-          ls /Applications/ | grep Xcode
           sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
           xcodebuild -version
-          # Install iOS platform - retry up to 3 times
-          for i in 1 2 3; do
-            if xcodebuild -showsdks 2>/dev/null | grep -q "iphoneos"; then
-              echo "iOS SDK already installed"
-              break
-            fi
-            echo "Attempt $i: Installing iOS platform..."
-            xcodebuild -downloadPlatform iOS && break
-            sleep 10
-          done
-          # Verify iOS SDK is available
+          # Always download iOS platform (SDK headers may exist but IB support missing)
+          xcodebuild -downloadPlatform iOS || xcodebuild -downloadPlatform iOS
           xcodebuild -showsdks | grep -i ios
-          xcodebuild -showsdks | grep -q "iphoneos" || { echo "ERROR: iOS SDK not installed"; exit 1; }
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
