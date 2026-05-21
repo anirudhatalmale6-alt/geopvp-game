@@ -5,6 +5,7 @@ on:
 
 env:
   EXPO_NO_TELEMETRY: 1
+  EXPO_PUBLIC_API_URL: http://167.235.196.123:3001/api
 
 jobs:
   build:
@@ -15,8 +16,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Select Xcode 16.2
-        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+      - name: Select Xcode and install iOS platform
+        run: |
+          # List available Xcode versions
+          ls /Applications/ | grep Xcode
+          # Use Xcode 16.2
+          sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+          xcodebuild -version
+          # Install iOS platform if needed
+          xcodebuild -downloadPlatform iOS || true
+          # List available SDKs
+          xcodebuild -showsdks | grep iOS
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
