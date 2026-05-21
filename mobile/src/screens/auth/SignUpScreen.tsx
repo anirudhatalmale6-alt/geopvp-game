@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fontSize, spacing, borderRadius, fonts } from '../../theme';
+import { useAuth } from '../../context/AuthContext';
 
 const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000/api';
 
@@ -25,6 +26,7 @@ interface PasswordRequirement {
 }
 
 export default function SignUpScreen({ navigation }: Props) {
+  const { login } = useAuth();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -87,7 +89,11 @@ export default function SignUpScreen({ navigation }: Props) {
         throw new Error(data.message || 'Sign up failed');
       }
 
-      navigation.navigate('VerifyEmail', { email: email.trim().toLowerCase() });
+      if (data.message && data.message.includes('auto-verified')) {
+        await login(email.trim().toLowerCase(), password);
+      } else {
+        navigation.navigate('VerifyEmail', { email: email.trim().toLowerCase() });
+      }
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred');
     } finally {

@@ -22,44 +22,171 @@ import {
 } from '../../api/game';
 import BuyInModal from './BuyInModal';
 
-const { width: SCREEN_W } = Dimensions.get('window');
-const RADAR_SIZE = Math.min(SCREEN_W - 32, 360);
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
-// ---------------------------------------------------------------------------
-// Web radar animation (CSS-based)
-// ---------------------------------------------------------------------------
-const RADAR_STYLE = Platform.OS === 'web' ? `
+const MAP_CSS = `
   @keyframes pulse {
-    0%   { transform: scale(1);   opacity: 0.9; box-shadow: 0 0 0 0 rgba(0,229,255,0.5); }
-    70%  { transform: scale(1.3); opacity: 0;   box-shadow: 0 0 0 16px rgba(0,229,255,0); }
+    0%   { transform: scale(1);   opacity: 1; box-shadow: 0 0 0 0 rgba(0,229,255,0.6); }
+    70%  { transform: scale(1.4); opacity: 0;   box-shadow: 0 0 0 20px rgba(0,229,255,0); }
     100% { transform: scale(1);   opacity: 0;   box-shadow: 0 0 0 0 rgba(0,229,255,0); }
-  }
-  @keyframes spin {
-    from { transform: rotate(0deg); }
-    to   { transform: rotate(360deg); }
-  }
-  @keyframes sweep {
-    from { transform: rotate(0deg); }
-    to   { transform: rotate(360deg); }
   }
   @keyframes blink {
     0%, 100% { opacity: 1; }
     50%      { opacity: 0.3; }
   }
-  .pulse-dot {
+  .pulse-ring {
     animation: pulse 2s ease-out infinite;
-  }
-  .radar-sweep {
-    animation: sweep 3s linear infinite;
   }
   .blink {
     animation: blink 1.2s ease-in-out infinite;
   }
-` : '';
+`;
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
+function LeafletMap({ lat, lng, nearbyPlayers, session }: {
+  lat: number;
+  lng: number;
+  nearbyPlayers: NearbyPlayer[];
+  session: GameSession | null;
+}) {
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const [ready, setReady] = useState(false);
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body,#map{width:100%;height:100%;background:#0a0e1a}
+  .player-marker{
+    width:14px;height:14px;border-radius:50%;
+    background:#00e5ff;border:2px solid #00e5ff;
+    box-shadow:0 0 12px #00e5ff,0 0 24px #00e5ff60;
+  }
+  .player-pulse{
+    position:absolute;width:30px;height:30px;border-radius:50%;
+    background:rgba(0,229,255,0.3);top:-8px;left:-8px;
+    animation:pulse 2s ease-out infinite;
+  }
+  @keyframes pulse{
+    0%{transform:scale(1);opacity:0.6}
+    100%{transform:scale(2.5);opacity:0}
+  }
+  .enemy-marker{
+    width:12px;height:12px;border-radius:50%;
+    background:#ff1744;border:2px solid #ff1744;
+    box-shadow:0 0 8px #ff1744;
+  }
+  .enemy-label{
+    color:#ff1744;font-size:10px;font-weight:700;
+    text-align:center;white-space:nowrap;
+    text-shadow:0 0 4px rgba(0,0,0,0.8);
+    margin-top:2px;letter-spacing:1px;
+  }
+  .leaflet-tile-pane{}
+  .leaflet-control-attribution{display:none!important}
+  .leaflet-control-zoom{display:none!important}
+  .radius-circle{
+    stroke:#00e5ff;stroke-opacity:0.4;fill:#00e5ff;fill-opacity:0.05;
+    stroke-dasharray:8 4;
+  }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<script>
+var map = L.map('map',{zoomControl:false,attributionControl:false}).setView([0,0],16);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+  maxZoom:19
+}).addTo(map);
+
+var playerIcon = L.divIcon({className:'',html:'<div class="player-pulse"></div><div class="player-marker"></div>',iconSize:[14,14],iconAnchor:[7,7]});
+var playerMarker = L.marker([0,0],{icon:playerIcon}).addTo(map);
+var radiusCircle = null;
+var enemyMarkers = [];
+
+window.addEventListener('message',function(e){
+  try{
+    var d = JSON.parse(e.data);
+    if(d.type==='update'){
+      map.setView([d.lat,d.lng],map.getZoom(),{animate:true,duration:0.5});
+      playerMarker.setLatLng([d.lat,d.lng]);
+
+      if(d.hasSession && !radiusCircle){
+        radiusCircle = L.circle([d.lat,d.lng],{radius:402,color:'#00e5ff',fillColor:'#00e5ff',fillOpacity:0.05,weight:1,opacity:0.4,dashArray:'8 4'}).addTo(map);
+      }
+      if(radiusCircle){
+        radiusCircle.setLatLng([d.lat,d.lng]);
+        if(!d.hasSession){map.removeLayer(radiusCircle);radiusCircle=null;}
+      }
+
+      enemyMarkers.forEach(function(m){map.removeLayer(m)});
+      enemyMarkers=[];
+      if(d.enemies){
+        d.enemies.forEach(function(en){
+          var icon = L.divIcon({className:'',html:'<div class="enemy-marker"></div><div class="enemy-label">'+en.name+'</div>',iconSize:[12,12],iconAnchor:[6,6]});
+          var m = L.marker([en.lat,en.lng],{icon:icon}).addTo(map);
+          enemyMarkers.push(m);
+        });
+      }
+    }
+    if(d.type==='init'){
+      map.setView([d.lat,d.lng],16);
+      playerMarker.setLatLng([d.lat,d.lng]);
+      window.parent.postMessage(JSON.stringify({type:'ready'}),'*');
+    }
+  }catch(ex){}
+});
+window.parent.postMessage(JSON.stringify({type:'ready'}),'*');
+</script>
+</body>
+</html>`;
+
+  useEffect(() => {
+    const handler = (e: MessageEvent) => {
+      try {
+        const d = JSON.parse(e.data);
+        if (d.type === 'ready') setReady(true);
+      } catch {}
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  useEffect(() => {
+    if (!iframeRef.current?.contentWindow) return;
+    const enemies = nearbyPlayers.map(p => ({
+      name: p.username.substring(0, 8),
+      lat: p.latitude || lat + (Math.random() - 0.5) * 0.003,
+      lng: p.longitude || lng + (Math.random() - 0.5) * 0.003,
+    }));
+    iframeRef.current.contentWindow.postMessage(JSON.stringify({
+      type: ready ? 'update' : 'init',
+      lat, lng,
+      hasSession: !!session,
+      enemies,
+    }), '*');
+  }, [lat, lng, nearbyPlayers, session, ready]);
+
+  return (
+    <iframe
+      ref={iframeRef as any}
+      srcDoc={html}
+      style={{
+        width: '100%',
+        height: '100%',
+        border: 'none',
+        position: 'absolute',
+        top: 0,
+        left: 0,
+      } as any}
+      allow="geolocation"
+    />
+  );
+}
 
 export default function MapScreen() {
   const [session, setSession] = useState<GameSession | null>(null);
@@ -72,19 +199,17 @@ export default function MapScreen() {
   const [attackResult, setAttackResult] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string>('SCANNING AREA...');
   const locationSub = useRef<Location.LocationSubscription | null>(null);
-  const pollRef = useRef<NodeJS.Timeout | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Inject CSS for web animations
   useEffect(() => {
-    if (Platform.OS === 'web' && RADAR_STYLE) {
+    if (Platform.OS === 'web' && MAP_CSS) {
       const style = document.createElement('style');
-      style.textContent = RADAR_STYLE;
+      style.textContent = MAP_CSS;
       document.head.appendChild(style);
       return () => { document.head.removeChild(style); };
     }
   }, []);
 
-  // Request location permission
   useEffect(() => {
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -94,13 +219,11 @@ export default function MapScreen() {
         setLoading(false);
         return;
       }
-      // Get initial position
       try {
         const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
         setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       } catch {}
 
-      // Subscribe to updates
       locationSub.current = await Location.watchPositionAsync(
         { accuracy: Location.Accuracy.Balanced, timeInterval: 5000, distanceInterval: 10 },
         (pos) => setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
@@ -109,7 +232,6 @@ export default function MapScreen() {
     return () => { locationSub.current?.remove(); };
   }, []);
 
-  // Load active session on mount
   const refreshSession = useCallback(async () => {
     try {
       const s = await getActiveSession();
@@ -124,7 +246,6 @@ export default function MapScreen() {
     })();
   }, [refreshSession]);
 
-  // Poll: update location + fetch nearby players every 10s when in session
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current);
     if (!session || !location) return;
@@ -142,7 +263,7 @@ export default function MapScreen() {
       } catch {}
     };
 
-    poll(); // immediate first run
+    poll();
     pollRef.current = setInterval(poll, 10_000);
 
     return () => {
@@ -150,7 +271,6 @@ export default function MapScreen() {
     };
   }, [session?.id, location?.lat, location?.lng]);
 
-  // Attack handler
   const handleAttack = async (player: NearbyPlayer) => {
     try {
       const result = await attackPlayer(player.sessionId);
@@ -166,17 +286,12 @@ export default function MapScreen() {
     setAttackTarget(null);
   };
 
-  // Buy shield
   const handleBuyShield = async () => {
     try {
       const updated = await buyShield();
       setSession(updated);
     } catch {}
   };
-
-  // ---------------------------------------------------------------------------
-  // Render helpers
-  // ---------------------------------------------------------------------------
 
   const shieldIsActive = session?.shieldActiveUntil
     ? new Date(session.shieldActiveUntil) > new Date()
@@ -203,189 +318,136 @@ export default function MapScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Status bar top */}
-      <View style={styles.topBar}>
-        <View style={styles.topLeft}>
-          <View style={styles.statusDot} />
-          <Text style={styles.statusText}>{statusMessage}</Text>
-        </View>
-        {session && (
-          <View style={styles.topRight}>
-            <Ionicons name="logo-bitcoin" size={14} color={colors.gold} />
-            <Text style={styles.coinsText}>{session.mapCoins}</Text>
+      {/* Real map */}
+      {Platform.OS === 'web' && location && (
+        <LeafletMap
+          lat={location.lat}
+          lng={location.lng}
+          nearbyPlayers={nearbyPlayers}
+          session={session}
+        />
+      )}
+
+      {/* HUD overlay on top of map */}
+      <View style={styles.hudOverlay} pointerEvents="box-none">
+        {/* Top status bar */}
+        <View style={styles.topBar}>
+          <View style={styles.topLeft}>
+            <View style={styles.statusDot} />
+            <Text style={styles.statusText}>{statusMessage}</Text>
           </View>
-        )}
-      </View>
-
-      {/* Radar view */}
-      <View style={styles.radarWrapper}>
-        <View style={styles.radar}>
-          {/* Concentric rings */}
-          <View style={[styles.ring, { width: RADAR_SIZE * 0.25, height: RADAR_SIZE * 0.25, borderRadius: RADAR_SIZE * 0.25 / 2 }]} />
-          <View style={[styles.ring, { width: RADAR_SIZE * 0.5,  height: RADAR_SIZE * 0.5,  borderRadius: RADAR_SIZE * 0.5  / 2 }]} />
-          <View style={[styles.ring, { width: RADAR_SIZE * 0.75, height: RADAR_SIZE * 0.75, borderRadius: RADAR_SIZE * 0.75 / 2 }]} />
-
-          {/* Cross-hair lines */}
-          <View style={styles.crossH} />
-          <View style={styles.crossV} />
-
-          {/* Radar sweep (web only) */}
-          {Platform.OS === 'web' && (
-            <View
-              className="radar-sweep"
-              style={styles.sweepContainer as any}
-            >
-              <View style={styles.sweepLine} />
-              <View style={styles.sweepFan} />
-            </View>
-          )}
-
-          {/* Attack radius circle */}
           {session && (
-            <View style={styles.attackRadius} />
-          )}
-
-          {/* Nearby players as red dots */}
-          {nearbyPlayers.map((player, idx) => {
-            // Place players around the radar based on index (since we don't have relative bearing)
-            const angle = (idx / Math.max(nearbyPlayers.length, 1)) * Math.PI * 2;
-            const dist = 0.3 + Math.random() * 0.25; // between 30-55% from center
-            const px = 50 + Math.cos(angle) * dist * 50;
-            const py = 50 + Math.sin(angle) * dist * 50;
-            return (
-              <TouchableOpacity
-                key={player.sessionId}
-                style={[
-                  styles.playerDot,
-                  { left: `${px}%` as any, top: `${py}%` as any },
-                  player.shieldActive && styles.playerDotShielded,
-                ]}
-                onPress={() => setAttackTarget(player)}
-              >
-                <View style={styles.playerDotInner} />
-                <Text style={styles.playerLabel}>{player.username.substring(0, 6)}</Text>
-              </TouchableOpacity>
-            );
-          })}
-
-          {/* Player (self) dot */}
-          {Platform.OS === 'web' ? (
-            <View
-              className="pulse-dot"
-              style={[styles.selfDot, shieldIsActive && styles.selfDotShielded]}
-            />
-          ) : (
-            <View style={[styles.selfDot, shieldIsActive && styles.selfDotShielded]} />
-          )}
-        </View>
-      </View>
-
-      {/* Location info */}
-      {location && (
-        <View style={styles.locationBar}>
-          <Ionicons name="location" size={12} color={colors.primary} />
-          <Text style={styles.locationText}>
-            {location.lat.toFixed(5)}, {location.lng.toFixed(5)}
-          </Text>
-        </View>
-      )}
-
-      {/* Session HUD */}
-      {session && (
-        <View style={styles.hudRow}>
-          <View style={styles.hudCard}>
-            <Ionicons name="logo-bitcoin" size={20} color={colors.gold} />
-            <Text style={styles.hudValue}>{session.mapCoins}</Text>
-            <Text style={styles.hudLabel}>COINS</Text>
-          </View>
-          <View style={styles.hudCard}>
-            <Ionicons name="shield" size={20} color={shieldIsActive ? colors.primary : colors.textMuted} />
-            <Text style={[styles.hudValue, { color: shieldIsActive ? colors.primary : colors.text }]}>
-              {shieldIsActive ? 'ON' : 'OFF'}
-            </Text>
-            <Text style={styles.hudLabel}>SHIELD</Text>
-          </View>
-          <View style={styles.hudCard}>
-            <Ionicons name="people" size={20} color={nearbyPlayers.length > 0 ? colors.secondary : colors.textMuted} />
-            <Text style={[styles.hudValue, { color: nearbyPlayers.length > 0 ? colors.secondary : colors.text }]}>
-              {nearbyPlayers.length}
-            </Text>
-            <Text style={styles.hudLabel}>NEARBY</Text>
-          </View>
-        </View>
-      )}
-
-      {/* Attack result toast */}
-      {attackResult && (
-        <View style={styles.toastBanner}>
-          <Ionicons
-            name={attackResult.includes('SUCCESS') ? 'checkmark-circle' : 'close-circle'}
-            size={16}
-            color={attackResult.includes('SUCCESS') ? colors.success : colors.error}
-          />
-          <Text style={styles.toastText}>{attackResult}</Text>
-        </View>
-      )}
-
-      {/* Attack confirmation panel */}
-      {attackTarget && (
-        <View style={styles.attackPanel}>
-          <Text style={styles.attackPanelTitle}>ATTACK TARGET</Text>
-          <Text style={styles.attackPanelName}>{attackTarget.username.toUpperCase()}</Text>
-          <Text style={styles.attackPanelCoins}>{attackTarget.mapCoins} coins</Text>
-          {attackTarget.shieldActive && (
-            <View style={styles.shieldWarning}>
-              <Ionicons name="shield" size={14} color={colors.warning} />
-              <Text style={styles.shieldWarningText}>SHIELD ACTIVE</Text>
+            <View style={styles.topRight}>
+              <Ionicons name="logo-bitcoin" size={14} color={colors.gold} />
+              <Text style={styles.coinsText}>{session.mapCoins}</Text>
             </View>
           )}
-          <View style={styles.attackPanelBtns}>
-            <TouchableOpacity
-              style={styles.cancelBtn}
-              onPress={() => setAttackTarget(null)}
-            >
-              <Text style={styles.cancelBtnText}>CANCEL</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.attackConfirmBtn}
-              onPress={() => handleAttack(attackTarget)}
-            >
-              <Ionicons name="flash" size={16} color="#fff" />
-              <Text style={styles.attackConfirmText}>ATTACK</Text>
-            </TouchableOpacity>
-          </View>
         </View>
-      )}
 
-      {/* Action buttons */}
-      <View style={styles.actionRow}>
-        {!session ? (
-          <TouchableOpacity
-            style={styles.startBtn}
-            onPress={() => setShowBuyIn(true)}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="flash" size={20} color={colors.background} />
-            <Text style={styles.startBtnText}>START HUNTING</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.sessionBtns}>
-            <TouchableOpacity
-              style={[styles.shieldBtn, shieldIsActive && styles.shieldBtnActive]}
-              onPress={handleBuyShield}
-              disabled={session.shieldsRemaining === 0 || shieldIsActive}
-            >
-              <Ionicons
-                name="shield"
-                size={18}
-                color={shieldIsActive ? colors.background : colors.primary}
-              />
-              <Text style={[styles.shieldBtnText, shieldIsActive && { color: colors.background }]}>
-                {shieldIsActive ? 'SHIELDED' : `SHIELD (${session.shieldsRemaining})`}
+        {/* Session HUD cards */}
+        {session && (
+          <View style={styles.hudRow}>
+            <View style={styles.hudCard}>
+              <Ionicons name="logo-bitcoin" size={18} color={colors.gold} />
+              <Text style={styles.hudValue}>{session.mapCoins}</Text>
+              <Text style={styles.hudLabel}>COINS</Text>
+            </View>
+            <View style={styles.hudCard}>
+              <Ionicons name="shield" size={18} color={shieldIsActive ? colors.primary : colors.textMuted} />
+              <Text style={[styles.hudValue, { color: shieldIsActive ? colors.primary : colors.text }]}>
+                {shieldIsActive ? 'ON' : 'OFF'}
               </Text>
-            </TouchableOpacity>
+              <Text style={styles.hudLabel}>SHIELD</Text>
+            </View>
+            <View style={styles.hudCard}>
+              <Ionicons name="people" size={18} color={nearbyPlayers.length > 0 ? colors.secondary : colors.textMuted} />
+              <Text style={[styles.hudValue, { color: nearbyPlayers.length > 0 ? colors.secondary : colors.text }]}>
+                {nearbyPlayers.length}
+              </Text>
+              <Text style={styles.hudLabel}>NEARBY</Text>
+            </View>
           </View>
         )}
+
+        {/* Location coords */}
+        {location && (
+          <View style={styles.locationBar}>
+            <Ionicons name="location" size={12} color={colors.primary} />
+            <Text style={styles.locationText}>
+              {location.lat.toFixed(5)}, {location.lng.toFixed(5)}
+            </Text>
+          </View>
+        )}
+
+        {/* Attack result toast */}
+        {attackResult && (
+          <View style={styles.toastBanner}>
+            <Ionicons
+              name={attackResult.includes('SUCCESS') ? 'checkmark-circle' : 'close-circle'}
+              size={16}
+              color={attackResult.includes('SUCCESS') ? colors.success : colors.error}
+            />
+            <Text style={styles.toastText}>{attackResult}</Text>
+          </View>
+        )}
+
+        {/* Attack confirmation panel */}
+        {attackTarget && (
+          <View style={styles.attackPanel}>
+            <Text style={styles.attackPanelTitle}>ATTACK TARGET</Text>
+            <Text style={styles.attackPanelName}>{attackTarget.username.toUpperCase()}</Text>
+            <Text style={styles.attackPanelCoins}>{attackTarget.mapCoins} coins</Text>
+            {attackTarget.shieldActive && (
+              <View style={styles.shieldWarning}>
+                <Ionicons name="shield" size={14} color={colors.warning} />
+                <Text style={styles.shieldWarningText}>SHIELD ACTIVE</Text>
+              </View>
+            )}
+            <View style={styles.attackPanelBtns}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setAttackTarget(null)}>
+                <Text style={styles.cancelBtnText}>CANCEL</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.attackConfirmBtn} onPress={() => handleAttack(attackTarget)}>
+                <Ionicons name="flash" size={16} color="#fff" />
+                <Text style={styles.attackConfirmText}>ATTACK</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Spacer pushes action buttons to bottom */}
+        <View style={{ flex: 1 }} />
+
+        {/* Action buttons at bottom */}
+        <View style={styles.actionRow}>
+          {!session ? (
+            <TouchableOpacity
+              style={styles.startBtn}
+              onPress={() => setShowBuyIn(true)}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="flash" size={20} color={colors.background} />
+              <Text style={styles.startBtnText}>START HUNTING</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.sessionBtns}>
+              <TouchableOpacity
+                style={[styles.shieldBtn, shieldIsActive && styles.shieldBtnActive]}
+                onPress={handleBuyShield}
+                disabled={session.shieldsRemaining === 0 || shieldIsActive}
+              >
+                <Ionicons
+                  name="shield"
+                  size={18}
+                  color={shieldIsActive ? colors.background : colors.primary}
+                />
+                <Text style={[styles.shieldBtnText, shieldIsActive && { color: colors.background }]}>
+                  {shieldIsActive ? 'SHIELDED' : `SHIELD (${session.shieldsRemaining})`}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
       </View>
 
       <BuyInModal
@@ -397,13 +459,11 @@ export default function MapScreen() {
   );
 }
 
-const S = RADAR_SIZE;
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-    alignItems: 'center',
+    position: 'relative',
   },
   centered: {
     flex: 1,
@@ -411,7 +471,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.xl,
-    gap: spacing.md,
   },
   loadingText: {
     color: colors.textSecondary,
@@ -432,16 +491,22 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     textAlign: 'center',
   },
+  hudOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 10,
+  },
   topBar: {
-    width: '100%',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingTop: spacing.lg,
+    backgroundColor: 'rgba(10, 14, 26, 0.85)',
   },
   topLeft: {
     flexDirection: 'row',
@@ -453,8 +518,6 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: colors.primary,
-    // @ts-ignore web
-    ...(Platform.OS === 'web' ? { boxShadow: `0 0 6px ${colors.primary}` } : {}),
   },
   statusText: {
     color: colors.primary,
@@ -466,7 +529,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: 'rgba(26, 34, 53, 0.9)',
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
     borderRadius: borderRadius.full,
@@ -476,160 +539,24 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     fontWeight: '800',
   },
-  radarWrapper: {
-    marginTop: spacing.lg,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  radar: {
-    width: S,
-    height: S,
-    borderRadius: S / 2,
-    backgroundColor: '#030712',
-    borderWidth: 2,
-    borderColor: colors.primary + '60',
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-    overflow: 'hidden',
-    // @ts-ignore web
-    ...(Platform.OS === 'web' ? {
-      boxShadow: `0 0 40px ${colors.primary}30, inset 0 0 40px rgba(0,0,0,0.5)`,
-    } : {}),
-  },
-  ring: {
-    position: 'absolute',
-    borderWidth: 1,
-    borderColor: colors.primary + '25',
-  },
-  crossH: {
-    position: 'absolute',
-    width: '100%',
-    height: 1,
-    backgroundColor: colors.primary + '15',
-  },
-  crossV: {
-    position: 'absolute',
-    width: 1,
-    height: '100%',
-    backgroundColor: colors.primary + '15',
-  },
-  sweepContainer: {
-    position: 'absolute',
-    width: S / 2,
-    height: S,
-    left: S / 2,
-    top: 0,
-    transformOrigin: 'left center',
-  },
-  sweepLine: {
-    position: 'absolute',
-    left: 0,
-    top: S / 2,
-    width: S / 2,
-    height: 2,
-    backgroundColor: colors.primary + '90',
-  },
-  sweepFan: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    width: S / 2,
-    height: S,
-    // @ts-ignore web
-    background: `conic-gradient(from -90deg at 0% 50%, transparent 270deg, ${colors.primary}40 360deg)`,
-    borderRadius: `0 ${S / 2}px ${S / 2}px 0`,
-  },
-  attackRadius: {
-    position: 'absolute',
-    width: S * 0.35,
-    height: S * 0.35,
-    borderRadius: (S * 0.35) / 2,
-    borderWidth: 1,
-    borderColor: colors.primary + '50',
-    borderStyle: 'dashed',
-  },
-  selfDot: {
-    position: 'absolute',
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: colors.primary,
-    // @ts-ignore web
-    ...(Platform.OS === 'web' ? {
-      boxShadow: `0 0 0 4px ${colors.primary}40, 0 0 12px ${colors.primary}`,
-    } : {}),
-    zIndex: 10,
-  },
-  selfDotShielded: {
-    // @ts-ignore web
-    ...(Platform.OS === 'web' ? {
-      boxShadow: `0 0 0 8px ${colors.primary}30, 0 0 20px ${colors.primary}`,
-    } : {}),
-    backgroundColor: colors.primary,
-  },
-  playerDot: {
-    position: 'absolute',
-    width: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    transform: [{ translateX: -10 }, { translateY: -10 }],
-    zIndex: 8,
-  },
-  playerDotShielded: {
-    // web glow handled inline
-  },
-  playerDotInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.secondary,
-    // @ts-ignore web
-    ...(Platform.OS === 'web' ? {
-      boxShadow: `0 0 8px ${colors.secondary}`,
-    } : {}),
-  },
-  playerLabel: {
-    position: 'absolute',
-    top: 20,
-    fontSize: 8,
-    color: colors.secondary,
-    fontWeight: '700',
-    letterSpacing: 1,
-    textAlign: 'center',
-    width: 60,
-    left: -25,
-  },
-  locationBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: spacing.sm,
-  },
-  locationText: {
-    fontSize: 10,
-    color: colors.textMuted,
-    fontFamily: Platform.OS === 'web' ? 'monospace' : undefined,
-  },
   hudRow: {
     flexDirection: 'row',
     gap: spacing.sm,
-    marginTop: spacing.md,
     paddingHorizontal: spacing.md,
+    marginTop: spacing.sm,
   },
   hudCard: {
     flex: 1,
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(17, 24, 39, 0.9)',
     borderRadius: borderRadius.md,
     padding: spacing.sm,
     alignItems: 'center',
-    gap: 4,
+    gap: 2,
     borderWidth: 1,
     borderColor: colors.border,
   },
   hudValue: {
-    fontSize: fontSize.lg,
+    fontSize: fontSize.md,
     fontWeight: '900',
     color: colors.text,
   },
@@ -639,11 +566,28 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     fontWeight: '600',
   },
+  locationBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    marginTop: spacing.sm,
+    backgroundColor: 'rgba(10, 14, 26, 0.7)',
+    alignSelf: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.full,
+  },
+  locationText: {
+    fontSize: 10,
+    color: colors.textMuted,
+    fontFamily: Platform.OS === 'web' ? 'monospace' : undefined,
+  },
   toastBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: 'rgba(26, 34, 53, 0.95)',
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -658,12 +602,11 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   attackPanel: {
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(17, 24, 39, 0.95)',
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     marginTop: spacing.md,
     marginHorizontal: spacing.md,
-    width: '90%',
     borderWidth: 1,
     borderColor: colors.secondary + '60',
     alignItems: 'center',
@@ -731,10 +674,9 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   actionRow: {
-    width: '100%',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
-    marginTop: 'auto',
+    paddingBottom: spacing.lg,
   },
   startBtn: {
     flexDirection: 'row',
@@ -744,10 +686,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     borderRadius: borderRadius.md,
     paddingVertical: spacing.md,
-    // @ts-ignore web
-    ...(Platform.OS === 'web' ? {
-      boxShadow: `0 0 20px ${colors.primary}60`,
-    } : {}),
   },
   startBtnText: {
     color: colors.background,
@@ -769,6 +707,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     borderWidth: 1,
     borderColor: colors.primary,
+    backgroundColor: 'rgba(10, 14, 26, 0.8)',
   },
   shieldBtnActive: {
     backgroundColor: colors.primary,
