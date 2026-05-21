@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
+// @ts-ignore — optional native dep
+const WebView = Platform.OS !== 'web' ? require('react-native-webview').default : null;
 import { colors, spacing, borderRadius, fontSize } from '../../theme';
 import {
   getActiveSession,
@@ -215,7 +217,7 @@ window.addEventListener('message',function(e){
             var m = L.marker([en.lat,en.lng],{icon:icon}).addTo(map);
             (function(enemy){
               m.on('click',function(){
-                window.parent.postMessage(JSON.stringify({
+                (window.ReactNativeWebView||window.parent).postMessage(JSON.stringify({
                   type:'attackPlayer',
                   sessionId:enemy.sid,
                   username:enemy.name,
@@ -246,7 +248,7 @@ window.addEventListener('message',function(e){
             var m = L.marker([c.lat,c.lng],{icon:icon}).addTo(map);
             (function(coin){
               m.on('click',function(){
-                window.parent.postMessage(JSON.stringify({
+                (window.ReactNativeWebView||window.parent).postMessage(JSON.stringify({
                   type:'collectCoin',
                   id:coin.id,
                   amount:coin.amount
@@ -265,29 +267,19 @@ window.addEventListener('message',function(e){
       });
 
       if(d.type==='init'){
-        window.parent.postMessage(JSON.stringify({type:'ready'}),'*');
+        (window.ReactNativeWebView||window.parent).postMessage(JSON.stringify({type:'ready'}),'*');
       }
     }
   }catch(ex){}
 });
-window.parent.postMessage(JSON.stringify({type:'ready'}),'*');
+(window.ReactNativeWebView||window.parent).postMessage(JSON.stringify({type:'ready'}),'*');
 </script>
 </body>
 </html>`;
 
-  useEffect(() => {
-    const handler = (e: MessageEvent) => {
-      try {
-        const d = JSON.parse(e.data);
-        if (d.type === 'ready') setReady(true);
-      } catch {}
-    };
-    window.addEventListener('message', handler);
-    return () => window.removeEventListener('message', handler);
-  }, []);
+  const webViewRef = useRef<any>(null);
 
-  useEffect(() => {
-    if (!iframeRef.current?.contentWindow) return;
+  const buildPayload = useCallback(() => {
     const enemies = nearbyPlayers.map(p => ({
       name: p.username.substring(0, 8),
       lat: p.latitude,
@@ -302,28 +294,96 @@ window.parent.postMessage(JSON.stringify({type:'ready'}),'*');
       lng: c.longitude,
       amount: c.amount,
     }));
-    iframeRef.current.contentWindow.postMessage(JSON.stringify({
+    return JSON.stringify({
       type: ready ? 'update' : 'init',
       lat, lng,
       hasSession: !!session,
       enemies,
       coins,
-    }), '*');
+    });
   }, [lat, lng, nearbyPlayers, coinDrops, session, ready]);
 
+  // Web: listen for postMessage from iframe
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const handler = (e: MessageEvent) => {
+      try {
+        const d = JSON.parse(e.data);
+        if (d.type === 'ready') setReady(true);
+      } catch {}
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  // Send data to map (web: iframe, native: WebView)
+  useEffect(() => {
+    const payload = buildPayload();
+    if (Platform.OS === 'web') {
+      if (!iframeRef.current?.contentWindow) return;
+      iframeRef.current.contentWindow.postMessage(payload, '*');
+    } else {
+      if (!webViewRef.current) return;
+      webViewRef.current.injectJavaScript(`
+        try {
+          var e = new MessageEvent('message', { data: '${payload.replace(/'/g, "\\'")}' });
+          window.dispatchEvent(e);
+        } catch(ex) {}
+        true;
+      `);
+    }
+  }, [lat, lng, nearbyPlayers, coinDrops, session, ready, buildPayload]);
+
+  const handleNativeMessage = useCallback((event: any) => {
+    try {
+      const d = JSON.parse(event.nativeEvent.data);
+      if (d.type === 'ready') setReady(true);
+      if (d.type === 'attackPlayer') {
+        // Forward to parent via a custom event the MapScreen can handle
+        if ((global as any).__mapEventHandler) {
+          (global as any).__mapEventHandler(d);
+        }
+      }
+      if (d.type === 'collectCoin') {
+        if ((global as any).__mapEventHandler) {
+          (global as any).__mapEventHandler(d);
+        }
+      }
+    } catch {}
+  }, []);
+
+  if (Platform.OS === 'web') {
+    return (
+      <iframe
+        ref={iframeRef as any}
+        srcDoc={html}
+        style={{
+          width: '100%',
+          height: '100%',
+          border: 'none',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+        } as any}
+        allow="geolocation"
+      />
+    );
+  }
+
+  // Native: use WebView
+  if (!WebView) return null;
   return (
-    <iframe
-      ref={iframeRef as any}
-      srcDoc={html}
-      style={{
-        width: '100%',
-        height: '100%',
-        border: 'none',
-        position: 'absolute',
-        top: 0,
-        left: 0,
-      } as any}
-      allow="geolocation"
+    <WebView
+      ref={webViewRef}
+      originWhitelist={['*']}
+      source={{ html }}
+      style={{ flex: 1, backgroundColor: '#0a0e1a' }}
+      onMessage={handleNativeMessage}
+      javaScriptEnabled
+      domStorageEnabled
+      geolocationEnabled
+      allowsInlineMediaPlayback
+      mixedContentMode="always"
     />
   );
 }
@@ -512,29 +572,36 @@ export default function MapScreen() {
   // iframe postMessage handler — attack + collect events from Leaflet
   // -------------------------------------------------------------------------
   useEffect(() => {
-    if (Platform.OS !== 'web') return;
-
-    const handler = (e: MessageEvent) => {
-      try {
-        const d = JSON.parse(e.data);
-
-        if (d.type === 'attackPlayer') {
-          setAttackTarget({
-            sessionId: d.sessionId,
-            username: d.username,
-            coins: d.coins,
-            shielded: !!d.shielded,
-          });
-        }
-
-        if (d.type === 'collectCoin') {
-          handleCollectCoin(d.id, d.amount);
-        }
-      } catch {}
+    const mapHandler = (d: any) => {
+      if (d.type === 'attackPlayer') {
+        setAttackTarget({
+          sessionId: d.sessionId,
+          username: d.username,
+          coins: d.coins,
+          shielded: !!d.shielded,
+        });
+      }
+      if (d.type === 'collectCoin') {
+        handleCollectCoin(d.id, d.amount);
+      }
     };
 
-    window.addEventListener('message', handler);
-    return () => window.removeEventListener('message', handler);
+    // Native: global handler called from WebView onMessage
+    (global as any).__mapEventHandler = mapHandler;
+
+    // Web: listen to postMessage
+    if (Platform.OS === 'web') {
+      const handler = (e: MessageEvent) => {
+        try { mapHandler(JSON.parse(e.data)); } catch {}
+      };
+      window.addEventListener('message', handler);
+      return () => {
+        window.removeEventListener('message', handler);
+        delete (global as any).__mapEventHandler;
+      };
+    }
+
+    return () => { delete (global as any).__mapEventHandler; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.id]);
 
@@ -615,8 +682,8 @@ export default function MapScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Real map */}
-      {Platform.OS === 'web' && location && (
+      {/* Real map — works on both web (iframe) and native (WebView) */}
+      {location && (
         <LeafletMap
           lat={location.lat}
           lng={location.lng}

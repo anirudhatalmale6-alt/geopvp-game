@@ -9,3 +9,4 @@ android/
 __pycache__/
 .DS_Store
 *.tgz
+*.p8
