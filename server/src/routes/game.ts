@@ -5,6 +5,7 @@ import {
   getActiveSession,
   updatePlayerLocation,
   getNearbyPlayers,
+  getAllPlayers,
   attackPlayer,
   buyShield,
   getWallet,
@@ -23,6 +24,7 @@ router.post('/sessions/location', updatePlayerLocation);
 
 // Gameplay routes
 router.get('/nearby', getNearbyPlayers);
+router.get('/players', getAllPlayers);
 router.post('/attack', attackPlayer);
 router.post('/shield', buyShield);
 

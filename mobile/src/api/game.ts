@@ -32,7 +32,8 @@ export interface NearbyPlayer {
   mapCoins: number;
   shieldActive: boolean;
   sessionId: string;
-  distanceMiles: number;
+  distanceMiles?: number;
+  coinTier?: string;
 }
 
 export interface AttackResult {
@@ -83,6 +84,15 @@ export async function updateLocation(lat: number, lng: number): Promise<void> {
 export async function getNearbyPlayers(): Promise<NearbyPlayer[]> {
   try {
     const { data } = await api.get<{ players: NearbyPlayer[] }>('/game/nearby');
+    return data.players;
+  } catch {
+    return [];
+  }
+}
+
+export async function getAllPlayers(): Promise<NearbyPlayer[]> {
+  try {
+    const { data } = await api.get<{ players: NearbyPlayer[] }>('/game/players');
     return data.players;
   } catch {
     return [];

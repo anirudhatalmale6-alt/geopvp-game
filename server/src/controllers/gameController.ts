@@ -227,6 +227,57 @@ export async function getNearbyPlayers(req: AuthRequest, res: Response): Promise
 }
 
 // ---------------------------------------------------------------------------
+// GET /api/game/players  — get ALL active players on the map
+// ---------------------------------------------------------------------------
+
+export async function getAllPlayers(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const userId = req.user!.id;
+
+    const result = await query(
+      `SELECT
+         gs.id AS session_id,
+         gs.user_id,
+         gs.latitude,
+         gs.longitude,
+         gs.map_coins,
+         gs.shield_active_until,
+         gs.coin_tier,
+         u.username
+       FROM game_sessions gs
+       JOIN users u ON u.id = gs.user_id
+       WHERE gs.is_active = true
+         AND gs.user_id != $1
+         AND gs.latitude IS NOT NULL
+         AND gs.last_location_update > now() - interval '30 minutes'
+       ORDER BY gs.map_coins DESC`,
+      [userId],
+    );
+
+    const players = result.rows.map((row) => {
+      const shieldActive = row.shield_active_until
+        ? new Date(row.shield_active_until) > new Date()
+        : false;
+      return {
+        sessionId: row.session_id,
+        id: row.user_id,
+        username: row.username,
+        latitude: parseFloat(row.latitude),
+        longitude: parseFloat(row.longitude),
+        mapCoins: parseInt(row.map_coins, 10),
+        coinTier: row.coin_tier,
+        shieldActive,
+      };
+    });
+
+    res.json({ players });
+  } catch (err) {
+    console.error('getAllPlayers error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+// ---------------------------------------------------------------------------
 // POST /api/game/attack  — attack a nearby player
 // ---------------------------------------------------------------------------
 

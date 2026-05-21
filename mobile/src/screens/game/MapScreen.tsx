@@ -15,6 +15,7 @@ import {
   getActiveSession,
   updateLocation,
   getNearbyPlayers,
+  getAllPlayers,
   attackPlayer,
   buyShield,
   GameSession,
@@ -79,12 +80,25 @@ function LeafletMap({ lat, lng, nearbyPlayers, session }: {
     width:12px;height:12px;border-radius:50%;
     background:#ff1744;border:2px solid #ff1744;
     box-shadow:0 0 8px #ff1744;
+    position:relative;
   }
-  .enemy-label{
+  .enemy-marker.shielded{
+    background:#7c4dff;border-color:#7c4dff;
+    box-shadow:0 0 8px #7c4dff;
+  }
+  .enemy-info{
+    display:flex;flex-direction:column;align-items:center;
+    margin-top:2px;
+  }
+  .enemy-name{
     color:#ff1744;font-size:10px;font-weight:700;
     text-align:center;white-space:nowrap;
     text-shadow:0 0 4px rgba(0,0,0,0.8);
-    margin-top:2px;letter-spacing:1px;
+    letter-spacing:1px;
+  }
+  .enemy-coins{
+    color:#ffd700;font-size:9px;font-weight:600;
+    text-shadow:0 0 4px rgba(0,0,0,0.8);
   }
   .leaflet-tile-pane{}
   .leaflet-control-attribution{display:none!important}
@@ -127,7 +141,9 @@ window.addEventListener('message',function(e){
       enemyMarkers=[];
       if(d.enemies){
         d.enemies.forEach(function(en){
-          var icon = L.divIcon({className:'',html:'<div class="enemy-marker"></div><div class="enemy-label">'+en.name+'</div>',iconSize:[12,12],iconAnchor:[6,6]});
+          var cls = en.shielded ? 'enemy-marker shielded' : 'enemy-marker';
+          var html = '<div class="'+cls+'"></div><div class="enemy-info"><span class="enemy-name">'+en.name+'</span><span class="enemy-coins">'+en.coins+' coins</span></div>';
+          var icon = L.divIcon({className:'',html:html,iconSize:[12,12],iconAnchor:[6,6]});
           var m = L.marker([en.lat,en.lng],{icon:icon}).addTo(map);
           enemyMarkers.push(m);
         });
@@ -160,8 +176,11 @@ window.parent.postMessage(JSON.stringify({type:'ready'}),'*');
     if (!iframeRef.current?.contentWindow) return;
     const enemies = nearbyPlayers.map(p => ({
       name: p.username.substring(0, 8),
-      lat: p.latitude || lat + (Math.random() - 0.5) * 0.003,
-      lng: p.longitude || lng + (Math.random() - 0.5) * 0.003,
+      lat: p.latitude,
+      lng: p.longitude,
+      coins: p.mapCoins,
+      shielded: p.shieldActive,
+      sid: p.sessionId,
     }));
     iframeRef.current.contentWindow.postMessage(JSON.stringify({
       type: ready ? 'update' : 'init',
@@ -197,7 +216,7 @@ export default function MapScreen() {
   const [showBuyIn, setShowBuyIn] = useState(false);
   const [attackTarget, setAttackTarget] = useState<NearbyPlayer | null>(null);
   const [attackResult, setAttackResult] = useState<string | null>(null);
-  const [statusMessage, setStatusMessage] = useState<string>('SCANNING AREA...');
+  const [statusMessage, setStatusMessage] = useState<string>('LIVE MAP');
   const locationSub = useRef<Location.LocationSubscription | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -253,13 +272,9 @@ export default function MapScreen() {
     const poll = async () => {
       try {
         await updateLocation(location.lat, location.lng);
-        const players = await getNearbyPlayers();
+        const players = await getAllPlayers();
         setNearbyPlayers(players);
-        if (players.length > 0) {
-          setStatusMessage(`${players.length} HUNTER${players.length > 1 ? 'S' : ''} DETECTED`);
-        } else {
-          setStatusMessage('AREA CLEAR');
-        }
+        setStatusMessage(`${players.length} HUNTER${players.length !== 1 ? 'S' : ''} ON MAP`);
       } catch {}
     };
 
