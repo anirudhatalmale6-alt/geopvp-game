@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -12,9 +12,9 @@ import SignUpScreen from './src/screens/auth/SignUpScreen';
 import VerifyEmailScreen from './src/screens/auth/VerifyEmailScreen';
 import ForgotPasswordScreen from './src/screens/auth/ForgotPasswordScreen';
 import ResetPasswordScreen from './src/screens/auth/ResetPasswordScreen';
+import MainTabs from './src/navigation/MainTabs';
 
 const AuthStackNav = createNativeStackNavigator();
-const MainStackNav = createNativeStackNavigator();
 
 const DarkTheme = {
   ...DefaultTheme,
@@ -48,30 +48,8 @@ function AuthStack() {
   );
 }
 
-function HomeScreen() {
-  const { user, logout } = useAuth();
-  return (
-    <View style={styles.homeContainer}>
-      <Text style={styles.homeTitle}>WELCOME, {user?.username?.toUpperCase() || 'HUNTER'}</Text>
-      <Text style={styles.homeSubtitle}>The map is coming soon...</Text>
-      <TouchableOpacity style={styles.logoutButton} onPress={logout}>
-        <Text style={styles.logoutText}>LOG OUT</Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
-
 function MainStack() {
-  return (
-    <MainStackNav.Navigator
-      screenOptions={{
-        headerShown: false,
-        contentStyle: { backgroundColor: colors.background },
-      }}
-    >
-      <MainStackNav.Screen name="Home" component={HomeScreen} />
-    </MainStackNav.Navigator>
-  );
+  return <MainTabs />;
 }
 
 function LoadingScreen() {
@@ -116,36 +94,5 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: colors.primary,
     letterSpacing: 6,
-  },
-  homeContainer: {
-    flex: 1,
-    backgroundColor: colors.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  homeTitle: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: colors.primary,
-    letterSpacing: 3,
-    marginBottom: 8,
-  },
-  homeSubtitle: {
-    fontSize: 16,
-    color: colors.textSecondary,
-    marginBottom: 40,
-  },
-  logoutButton: {
-    backgroundColor: colors.secondary,
-    paddingVertical: 14,
-    paddingHorizontal: 40,
-    borderRadius: 12,
-  },
-  logoutText: {
-    color: '#fff',
-    fontWeight: '800',
-    fontSize: 16,
-    letterSpacing: 2,
   },
 });

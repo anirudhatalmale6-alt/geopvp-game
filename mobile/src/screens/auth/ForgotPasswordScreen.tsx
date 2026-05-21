@@ -40,7 +40,7 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE}/api/auth/forgot-password`, {
+      const response = await fetch(`${API_BASE}/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim().toLowerCase() }),

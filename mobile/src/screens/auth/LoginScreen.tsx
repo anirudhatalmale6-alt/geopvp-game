@@ -11,16 +11,15 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as SecureStore from 'expo-secure-store';
 import { colors, fontSize, spacing, borderRadius, fonts } from '../../theme';
-
-const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000/api';
+import { useAuth } from '../../context/AuthContext';
 
 interface Props {
   navigation: any;
 }
 
 export default function LoginScreen({ navigation }: Props) {
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -42,33 +41,7 @@ export default function LoginScreen({ navigation }: Props) {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Login failed');
-      }
-
-      // Store tokens
-      await SecureStore.setItemAsync('accessToken', data.accessToken);
-      await SecureStore.setItemAsync('refreshToken', data.refreshToken);
-
-      if (rememberMe) {
-        await SecureStore.setItemAsync('rememberEmail', email.trim().toLowerCase());
-      } else {
-        await SecureStore.deleteItemAsync('rememberEmail');
-      }
-
-      // Navigate to main app
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'Main' }],
-      });
+      await login(email.trim().toLowerCase(), password);
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred');
     } finally {

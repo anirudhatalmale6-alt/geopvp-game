@@ -105,7 +105,7 @@ export default function VerifyEmailScreen({ navigation, route }: Props) {
     setError('');
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE}/api/auth/verify-email`, {
+      const response = await fetch(`${API_BASE}/auth/verify-email`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, code: fullCode }),
@@ -133,7 +133,7 @@ export default function VerifyEmailScreen({ navigation, route }: Props) {
     setError('');
 
     try {
-      const response = await fetch(`${API_BASE}/api/auth/resend-code`, {
+      const response = await fetch(`${API_BASE}/auth/resend-code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),

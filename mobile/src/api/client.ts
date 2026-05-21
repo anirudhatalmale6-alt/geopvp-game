@@ -3,7 +3,23 @@
  * Uses expo-secure-store for secure token persistence.
  */
 
+import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+
+const storage = {
+  getItemAsync: (key: string) =>
+    Platform.OS === 'web'
+      ? Promise.resolve(localStorage.getItem(key))
+      : SecureStore.getItemAsync(key),
+  setItemAsync: (key: string, value: string) =>
+    Platform.OS === 'web'
+      ? Promise.resolve(void localStorage.setItem(key, value))
+      : SecureStore.setItemAsync(key, value),
+  deleteItemAsync: (key: string) =>
+    Platform.OS === 'web'
+      ? Promise.resolve(void localStorage.removeItem(key))
+      : SecureStore.deleteItemAsync(key),
+};
 
 const TOKEN_KEY = 'geoapp_token';
 const REFRESH_TOKEN_KEY = 'geoapp_refresh_token';
@@ -19,21 +35,21 @@ export async function setTokens(
   token: string,
   refreshToken: string,
 ): Promise<void> {
-  await SecureStore.setItemAsync(TOKEN_KEY, token);
-  await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, refreshToken);
+  await storage.setItemAsync(TOKEN_KEY, token);
+  await storage.setItemAsync(REFRESH_TOKEN_KEY, refreshToken);
 }
 
 export async function getToken(): Promise<string | null> {
-  return SecureStore.getItemAsync(TOKEN_KEY);
+  return storage.getItemAsync(TOKEN_KEY);
 }
 
 export async function getRefreshToken(): Promise<string | null> {
-  return SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+  return storage.getItemAsync(REFRESH_TOKEN_KEY);
 }
 
 export async function clearTokens(): Promise<void> {
-  await SecureStore.deleteItemAsync(TOKEN_KEY);
-  await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
+  await storage.deleteItemAsync(TOKEN_KEY);
+  await storage.deleteItemAsync(REFRESH_TOKEN_KEY);
 }
 
 // ---------------------------------------------------------------------------

@@ -71,7 +71,7 @@ export default function SignUpScreen({ navigation }: Props) {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE}/api/auth/signup`, {
+      const response = await fetch(`${API_BASE}/auth/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
