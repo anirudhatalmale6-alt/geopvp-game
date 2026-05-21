@@ -10,3 +10,6 @@ __pycache__/
 .DS_Store
 *.tgz
 *.p8
+
+ios-creds/
+credentials.json
