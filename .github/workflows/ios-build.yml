@@ -8,12 +8,15 @@ env:
 
 jobs:
   build:
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 60
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Select Xcode 16.2
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -25,15 +28,6 @@ jobs:
       - name: Install mobile dependencies
         working-directory: mobile
         run: npm ci
-
-      - name: Setup Ruby & CocoaPods
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.2'
-          bundler-cache: false
-
-      - name: Install CocoaPods
-        run: gem install cocoapods
 
       - name: Expo prebuild
         working-directory: mobile
