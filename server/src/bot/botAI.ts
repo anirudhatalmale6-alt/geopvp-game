@@ -74,11 +74,14 @@ async function botTick(io: SocketIOServer) {
     botsWithDist.sort((a: any, b: any) => a._minDist - b._minDist);
 
     for (const bot of botsWithDist) {
-      // Find nearest real player within hunt radius that isn't already being chased
+      // Find nearest real player that isn't already being chased AND hasn't been hit by this bot recently
       let nearest = null;
       let nearestDist = Infinity;
       for (const p of realPlayers) {
         if (playerBeingChased.has(p.user_id)) continue;
+        const cooldownKey = `${bot.user_id}:${p.user_id}`;
+        const lastHit = botPlayerCooldowns.get(cooldownKey) || 0;
+        if (Date.now() - lastHit < ONE_WEEK_MS) continue;
         const d = distanceMiles(bot.latitude, bot.longitude, p.latitude, p.longitude);
         if (d < nearestDist && d <= MAX_HUNT_RADIUS_MILES) {
           nearestDist = d;
