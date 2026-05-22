@@ -154,11 +154,12 @@ async function botAttack(
       const botHitsLeft = parseInt(bot.shields_remaining || '0', 10);
       if (botHitsLeft <= 0) return;
 
-      // Bot takes 1 shield from the player (if they have any)
-      const playerShieldsRemaining = parseInt(defender.shields_remaining || '0', 10);
-      if (playerShieldsRemaining > 0) {
+      // Bot takes 1 shield from the player's 3-shield pool (even if inactive)
+      const playerShieldsPurchased = parseInt(defender.shields_purchased || '0', 10);
+      const shieldTaken = playerShieldsPurchased < 3;
+      if (shieldTaken) {
         await q(
-          `UPDATE game_sessions SET shields_remaining = shields_remaining - 1 WHERE id = $1`,
+          `UPDATE game_sessions SET shields_purchased = shields_purchased + 1, shield_active_until = NULL WHERE id = $1`,
           [target.session_id],
         );
       }
@@ -188,7 +189,7 @@ async function botAttack(
         botUserId: bot.user_id,
         botName: bot.username,
         targetUserId: defender.user_id,
-        shieldTaken: playerShieldsRemaining > 0,
+        shieldTaken,
         botHitsLeft: newBotHits,
       });
 

@@ -363,22 +363,20 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
       const isBot = defenderEmail?.endsWith('@bot.local');
 
       if (isBot) {
-        // Player attacks bot: costs 1 shield (consumes active shield + uses up a purchased slot)
-        const hasActiveShield = attacker.shield_active_until
-          ? new Date(attacker.shield_active_until) > new Date()
-          : false;
+        // Player attacks bot: costs 1 shield from their 3-shield pool
         const shieldsPurchased = parseInt(attacker.shields_purchased || '0', 10);
 
-        if (!hasActiveShield) {
-          throw new Error('You need an active shield to attack a bot! Buy and activate a shield first.');
+        if (shieldsPurchased >= 3) {
+          throw new Error('No shields left! You have used all 3 shields this session.');
         }
 
-        // Consume the player's active shield
+        // Consume 1 shield: increment shields_purchased (UI shows 3 - shields_purchased)
+        // Also clear any active shield timer
         await q(
-          `UPDATE game_sessions SET shield_active_until = NULL WHERE id = $1`,
+          `UPDATE game_sessions SET shields_purchased = shields_purchased + 1, shield_active_until = NULL WHERE id = $1`,
           [attacker.id],
         );
-        const playerShieldsLeft = 3 - shieldsPurchased;
+        const playerShieldsLeft = 3 - (shieldsPurchased + 1);
 
         const hitsRemaining = parseInt(defender.shields_remaining || '0', 10);
 
