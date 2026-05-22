@@ -10,8 +10,9 @@ const BOT_ATTACK_RADIUS = 0.5;
 const MAX_HUNT_RADIUS_MILES = 150;
 
 let tickHandle: ReturnType<typeof setInterval> | null = null;
-const botAttackCooldowns = new Map<string, number>();
-const BOT_ATTACK_COOLDOWN_MS = 15000;
+// Key: "botUserId:playerUserId", Value: timestamp of last bot->player attack
+const botPlayerCooldowns = new Map<string, number>();
+const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 function distanceMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 3958.8;
@@ -105,11 +106,12 @@ async function botTick(io: SocketIOServer) {
         ts: Date.now(),
       });
 
-      // If within attack range and cooldown expired, bot attacks
+      // If within attack range and this bot hasn't hit this player in the last week
       const currentDist = distanceMiles(newLat, newLng, nearest.latitude, nearest.longitude);
-      const lastAttack = botAttackCooldowns.get(bot.session_id) || 0;
-      if (currentDist <= BOT_ATTACK_RADIUS && Date.now() - lastAttack > BOT_ATTACK_COOLDOWN_MS) {
-        botAttackCooldowns.set(bot.session_id, Date.now());
+      const cooldownKey = `${bot.user_id}:${nearest.user_id}`;
+      const lastHit = botPlayerCooldowns.get(cooldownKey) || 0;
+      if (currentDist <= BOT_ATTACK_RADIUS && Date.now() - lastHit > ONE_WEEK_MS) {
+        botPlayerCooldowns.set(cooldownKey, Date.now());
         await botAttack(bot, nearest, io);
       }
     }

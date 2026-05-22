@@ -363,11 +363,21 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
       const isBot = defenderEmail?.endsWith('@bot.local');
 
       if (isBot) {
-        // Bot attack: each hit removes 1 hit point, no coins stolen until bot is defeated
+        // Player attacks bot: costs 1 shield per attack
+        const attackerShields = parseInt(attacker.shields_remaining || '0', 10);
+        if (attackerShields <= 0) {
+          throw new Error('You need a shield to attack a bot! Buy a shield first.');
+        }
+
+        // Take 1 shield from the attacker
+        await q(
+          `UPDATE game_sessions SET shields_remaining = shields_remaining - 1 WHERE id = $1`,
+          [attacker.id],
+        );
+
         const hitsRemaining = parseInt(defender.shields_remaining || '0', 10);
 
         if (hitsRemaining > 1) {
-          // Bot still has hit points - remove one, no coins change hands
           await q(
             `UPDATE game_sessions SET shields_remaining = shields_remaining - 1 WHERE id = $1`,
             [defender.id],
@@ -383,7 +393,9 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
             coinsStolen: 0,
             defenderHadShield: true,
             shieldsLeft: left,
-            message: `Hit! ${left} hit(s) remaining on this bot.`,
+            shieldsUsed: 1,
+            playerShieldsLeft: attackerShields - 1,
+            message: `Hit! ${left} hit(s) remaining on this bot. You used 1 shield (${attackerShields - 1} left).`,
           };
         }
 
@@ -407,7 +419,9 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
           success: true,
           coinsStolen: botCoins,
           defenderHadShield: false,
-          message: `Bot defeated! You took all ${botCoins} coins!`,
+          shieldsUsed: 1,
+          playerShieldsLeft: attackerShields - 1,
+          message: `Bot defeated! You took all ${botCoins} coins! (1 shield used)`,
         };
       }
 
