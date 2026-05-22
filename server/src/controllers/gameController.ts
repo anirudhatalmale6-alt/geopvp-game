@@ -186,7 +186,9 @@ export async function getNearbyPlayers(req: AuthRequest, res: Response): Promise
          gs.longitude,
          gs.map_coins,
          gs.shield_active_until,
-         u.username
+         gs.shields_remaining,
+         u.username,
+         u.email
        FROM game_sessions gs
        JOIN users u ON u.id = gs.user_id
        WHERE gs.is_active = true
@@ -194,16 +196,17 @@ export async function getNearbyPlayers(req: AuthRequest, res: Response): Promise
          AND gs.latitude IS NOT NULL
          AND gs.latitude BETWEEN $2 AND $3
          AND gs.longitude BETWEEN $4 AND $5
-         AND gs.last_location_update > now() - interval '5 minutes'`,
+         AND (gs.last_location_update > now() - interval '5 minutes' OR u.email LIKE '%@bot.local')`,
       [userId, myLat - delta, myLat + delta, myLng - delta, myLng + delta],
     );
 
     const players = result.rows
       .map((row) => {
         const dist = distanceMiles(myLat, myLng, row.latitude, row.longitude);
-        const shieldActive = row.shield_active_until
-          ? new Date(row.shield_active_until) > new Date()
-          : false;
+        const isBot = row.email?.endsWith('@bot.local');
+        const shieldActive = isBot
+          ? parseInt(row.shields_remaining || '0', 10) > 0
+          : (row.shield_active_until ? new Date(row.shield_active_until) > new Date() : false);
         return {
           sessionId: row.session_id,
           id: row.user_id,
@@ -240,22 +243,25 @@ export async function getAllPlayers(req: AuthRequest, res: Response): Promise<vo
          gs.longitude,
          gs.map_coins,
          gs.shield_active_until,
+         gs.shields_remaining,
          gs.coin_tier,
-         u.username
+         u.username,
+         u.email
        FROM game_sessions gs
        JOIN users u ON u.id = gs.user_id
        WHERE gs.is_active = true
          AND gs.user_id != $1
          AND gs.latitude IS NOT NULL
-         AND gs.last_location_update > now() - interval '30 minutes'
+         AND (gs.last_location_update > now() - interval '30 minutes' OR u.email LIKE '%@bot.local')
        ORDER BY gs.map_coins DESC`,
       [userId],
     );
 
     const players = result.rows.map((row) => {
-      const shieldActive = row.shield_active_until
-        ? new Date(row.shield_active_until) > new Date()
-        : false;
+      const isBot = row.email?.endsWith('@bot.local');
+      const shieldActive = isBot
+        ? parseInt(row.shields_remaining || '0', 10) > 0
+        : (row.shield_active_until ? new Date(row.shield_active_until) > new Date() : false);
       return {
         sessionId: row.session_id,
         id: row.user_id,
@@ -338,18 +344,26 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
       }
 
       // Check if defender has active shield
-      const defenderHasShield = defender.shield_active_until
-        ? new Date(defender.shield_active_until) > new Date()
-        : false;
+      const isBot = defender.defender_name && (await q(`SELECT email FROM users WHERE id = $1`, [defender.user_id])).rows[0]?.email?.endsWith('@bot.local');
+      const defenderShieldsRemaining = parseInt(defender.shields_remaining || '0', 10);
+      const defenderHasShield = isBot
+        ? defenderShieldsRemaining > 0
+        : (defender.shield_active_until ? new Date(defender.shield_active_until) > new Date() : false);
 
       if (defenderHasShield) {
-        // Attack blocked
+        if (isBot && defenderShieldsRemaining > 0) {
+          await q(
+            `UPDATE game_sessions SET shields_remaining = shields_remaining - 1 WHERE id = $1`,
+            [defender.id],
+          );
+        }
         await q(
           `INSERT INTO attacks (attacker_id, defender_id, attacker_coins, defender_coins, coins_stolen, defender_had_shield, success, latitude, longitude)
            VALUES ($1, $2, $3, $4, 0, true, false, $5, $6)`,
           [attacker.user_id, defender.user_id, attacker.map_coins, defender.map_coins, attacker.latitude, attacker.longitude],
         );
-        return { success: false, coinsStolen: 0, defenderHadShield: true, message: 'Attack blocked by shield!' };
+        const shieldsLeft = isBot ? defenderShieldsRemaining - 1 : 0;
+        return { success: false, coinsStolen: 0, defenderHadShield: true, shieldsLeft, message: `Attack blocked by shield! ${isBot ? shieldsLeft + ' shield(s) remaining.' : ''}` };
       }
 
       // Steal 20% of defender's coins (min 1, max 50)
