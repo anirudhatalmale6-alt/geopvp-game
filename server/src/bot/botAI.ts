@@ -9,8 +9,13 @@ const ATTACK_RADIUS = config.attackRadiusMiles;
 const BOT_ATTACK_RADIUS = 0.5;
 const MAX_HUNT_RADIUS_MILES = 150;
 const MAX_BOT_HITS_PER_PLAYER_PER_WEEK = 2;
+const MIN_BOT_SPACING_MILES = 10;
+const MIN_BOT_SPACING_DEGS = MIN_BOT_SPACING_MILES / 69;
 
 let tickHandle: ReturnType<typeof setInterval> | null = null;
+
+// Persistent wander headings per bot (survives across ticks, not across restarts - that's fine)
+const botWanderAngles = new Map<string, number>();
 
 function distanceMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 3958.8;
@@ -20,6 +25,17 @@ function distanceMiles(lat1: number, lng1: number, lat2: number, lng2: number): 
     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
     Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function getWanderAngle(botId: string): number {
+  if (!botWanderAngles.has(botId)) {
+    botWanderAngles.set(botId, Math.random() * 2 * Math.PI);
+  }
+  // Slowly drift the heading each tick for natural-looking patrol movement
+  let angle = botWanderAngles.get(botId)!;
+  angle += (Math.random() - 0.5) * 0.3;
+  botWanderAngles.set(botId, angle);
+  return angle;
 }
 
 async function botTick(io: SocketIOServer) {
@@ -41,7 +57,6 @@ async function botTick(io: SocketIOServer) {
       console.log(`[BotAI] ${realPlayers.length} real players online`);
     }
 
-    // Query database for bot attack history this week (survives server restarts)
     const weeklyHitsRes = await query(
       `SELECT a.attacker_id, a.defender_id, MAX(a.created_at) as last_hit
        FROM attacks a
@@ -51,9 +66,7 @@ async function botTick(io: SocketIOServer) {
        GROUP BY a.attacker_id, a.defender_id`,
     );
 
-    // Build cooldown map from DB: "botUserId:playerUserId" -> last hit timestamp
     const dbCooldowns = new Map<string, number>();
-    // Build per-player hit count: how many distinct bots hit each player this week
     const playerDistinctBotHits = new Map<string, Set<string>>();
     for (const row of weeklyHitsRes.rows) {
       const key = `${row.attacker_id}:${row.defender_id}`;
@@ -76,10 +89,11 @@ async function botTick(io: SocketIOServer) {
 
     const dtSeconds = TICK_INTERVAL_MS / 1000;
     const moveDegs = BOT_SPEED_MPH * MPH_TO_DEG_PER_SEC * dtSeconds;
+    const allBots = botsRes.rows;
 
     const playerBeingChased = new Set<string>();
 
-    const botsWithDist = botsRes.rows.map((bot: any) => {
+    const botsWithDist = allBots.map((bot: any) => {
       let minDist = Infinity;
       for (const p of realPlayers) {
         const d = distanceMiles(bot.latitude, bot.longitude, p.latitude, p.longitude);
@@ -89,15 +103,16 @@ async function botTick(io: SocketIOServer) {
     });
     botsWithDist.sort((a: any, b: any) => a._minDist - b._minDist);
 
+    // Track updated positions so later bots repel from already-moved bots
+    const updatedPositions = new Map<string, { lat: number; lng: number }>();
+
     for (const bot of botsWithDist) {
       let nearest = null;
       let nearestDist = Infinity;
       for (const p of realPlayers) {
         if (playerBeingChased.has(p.user_id)) continue;
-        // Skip if this bot already hit this player this week (DB-backed)
         const cooldownKey = `${bot.user_id}:${p.user_id}`;
         if (dbCooldowns.has(cooldownKey)) continue;
-        // Skip if this player already got hit by MAX distinct bots this week
         const distinctBots = playerDistinctBotHits.get(p.user_id);
         if (distinctBots && distinctBots.size >= MAX_BOT_HITS_PER_PLAYER_PER_WEEK) continue;
         const d = distanceMiles(bot.latitude, bot.longitude, p.latitude, p.longitude);
@@ -107,27 +122,47 @@ async function botTick(io: SocketIOServer) {
         }
       }
 
-      let newLat = bot.latitude;
-      let newLng = bot.longitude;
+      // Calculate base movement direction
+      let moveLat = 0;
+      let moveLng = 0;
 
-      if (!nearest) {
-        // No valid target - wander away from nearest player in a random direction
-        const angle = Math.random() * 2 * Math.PI;
-        newLat = bot.latitude + Math.cos(angle) * moveDegs;
-        newLng = bot.longitude + Math.sin(angle) * moveDegs;
-      } else {
+      if (nearest) {
         playerBeingChased.add(nearest.user_id);
-
         const dLat = nearest.latitude - bot.latitude;
         const dLng = nearest.longitude - bot.longitude;
         const rawDist = Math.sqrt(dLat * dLat + dLng * dLng);
-
         if (rawDist > 0.0001) {
-          const step = Math.min(moveDegs, rawDist);
-          newLat = bot.latitude + (dLat / rawDist) * step;
-          newLng = bot.longitude + (dLng / rawDist) * step;
+          moveLat = (dLat / rawDist) * moveDegs;
+          moveLng = (dLng / rawDist) * moveDegs;
+        }
+      } else {
+        // Wander with a persistent heading
+        const angle = getWanderAngle(bot.user_id);
+        moveLat = Math.cos(angle) * moveDegs;
+        moveLng = Math.sin(angle) * moveDegs;
+      }
+
+      // Bot-to-bot repulsion: push away from any bot within MIN_BOT_SPACING_MILES
+      let repelLat = 0;
+      let repelLng = 0;
+      for (const other of allBots) {
+        if (other.user_id === bot.user_id) continue;
+        const oPos = updatedPositions.get(other.user_id) || { lat: other.latitude, lng: other.longitude };
+        const dLat = bot.latitude - oPos.lat;
+        const dLng = bot.longitude - oPos.lng;
+        const degDist = Math.sqrt(dLat * dLat + dLng * dLng);
+        if (degDist < MIN_BOT_SPACING_DEGS && degDist > 0.0001) {
+          // Stronger repulsion the closer they are
+          const strength = (MIN_BOT_SPACING_DEGS - degDist) / MIN_BOT_SPACING_DEGS;
+          repelLat += (dLat / degDist) * moveDegs * strength * 2;
+          repelLng += (dLng / degDist) * moveDegs * strength * 2;
         }
       }
+
+      let newLat = bot.latitude + moveLat + repelLat;
+      let newLng = bot.longitude + moveLng + repelLng;
+
+      updatedPositions.set(bot.user_id, { lat: newLat, lng: newLng });
 
       await query(
         `UPDATE game_sessions SET latitude = $1, longitude = $2, last_location_update = now() WHERE id = $3`,
