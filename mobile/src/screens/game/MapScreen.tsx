@@ -459,6 +459,8 @@ export default function MapScreen() {
   const [zoomedOut, setZoomedOut] = useState(false);
   const mapRef = useRef<any>(null);
   const locationSub = useRef<Location.LocationSubscription | null>(null);
+  const locationFallbackRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastLocationUpdate = useRef<number>(Date.now());
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const coinPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const socketUnsubRef = useRef<(() => void) | null>(null);
@@ -490,17 +492,34 @@ export default function MapScreen() {
       } catch {}
 
       locationSub.current = await Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 2000, distanceInterval: 3 },
+        { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 2000, distanceInterval: 1 },
         (pos) => {
           if (checkMockLocation(pos)) {
             console.warn('[AntiCheat] Mock location detected, ignoring update');
             return;
           }
+          lastLocationUpdate.current = Date.now();
           setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         },
       );
+
+      // Fallback: if watchPosition stops firing (poor signal areas), poll every 8s
+      locationFallbackRef.current = setInterval(async () => {
+        if (Date.now() - lastLocationUpdate.current > 6000) {
+          try {
+            const pos = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.High,
+            });
+            lastLocationUpdate.current = Date.now();
+            setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+          } catch {}
+        }
+      }, 8000);
     })();
-    return () => { locationSub.current?.remove(); };
+    return () => {
+      locationSub.current?.remove();
+      if (locationFallbackRef.current) clearInterval(locationFallbackRef.current);
+    };
   }, []);
 
   // -------------------------------------------------------------------------
