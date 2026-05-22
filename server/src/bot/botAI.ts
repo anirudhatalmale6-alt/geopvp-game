@@ -107,20 +107,26 @@ async function botTick(io: SocketIOServer) {
         }
       }
 
-      if (!nearest) continue;
-      playerBeingChased.add(nearest.user_id);
-
-      const dLat = nearest.latitude - bot.latitude;
-      const dLng = nearest.longitude - bot.longitude;
-      const rawDist = Math.sqrt(dLat * dLat + dLng * dLng);
-
       let newLat = bot.latitude;
       let newLng = bot.longitude;
 
-      if (rawDist > 0.0001) {
-        const step = Math.min(moveDegs, rawDist);
-        newLat = bot.latitude + (dLat / rawDist) * step;
-        newLng = bot.longitude + (dLng / rawDist) * step;
+      if (!nearest) {
+        // No valid target - wander away from nearest player in a random direction
+        const angle = Math.random() * 2 * Math.PI;
+        newLat = bot.latitude + Math.cos(angle) * moveDegs;
+        newLng = bot.longitude + Math.sin(angle) * moveDegs;
+      } else {
+        playerBeingChased.add(nearest.user_id);
+
+        const dLat = nearest.latitude - bot.latitude;
+        const dLng = nearest.longitude - bot.longitude;
+        const rawDist = Math.sqrt(dLat * dLat + dLng * dLng);
+
+        if (rawDist > 0.0001) {
+          const step = Math.min(moveDegs, rawDist);
+          newLat = bot.latitude + (dLat / rawDist) * step;
+          newLng = bot.longitude + (dLng / rawDist) * step;
+        }
       }
 
       await query(
@@ -136,18 +142,19 @@ async function botTick(io: SocketIOServer) {
         ts: Date.now(),
       });
 
-      const currentDist = distanceMiles(newLat, newLng, nearest.latitude, nearest.longitude);
-      const cooldownKey = `${bot.user_id}:${nearest.user_id}`;
-      if (currentDist <= BOT_ATTACK_RADIUS && !dbCooldowns.has(cooldownKey)) {
-        const distinctBots = playerDistinctBotHits.get(nearest.user_id);
-        if (!distinctBots || distinctBots.size < MAX_BOT_HITS_PER_PLAYER_PER_WEEK) {
-          // Mark in local maps so this tick doesn't double-hit
-          dbCooldowns.set(cooldownKey, Date.now());
-          if (!playerDistinctBotHits.has(nearest.user_id)) {
-            playerDistinctBotHits.set(nearest.user_id, new Set());
+      if (nearest) {
+        const currentDist = distanceMiles(newLat, newLng, nearest.latitude, nearest.longitude);
+        const cooldownKey = `${bot.user_id}:${nearest.user_id}`;
+        if (currentDist <= BOT_ATTACK_RADIUS && !dbCooldowns.has(cooldownKey)) {
+          const distinctBots = playerDistinctBotHits.get(nearest.user_id);
+          if (!distinctBots || distinctBots.size < MAX_BOT_HITS_PER_PLAYER_PER_WEEK) {
+            dbCooldowns.set(cooldownKey, Date.now());
+            if (!playerDistinctBotHits.has(nearest.user_id)) {
+              playerDistinctBotHits.set(nearest.user_id, new Set());
+            }
+            playerDistinctBotHits.get(nearest.user_id)!.add(bot.user_id);
+            await botAttack(bot, nearest, io);
           }
-          playerDistinctBotHits.get(nearest.user_id)!.add(bot.user_id);
-          await botAttack(bot, nearest, io);
         }
       }
     }
