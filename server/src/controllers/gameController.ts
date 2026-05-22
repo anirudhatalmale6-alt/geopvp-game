@@ -363,17 +363,22 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
       const isBot = defenderEmail?.endsWith('@bot.local');
 
       if (isBot) {
-        // Player attacks bot: costs 1 shield per attack
-        const attackerShields = parseInt(attacker.shields_remaining || '0', 10);
-        if (attackerShields <= 0) {
-          throw new Error('You need a shield to attack a bot! Buy a shield first.');
+        // Player attacks bot: costs 1 shield (consumes active shield + uses up a purchased slot)
+        const hasActiveShield = attacker.shield_active_until
+          ? new Date(attacker.shield_active_until) > new Date()
+          : false;
+        const shieldsPurchased = parseInt(attacker.shields_purchased || '0', 10);
+
+        if (!hasActiveShield) {
+          throw new Error('You need an active shield to attack a bot! Buy and activate a shield first.');
         }
 
-        // Take 1 shield from the attacker
+        // Consume the player's active shield
         await q(
-          `UPDATE game_sessions SET shields_remaining = shields_remaining - 1 WHERE id = $1`,
+          `UPDATE game_sessions SET shield_active_until = NULL WHERE id = $1`,
           [attacker.id],
         );
+        const playerShieldsLeft = 3 - shieldsPurchased;
 
         const hitsRemaining = parseInt(defender.shields_remaining || '0', 10);
 
@@ -393,9 +398,9 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
             coinsStolen: 0,
             defenderHadShield: true,
             shieldsLeft: left,
-            shieldsUsed: 1,
-            playerShieldsLeft: attackerShields - 1,
-            message: `Hit! ${left} hit(s) remaining on this bot. You used 1 shield (${attackerShields - 1} left).`,
+            shieldConsumed: true,
+            playerShieldsLeft,
+            message: `Hit! ${left} hit(s) remaining on this bot. Shield used - buy another to attack again.`,
           };
         }
 
@@ -419,9 +424,9 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
           success: true,
           coinsStolen: botCoins,
           defenderHadShield: false,
-          shieldsUsed: 1,
-          playerShieldsLeft: attackerShields - 1,
-          message: `Bot defeated! You took all ${botCoins} coins! (1 shield used)`,
+          shieldConsumed: true,
+          playerShieldsLeft,
+          message: `Bot defeated! You took all ${botCoins} coins!`,
         };
       }
 
