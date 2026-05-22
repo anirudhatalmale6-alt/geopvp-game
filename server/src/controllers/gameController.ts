@@ -235,6 +235,14 @@ export async function getAllPlayers(req: AuthRequest, res: Response): Promise<vo
   try {
     const userId = req.user!.id;
 
+    // Get caller's location to sort by proximity
+    const mySession = await query(
+      `SELECT latitude, longitude FROM game_sessions WHERE user_id = $1 AND is_active = true LIMIT 1`,
+      [userId],
+    );
+    const myLat = mySession.rows[0]?.latitude ?? 0;
+    const myLng = mySession.rows[0]?.longitude ?? 0;
+
     const result = await query(
       `SELECT
          gs.id AS session_id,
@@ -253,14 +261,15 @@ export async function getAllPlayers(req: AuthRequest, res: Response): Promise<vo
          AND gs.user_id != $1
          AND gs.latitude IS NOT NULL
          AND (gs.last_location_update > now() - interval '30 minutes' OR u.email LIKE '%@bot.local')
-       ORDER BY gs.map_coins DESC`,
-      [userId],
+       ORDER BY (gs.latitude - $2)*(gs.latitude - $2) + (gs.longitude - $3)*(gs.longitude - $3) ASC
+       LIMIT 200`,
+      [userId, myLat, myLng],
     );
 
     const players = result.rows.map((row) => {
       const isBot = row.email?.endsWith('@bot.local');
       const shieldActive = isBot
-        ? parseInt(row.shields_remaining || '0', 10) > 0
+        ? (parseInt(row.shields_remaining || '0', 10) > 0 || (row.shield_active_until ? new Date(row.shield_active_until) > new Date() : false))
         : (row.shield_active_until ? new Date(row.shield_active_until) > new Date() : false);
       return {
         sessionId: row.session_id,

@@ -10,7 +10,7 @@ const spawnBotsSchema = z.object({
   count: z.number().int().min(1).max(2000),
   centerLat: z.number().min(-90).max(90),
   centerLng: z.number().min(-180).max(180),
-  radiusKm: z.number().min(0.1).max(500).default(50),
+  radiusKm: z.number().min(0.1).max(3000).default(50),
 });
 
 const dropCoinSchema = z.object({
