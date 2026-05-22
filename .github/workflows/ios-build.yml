@@ -157,12 +157,18 @@ jobs:
           mkdir -p ~/private_keys
           echo -n "$ASC_KEY_BASE64" | base64 --decode -o ~/private_keys/AuthKey_${ASC_KEY_ID}.p8
 
+          set -o pipefail
           xcrun altool --upload-app \
             --type ios \
             --file "$RUNNER_TEMP/export/CoinProwl.ipa" \
             --apiKey $ASC_KEY_ID \
             --apiIssuer $ASC_ISSUER_ID \
-            --show-progress
+            --show-progress 2>&1 | tee /tmp/upload.log
+
+          if grep -q "ERROR" /tmp/upload.log; then
+            echo "Upload failed!"
+            exit 1
+          fi
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
