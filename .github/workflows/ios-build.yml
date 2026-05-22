@@ -5,7 +5,7 @@ on:
 
 env:
   EXPO_NO_TELEMETRY: 1
-  EXPO_PUBLIC_API_URL: http://167.235.196.123:3001/api
+  EXPO_PUBLIC_API_URL: https://english-ext-mazda-pda.trycloudflare.com/api
 
 jobs:
   build:
