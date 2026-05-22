@@ -89,7 +89,7 @@ export default function SignUpScreen({ navigation }: Props) {
         throw new Error(data.message || 'Sign up failed');
       }
 
-      if (data.message && data.message.includes('auto-verified')) {
+      if (data.token) {
         await login(email.trim().toLowerCase(), password);
       } else {
         navigation.navigate('VerifyEmail', { email: email.trim().toLowerCase() });
