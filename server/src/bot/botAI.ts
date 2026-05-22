@@ -2,7 +2,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { query, transaction } from '../config/database';
 import { config } from '../config/env';
 
-const MPH_TO_DEG_PER_SEC = 1 / (69 * 3600); // ~1 degree lat ≈ 69 miles
+const MPH_TO_DEG_PER_SEC = 1 / (69 * 3600);
 const BOT_SPEED_MPH = 30;
 const TICK_INTERVAL_MS = 3000;
 const ATTACK_RADIUS = config.attackRadiusMiles;
@@ -11,11 +11,6 @@ const MAX_HUNT_RADIUS_MILES = 150;
 const MAX_BOT_HITS_PER_PLAYER_PER_WEEK = 2;
 
 let tickHandle: ReturnType<typeof setInterval> | null = null;
-// Key: "botUserId:playerUserId", Value: timestamp of last bot->player attack
-const botPlayerCooldowns = new Map<string, number>();
-// Key: playerUserId, Value: count of bot hits this week
-const playerBotHitCounts = new Map<string, number>();
-const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 function distanceMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 3958.8;
@@ -44,6 +39,29 @@ async function botTick(io: SocketIOServer) {
 
     if (Date.now() % 60000 < TICK_INTERVAL_MS) {
       console.log(`[BotAI] ${realPlayers.length} real players online`);
+    }
+
+    // Query database for bot attack history this week (survives server restarts)
+    const weeklyHitsRes = await query(
+      `SELECT a.attacker_id, a.defender_id, MAX(a.created_at) as last_hit
+       FROM attacks a
+       JOIN users u ON u.id = a.attacker_id
+       WHERE u.email LIKE '%@bot.local'
+         AND a.created_at > now() - interval '7 days'
+       GROUP BY a.attacker_id, a.defender_id`,
+    );
+
+    // Build cooldown map from DB: "botUserId:playerUserId" -> last hit timestamp
+    const dbCooldowns = new Map<string, number>();
+    // Build per-player hit count: how many distinct bots hit each player this week
+    const playerDistinctBotHits = new Map<string, Set<string>>();
+    for (const row of weeklyHitsRes.rows) {
+      const key = `${row.attacker_id}:${row.defender_id}`;
+      dbCooldowns.set(key, new Date(row.last_hit).getTime());
+      if (!playerDistinctBotHits.has(row.defender_id)) {
+        playerDistinctBotHits.set(row.defender_id, new Set());
+      }
+      playerDistinctBotHits.get(row.defender_id)!.add(row.attacker_id);
     }
 
     const botsRes = await query(
@@ -76,13 +94,12 @@ async function botTick(io: SocketIOServer) {
       let nearestDist = Infinity;
       for (const p of realPlayers) {
         if (playerBeingChased.has(p.user_id)) continue;
-        // Skip if this bot already hit this player this week
+        // Skip if this bot already hit this player this week (DB-backed)
         const cooldownKey = `${bot.user_id}:${p.user_id}`;
-        const lastHit = botPlayerCooldowns.get(cooldownKey) || 0;
-        if (Date.now() - lastHit < ONE_WEEK_MS) continue;
-        // Skip if this player already got hit by 2 different bots this week
-        const hitCount = playerBotHitCounts.get(p.user_id) || 0;
-        if (hitCount >= MAX_BOT_HITS_PER_PLAYER_PER_WEEK) continue;
+        if (dbCooldowns.has(cooldownKey)) continue;
+        // Skip if this player already got hit by MAX distinct bots this week
+        const distinctBots = playerDistinctBotHits.get(p.user_id);
+        if (distinctBots && distinctBots.size >= MAX_BOT_HITS_PER_PLAYER_PER_WEEK) continue;
         const d = distanceMiles(bot.latitude, bot.longitude, p.latitude, p.longitude);
         if (d < nearestDist && d <= MAX_HUNT_RADIUS_MILES) {
           nearestDist = d;
@@ -121,12 +138,15 @@ async function botTick(io: SocketIOServer) {
 
       const currentDist = distanceMiles(newLat, newLng, nearest.latitude, nearest.longitude);
       const cooldownKey = `${bot.user_id}:${nearest.user_id}`;
-      const lastHit = botPlayerCooldowns.get(cooldownKey) || 0;
-      if (currentDist <= BOT_ATTACK_RADIUS && Date.now() - lastHit > ONE_WEEK_MS) {
-        const hitCount = playerBotHitCounts.get(nearest.user_id) || 0;
-        if (hitCount < MAX_BOT_HITS_PER_PLAYER_PER_WEEK) {
-          botPlayerCooldowns.set(cooldownKey, Date.now());
-          playerBotHitCounts.set(nearest.user_id, hitCount + 1);
+      if (currentDist <= BOT_ATTACK_RADIUS && !dbCooldowns.has(cooldownKey)) {
+        const distinctBots = playerDistinctBotHits.get(nearest.user_id);
+        if (!distinctBots || distinctBots.size < MAX_BOT_HITS_PER_PLAYER_PER_WEEK) {
+          // Mark in local maps so this tick doesn't double-hit
+          dbCooldowns.set(cooldownKey, Date.now());
+          if (!playerDistinctBotHits.has(nearest.user_id)) {
+            playerDistinctBotHits.set(nearest.user_id, new Set());
+          }
+          playerDistinctBotHits.get(nearest.user_id)!.add(bot.user_id);
           await botAttack(bot, nearest, io);
         }
       }
@@ -154,7 +174,6 @@ async function botAttack(
       const botHitsLeft = parseInt(bot.shields_remaining || '0', 10);
       if (botHitsLeft <= 0) return;
 
-      // Bot takes 1 shield from the player's 3-shield pool (even if inactive)
       const playerShieldsPurchased = parseInt(defender.shields_purchased || '0', 10);
       const shieldTaken = playerShieldsPurchased < 3;
       if (shieldTaken) {
@@ -164,7 +183,6 @@ async function botAttack(
         );
       }
 
-      // Bot loses 1 hit point
       const newBotHits = botHitsLeft - 1;
       if (newBotHits <= 0) {
         await q(
