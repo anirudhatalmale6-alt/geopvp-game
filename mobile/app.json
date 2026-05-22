@@ -48,8 +48,7 @@
         {
           "locationWhenInUsePermission": "CoinProwl needs your location to show you on the game map."
         }
-      ],
-      "expo-crypto"
+      ]
     ],
     "extra": {
       "eas": {

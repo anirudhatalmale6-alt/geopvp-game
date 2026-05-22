@@ -53,12 +53,13 @@ const MAP_CSS = `
 // Leaflet iframe
 // ---------------------------------------------------------------------------
 
-function LeafletMap({ lat, lng, nearbyPlayers, session, coinDrops }: {
+function LeafletMap({ lat, lng, nearbyPlayers, session, coinDrops, commandRef }: {
   lat: number;
   lng: number;
   nearbyPlayers: NearbyPlayer[];
   session: GameSession | null;
   coinDrops: CoinDrop[];
+  commandRef?: React.MutableRefObject<((cmd: any) => void) | null>;
 }) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [ready, setReady] = useState(false);
@@ -158,6 +159,7 @@ function LeafletMap({ lat, lng, nearbyPlayers, session, coinDrops }: {
 <div id="map"></div>
 <script>
 var map = L.map('map',{zoomControl:false,attributionControl:false}).setView([0,0],16);
+var zoomMode = 'player';
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
   maxZoom:19
 }).addTo(map);
@@ -188,10 +190,24 @@ window.addEventListener('message',function(e){
   try{
     var d = JSON.parse(e.data);
 
+    if(d.type==='setZoom'){
+      zoomMode = d.mode;
+      if(d.mode==='world'){
+        var bounds = [playerMarker.getLatLng()];
+        Object.keys(enemyMarkers).forEach(function(k){bounds.push(enemyMarkers[k].getLatLng());});
+        Object.keys(coinMarkers).forEach(function(k){bounds.push(coinMarkers[k].getLatLng());});
+        if(bounds.length>1) map.fitBounds(L.latLngBounds(bounds),{padding:[40,40],animate:true,duration:0.8});
+        else map.setZoom(6,{animate:true});
+      } else {
+        map.setView(playerMarker.getLatLng(),16,{animate:true,duration:0.8});
+      }
+      return;
+    }
+
     if(d.type==='update'||d.type==='init'){
       if(d.type==='init'){
         map.setView([d.lat,d.lng],16,{animate:false});
-      } else {
+      } else if(zoomMode==='player'){
         map.panTo([d.lat,d.lng],{animate:true,duration:1.0,easeLinearity:0.25});
       }
       playerMarker.setLatLng([d.lat,d.lng]);
@@ -279,6 +295,27 @@ window.addEventListener('message',function(e){
 </html>`;
 
   const webViewRef = useRef<any>(null);
+
+  const sendCommand = useCallback((cmd: any) => {
+    const payload = JSON.stringify(cmd);
+    if (Platform.OS === 'web') {
+      if (!iframeRef.current?.contentWindow) return;
+      iframeRef.current.contentWindow.postMessage(payload, '*');
+    } else {
+      if (!webViewRef.current) return;
+      webViewRef.current.injectJavaScript(`
+        try {
+          var e = new MessageEvent('message', { data: '${payload.replace(/'/g, "\\'")}' });
+          window.dispatchEvent(e);
+        } catch(ex) {}
+        true;
+      `);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (commandRef) commandRef.current = sendCommand;
+  }, [commandRef, sendCommand]);
 
   const buildPayload = useCallback(() => {
     const withDist = nearbyPlayers.map(p => {
@@ -419,6 +456,8 @@ export default function MapScreen() {
   const [attackResult, setAttackResult] = useState<string | null>(null);
 
   const [statusMessage, setStatusMessage] = useState<string>('LIVE MAP');
+  const [zoomedOut, setZoomedOut] = useState(false);
+  const mapRef = useRef<any>(null);
   const locationSub = useRef<Location.LocationSubscription | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const coinPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -725,6 +764,7 @@ export default function MapScreen() {
           nearbyPlayers={nearbyPlayers}
           session={session}
           coinDrops={coinDrops}
+          commandRef={mapRef}
         />
       )}
 
@@ -776,13 +816,34 @@ export default function MapScreen() {
           </View>
         )}
 
-        {/* Location coords */}
+        {/* Location coords + zoom toggle */}
         {location && (
-          <View style={styles.locationBar}>
-            <Ionicons name="location" size={12} color={colors.primary} />
-            <Text style={styles.locationText}>
-              {location.lat.toFixed(5)}, {location.lng.toFixed(5)}
-            </Text>
+          <View style={styles.locationRow}>
+            <View style={styles.locationBar}>
+              <Ionicons name="location" size={12} color={colors.primary} />
+              <Text style={styles.locationText}>
+                {location.lat.toFixed(5)}, {location.lng.toFixed(5)}
+              </Text>
+            </View>
+            {session && (
+              <TouchableOpacity
+                style={[styles.zoomBtn, zoomedOut && styles.zoomBtnActive]}
+                onPress={() => {
+                  const newMode = !zoomedOut;
+                  setZoomedOut(newMode);
+                  if (mapRef.current) {
+                    mapRef.current({ type: 'setZoom', mode: newMode ? 'world' : 'player' });
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={zoomedOut ? 'locate' : 'globe-outline'}
+                  size={16}
+                  color={zoomedOut ? colors.background : colors.primary}
+                />
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -1000,14 +1061,19 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     fontWeight: '600',
   },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
   locationBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    marginTop: spacing.sm,
     backgroundColor: 'rgba(10, 14, 26, 0.7)',
-    alignSelf: 'center',
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
     borderRadius: borderRadius.full,
@@ -1016,6 +1082,20 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: colors.textMuted,
     fontFamily: Platform.OS === 'web' ? 'monospace' : undefined,
+  },
+  zoomBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(10, 14, 26, 0.8)',
+    borderWidth: 1,
+    borderColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  zoomBtnActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   toastBanner: {
     flexDirection: 'row',
