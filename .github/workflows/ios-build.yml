@@ -18,10 +18,17 @@ jobs:
 
       - name: Select Xcode and install iOS platform
         run: |
-          sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+          # List available Xcode versions
+          ls /Applications/ | grep Xcode
+          # Use latest Xcode (26.x) for iOS 26 SDK requirement
+          XCODE_PATH=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XCODE_PATH" ]; then
+            XCODE_PATH=$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)
+          fi
+          echo "Using Xcode at: $XCODE_PATH"
+          sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
           xcodebuild -version
-          # Always download iOS platform (SDK headers may exist but IB support missing)
-          xcodebuild -downloadPlatform iOS || xcodebuild -downloadPlatform iOS
+          xcodebuild -downloadPlatform iOS || xcodebuild -downloadPlatform iOS || true
           xcodebuild -showsdks | grep -i ios
 
       - name: Setup Node.js
