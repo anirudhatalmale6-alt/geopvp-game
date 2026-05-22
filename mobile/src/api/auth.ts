@@ -4,6 +4,7 @@
  */
 
 import { api, setTokens } from './client';
+import { getDeviceId } from '../utils/device';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -34,10 +35,12 @@ export async function signup(
   email: string,
   password: string,
 ): Promise<AuthResponse> {
+  const deviceId = await getDeviceId();
   const { data } = await api.post<AuthResponse>('/auth/signup', {
     username,
     email,
     password,
+    deviceId,
   });
   if (data.token && data.refreshToken) {
     await setTokens(data.token, data.refreshToken);
@@ -67,9 +70,11 @@ export async function login(
   email: string,
   password: string,
 ): Promise<AuthResponse> {
+  const deviceId = await getDeviceId();
   const { data } = await api.post<AuthResponse>('/auth/login', {
     email,
     password,
+    deviceId,
   });
   if (data.token && data.refreshToken) {
     await setTokens(data.token, data.refreshToken);

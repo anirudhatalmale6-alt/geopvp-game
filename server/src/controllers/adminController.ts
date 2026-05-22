@@ -325,6 +325,28 @@ export async function clearBots(req: AuthRequest, res: Response): Promise<void> 
   }
 }
 
+export async function resetDeviceLock(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    if (!(await requireAdmin(req, res))) return;
+
+    const { id } = req.params;
+    const result = await query(
+      `UPDATE users SET device_id = NULL WHERE id = $1 RETURNING id, username`,
+      [id],
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: 'User not found.' });
+      return;
+    }
+
+    res.json({ ok: true, user: result.rows[0], message: 'Device lock cleared. User can login from any device.' });
+  } catch (err) {
+    console.error('resetDeviceLock error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
 function formatDrop(row: Record<string, any>) {
   return {
     id: row.id,

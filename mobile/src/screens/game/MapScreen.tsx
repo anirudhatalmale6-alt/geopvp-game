@@ -27,6 +27,7 @@ import {
 } from '../../api/game';
 import { connectSocket, disconnectSocket, emitLocation, onPlayersUpdate } from '../../api/socket';
 import BuyInModal from './BuyInModal';
+import { checkMockLocation } from '../../utils/anticheat';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -451,7 +452,13 @@ export default function MapScreen() {
 
       locationSub.current = await Location.watchPositionAsync(
         { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 2000, distanceInterval: 3 },
-        (pos) => setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        (pos) => {
+          if (checkMockLocation(pos)) {
+            console.warn('[AntiCheat] Mock location detected, ignoring update');
+            return;
+          }
+          setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        },
       );
     })();
     return () => { locationSub.current?.remove(); };

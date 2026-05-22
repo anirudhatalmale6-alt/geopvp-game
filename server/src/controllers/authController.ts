@@ -23,6 +23,7 @@ const signupSchema = z.object({
     .min(8, 'Password must be at least 8 characters')
     .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
     .regex(/[0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/, 'Password must contain at least one number or symbol'),
+  deviceId: z.string().min(1, 'Device ID is required').optional(),
 });
 
 const verifyEmailSchema = z.object({
@@ -37,6 +38,7 @@ const resendCodeSchema = z.object({
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1, 'Password is required'),
+  deviceId: z.string().optional(),
 });
 
 const refreshTokenSchema = z.object({
@@ -116,7 +118,7 @@ export async function signup(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const { username, email, password } = parsed.data;
+    const { username, email, password, deviceId } = parsed.data;
 
     // Check email uniqueness
     const emailCheck = await query('SELECT id FROM users WHERE email = $1', [email.toLowerCase()]);
@@ -136,12 +138,12 @@ export async function signup(req: Request, res: Response): Promise<void> {
     const verificationCode = generateCode();
     const codeExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
-    // Insert user
+    // Insert user with device lock
     const result = await query(
-      `INSERT INTO users (username, email, password_hash, verification_code, verification_expires)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO users (username, email, password_hash, verification_code, verification_expires, device_id)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id`,
-      [username.toLowerCase(), email.toLowerCase(), hashedPassword, verificationCode, codeExpiry],
+      [username.toLowerCase(), email.toLowerCase(), hashedPassword, verificationCode, codeExpiry, deviceId || null],
     );
 
     const userId = result.rows[0].id;
@@ -278,10 +280,10 @@ export async function login(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const { email, password } = parsed.data;
+    const { email, password, deviceId } = parsed.data;
 
     const result = await query(
-      'SELECT id, username, email, password_hash, is_verified FROM users WHERE email = $1',
+      'SELECT id, username, email, password_hash, is_verified, device_id FROM users WHERE email = $1',
       [email.toLowerCase()],
     );
 
@@ -301,6 +303,18 @@ export async function login(req: Request, res: Response): Promise<void> {
     if (!user.is_verified) {
       res.status(403).json({ error: 'Please verify your email before logging in.' });
       return;
+    }
+
+    // Device lock: if account has a registered device, reject logins from other devices
+    if (user.device_id && deviceId && user.device_id !== deviceId) {
+      console.warn(`[AntiCheat] Device mismatch for ${user.email}: expected ${user.device_id.slice(0, 8)}..., got ${deviceId.slice(0, 8)}...`);
+      res.status(403).json({ error: 'This account is locked to another device. Contact support if you need to transfer.' });
+      return;
+    }
+
+    // If user has no device_id yet (legacy account), bind it now
+    if (!user.device_id && deviceId) {
+      await query('UPDATE users SET device_id = $1 WHERE id = $2', [deviceId, user.id]);
     }
 
     const token = generateAccessToken({ id: user.id, email: user.email, username: user.username });

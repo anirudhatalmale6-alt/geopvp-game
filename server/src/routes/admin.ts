@@ -12,6 +12,7 @@ import {
   getActivePlayers,
   spawnBots,
   clearBots,
+  resetDeviceLock,
 } from '../controllers/adminController';
 
 const router = Router();
@@ -29,5 +30,6 @@ router.delete('/coins/:id', deleteCoinDrop);
 router.delete('/coins', clearAllDrops);
 router.post('/bots/spawn', spawnBots);
 router.delete('/bots', clearBots);
+router.post('/users/:id/reset-device', resetDeviceLock);
 
 export default router;

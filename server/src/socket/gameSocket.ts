@@ -2,6 +2,7 @@ import { Server as SocketIOServer, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { config } from '../config/env';
 import { query } from '../config/database';
+import { validateLocationUpdate } from '../middleware/anticheat';
 
 interface AuthUser {
   id: string;
@@ -54,6 +55,25 @@ export function setupGameSocket(io: SocketIOServer): void {
       try {
         const { lat, lng } = data;
         if (typeof lat !== 'number' || typeof lng !== 'number') return;
+
+        // Get active session for anti-cheat check
+        const sessionRes = await query(
+          `SELECT id FROM game_sessions WHERE user_id = $1 AND is_active = true LIMIT 1`,
+          [user.id],
+        );
+        if (sessionRes.rows.length === 0) return;
+
+        const sessionId = sessionRes.rows[0].id;
+
+        // Anti-cheat: validate speed (reject teleportation / GPS spoofing)
+        const check = await validateLocationUpdate(user.id, sessionId, lat, lng);
+        if (!check.valid) {
+          socket.emit('anticheat:warning', { message: check.reason });
+          if (check.reason?.includes('terminated')) {
+            socket.emit('session:terminated', { reason: check.reason });
+          }
+          return;
+        }
 
         // Persist to DB
         await query(
