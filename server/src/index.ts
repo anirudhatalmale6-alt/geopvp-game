@@ -9,6 +9,7 @@ import gameRoutes from './routes/game';
 import walletRoutes from './routes/wallet';
 import adminRoutes from './routes/admin';
 import { setupGameSocket } from './socket/gameSocket';
+import { startBotAI } from './bot/botAI';
 
 const app = express();
 
@@ -67,6 +68,9 @@ const io = new SocketIOServer(server, {
 
 // Wire up game socket handlers (auth + player:location + players:update)
 setupGameSocket(io);
+
+// Start bot AI loop (bots move + attack every 5s)
+startBotAI(io);
 
 // ---------------------------------------------------------------------------
 // Start
