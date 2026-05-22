@@ -8,10 +8,13 @@ const TICK_INTERVAL_MS = 3000;
 const ATTACK_RADIUS = config.attackRadiusMiles;
 const BOT_ATTACK_RADIUS = 0.5;
 const MAX_HUNT_RADIUS_MILES = 150;
+const MAX_BOT_HITS_PER_PLAYER_PER_WEEK = 2;
 
 let tickHandle: ReturnType<typeof setInterval> | null = null;
 // Key: "botUserId:playerUserId", Value: timestamp of last bot->player attack
 const botPlayerCooldowns = new Map<string, number>();
+// Key: playerUserId, Value: count of bot hits this week
+const playerBotHitCounts = new Map<string, number>();
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 function distanceMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -26,7 +29,6 @@ function distanceMiles(lat1: number, lng1: number, lat2: number, lng2: number): 
 
 async function botTick(io: SocketIOServer) {
   try {
-    // Get all active real players (non-bots) with location
     const realPlayersRes = await query(
       `SELECT gs.id AS session_id, gs.user_id, gs.latitude, gs.longitude, gs.map_coins,
               gs.shield_active_until, u.username
@@ -40,12 +42,10 @@ async function botTick(io: SocketIOServer) {
     const realPlayers = realPlayersRes.rows;
     if (realPlayers.length === 0) return;
 
-    // Debug: log once per minute
     if (Date.now() % 60000 < TICK_INTERVAL_MS) {
       console.log(`[BotAI] ${realPlayers.length} real players online`);
     }
 
-    // Get all active bots
     const botsRes = await query(
       `SELECT gs.id AS session_id, gs.user_id, gs.latitude, gs.longitude, gs.map_coins,
               gs.shield_active_until, gs.shields_remaining, u.username
@@ -59,10 +59,8 @@ async function botTick(io: SocketIOServer) {
     const dtSeconds = TICK_INTERVAL_MS / 1000;
     const moveDegs = BOT_SPEED_MPH * MPH_TO_DEG_PER_SEC * dtSeconds;
 
-    // Track which players already have a bot chasing them this tick
     const playerBeingChased = new Set<string>();
 
-    // Sort bots by distance to nearest player so closer bots get first pick
     const botsWithDist = botsRes.rows.map((bot: any) => {
       let minDist = Infinity;
       for (const p of realPlayers) {
@@ -74,14 +72,17 @@ async function botTick(io: SocketIOServer) {
     botsWithDist.sort((a: any, b: any) => a._minDist - b._minDist);
 
     for (const bot of botsWithDist) {
-      // Find nearest real player that isn't already being chased AND hasn't been hit by this bot recently
       let nearest = null;
       let nearestDist = Infinity;
       for (const p of realPlayers) {
         if (playerBeingChased.has(p.user_id)) continue;
+        // Skip if this bot already hit this player this week
         const cooldownKey = `${bot.user_id}:${p.user_id}`;
         const lastHit = botPlayerCooldowns.get(cooldownKey) || 0;
         if (Date.now() - lastHit < ONE_WEEK_MS) continue;
+        // Skip if this player already got hit by 2 different bots this week
+        const hitCount = playerBotHitCounts.get(p.user_id) || 0;
+        if (hitCount >= MAX_BOT_HITS_PER_PLAYER_PER_WEEK) continue;
         const d = distanceMiles(bot.latitude, bot.longitude, p.latitude, p.longitude);
         if (d < nearestDist && d <= MAX_HUNT_RADIUS_MILES) {
           nearestDist = d;
@@ -92,7 +93,6 @@ async function botTick(io: SocketIOServer) {
       if (!nearest) continue;
       playerBeingChased.add(nearest.user_id);
 
-      // Move toward nearest player
       const dLat = nearest.latitude - bot.latitude;
       const dLng = nearest.longitude - bot.longitude;
       const rawDist = Math.sqrt(dLat * dLat + dLng * dLng);
@@ -106,13 +106,11 @@ async function botTick(io: SocketIOServer) {
         newLng = bot.longitude + (dLng / rawDist) * step;
       }
 
-      // Update bot position
       await query(
         `UPDATE game_sessions SET latitude = $1, longitude = $2, last_location_update = now() WHERE id = $3`,
         [newLat, newLng, bot.session_id],
       );
 
-      // Broadcast bot movement via socket
       io.to('game').emit('players:update', {
         userId: bot.user_id,
         username: bot.username,
@@ -121,13 +119,16 @@ async function botTick(io: SocketIOServer) {
         ts: Date.now(),
       });
 
-      // If within attack range and this bot hasn't hit this player in the last week
       const currentDist = distanceMiles(newLat, newLng, nearest.latitude, nearest.longitude);
       const cooldownKey = `${bot.user_id}:${nearest.user_id}`;
       const lastHit = botPlayerCooldowns.get(cooldownKey) || 0;
       if (currentDist <= BOT_ATTACK_RADIUS && Date.now() - lastHit > ONE_WEEK_MS) {
-        botPlayerCooldowns.set(cooldownKey, Date.now());
-        await botAttack(bot, nearest, io);
+        const hitCount = playerBotHitCounts.get(nearest.user_id) || 0;
+        if (hitCount < MAX_BOT_HITS_PER_PLAYER_PER_WEEK) {
+          botPlayerCooldowns.set(cooldownKey, Date.now());
+          playerBotHitCounts.set(nearest.user_id, hitCount + 1);
+          await botAttack(bot, nearest, io);
+        }
       }
     }
   } catch (err) {
@@ -150,7 +151,6 @@ async function botAttack(
       if (tRes.rows.length === 0) return;
       const defender = tRes.rows[0];
 
-      // Check bot's remaining hit points
       const botHitsLeft = parseInt(bot.shields_remaining || '0', 10);
       if (botHitsLeft <= 0) return;
 
@@ -184,7 +184,6 @@ async function botAttack(
         [bot.user_id, defender.user_id, bot.map_coins, defender.map_coins, bot.latitude, bot.longitude],
       );
 
-      // Notify the player via socket
       io.to('game').emit('bot:attacked', {
         botUserId: bot.user_id,
         botName: bot.username,
@@ -193,7 +192,7 @@ async function botAttack(
         botHitsLeft: newBotHits,
       });
 
-      console.log(`[BotAI] ${bot.username} hit ${defender.username} (shield taken: ${playerShieldsRemaining > 0}, bot hits left: ${newBotHits})`);
+      console.log(`[BotAI] ${bot.username} hit ${defender.username} (shield taken: ${shieldTaken}, bot hits left: ${newBotHits})`);
     });
   } catch (err) {
     console.error('[BotAI] attack error:', err);

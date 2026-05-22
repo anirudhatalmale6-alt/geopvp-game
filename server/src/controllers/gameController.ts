@@ -206,7 +206,7 @@ export async function getNearbyPlayers(req: AuthRequest, res: Response): Promise
         const isBot = row.email?.endsWith('@bot.local');
         const hitsRemaining = isBot ? parseInt(row.shields_remaining || '0', 10) : undefined;
         const shieldActive = isBot
-          ? hitsRemaining! > 0
+          ? false
           : (row.shield_active_until ? new Date(row.shield_active_until) > new Date() : false);
         return {
           sessionId: row.session_id,
@@ -273,7 +273,7 @@ export async function getAllPlayers(req: AuthRequest, res: Response): Promise<vo
       const isBot = row.email?.endsWith('@bot.local');
       const hitsRemaining = isBot ? parseInt(row.shields_remaining || '0', 10) : undefined;
       const shieldActive = isBot
-        ? hitsRemaining! > 0
+        ? false
         : (row.shield_active_until ? new Date(row.shield_active_until) > new Date() : false);
       return {
         sessionId: row.session_id,
