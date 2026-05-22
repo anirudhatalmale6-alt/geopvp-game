@@ -3,9 +3,10 @@ import { query, transaction } from '../config/database';
 import { config } from '../config/env';
 
 const MPH_TO_DEG_PER_SEC = 1 / (69 * 3600); // ~1 degree lat ≈ 69 miles
-const BOT_SPEED_MPH = 10;
-const TICK_INTERVAL_MS = 5000;
+const BOT_SPEED_MPH = 30;
+const TICK_INTERVAL_MS = 3000;
 const ATTACK_RADIUS = config.attackRadiusMiles;
+const BOT_ATTACK_RADIUS = 0.5;
 const MAX_HUNT_RADIUS_MILES = 150;
 
 let tickHandle: ReturnType<typeof setInterval> | null = null;
@@ -35,6 +36,11 @@ async function botTick(io: SocketIOServer) {
     );
     const realPlayers = realPlayersRes.rows;
     if (realPlayers.length === 0) return;
+
+    // Debug: log once per minute
+    if (Date.now() % 60000 < TICK_INTERVAL_MS) {
+      console.log(`[BotAI] ${realPlayers.length} real players online`);
+    }
 
     // Get all active bots
     const botsRes = await query(
@@ -99,7 +105,7 @@ async function botTick(io: SocketIOServer) {
 
       // If within attack range and bot is NOT shielded, attack the nearest player
       const currentDist = distanceMiles(newLat, newLng, nearest.latitude, nearest.longitude);
-      if (currentDist <= ATTACK_RADIUS && !botShielded) {
+      if (currentDist <= BOT_ATTACK_RADIUS && !botShielded) {
         await botAttack(bot, nearest, io);
       }
     }
