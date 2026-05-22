@@ -42,6 +42,10 @@ jobs:
         working-directory: mobile
         run: npm ci
 
+      - name: Set API URL
+        working-directory: mobile
+        run: echo "EXPO_PUBLIC_API_URL=$EXPO_PUBLIC_API_URL" > .env
+
       - name: Expo prebuild
         working-directory: mobile
         run: npx expo prebuild --platform ios --clean
