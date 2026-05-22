@@ -7,6 +7,7 @@ import {
   Platform,
   Dimensions,
   ActivityIndicator,
+  AppState,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
@@ -477,6 +478,43 @@ export default function MapScreen() {
   // -------------------------------------------------------------------------
   // Location permission + GPS watch
   // -------------------------------------------------------------------------
+  const startLocationWatch = useCallback(async () => {
+    // Clean up any existing watcher
+    locationSub.current?.remove();
+    if (locationFallbackRef.current) clearInterval(locationFallbackRef.current);
+
+    try {
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      lastLocationUpdate.current = Date.now();
+      setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+    } catch {}
+
+    locationSub.current = await Location.watchPositionAsync(
+      { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 2000, distanceInterval: 1 },
+      (pos) => {
+        if (checkMockLocation(pos)) {
+          console.warn('[AntiCheat] Mock location detected, ignoring update');
+          return;
+        }
+        lastLocationUpdate.current = Date.now();
+        setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      },
+    );
+
+    // Fallback: if watchPosition stops firing (poor signal areas), poll every 8s
+    locationFallbackRef.current = setInterval(async () => {
+      if (Date.now() - lastLocationUpdate.current > 6000) {
+        try {
+          const pos = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.High,
+          });
+          lastLocationUpdate.current = Date.now();
+          setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        } catch {}
+      }
+    }, 8000);
+  }, []);
+
   useEffect(() => {
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -486,41 +524,24 @@ export default function MapScreen() {
         setLoading(false);
         return;
       }
-      try {
-        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-      } catch {}
-
-      locationSub.current = await Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 2000, distanceInterval: 1 },
-        (pos) => {
-          if (checkMockLocation(pos)) {
-            console.warn('[AntiCheat] Mock location detected, ignoring update');
-            return;
-          }
-          lastLocationUpdate.current = Date.now();
-          setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        },
-      );
-
-      // Fallback: if watchPosition stops firing (poor signal areas), poll every 8s
-      locationFallbackRef.current = setInterval(async () => {
-        if (Date.now() - lastLocationUpdate.current > 6000) {
-          try {
-            const pos = await Location.getCurrentPositionAsync({
-              accuracy: Location.Accuracy.High,
-            });
-            lastLocationUpdate.current = Date.now();
-            setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-          } catch {}
-        }
-      }, 8000);
+      await startLocationWatch();
     })();
     return () => {
       locationSub.current?.remove();
       if (locationFallbackRef.current) clearInterval(locationFallbackRef.current);
     };
-  }, []);
+  }, [startLocationWatch]);
+
+  // Restart GPS watcher when app returns to foreground
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && locationPermission) {
+        startLocationWatch();
+      }
+    });
+    return () => sub.remove();
+  }, [locationPermission, startLocationWatch]);
 
   // -------------------------------------------------------------------------
   // Initial session fetch
