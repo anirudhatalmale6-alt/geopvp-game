@@ -103,11 +103,7 @@ async function botTick(io: SocketIOServer) {
         ts: Date.now(),
       });
 
-      // If within attack range and bot is NOT shielded, attack the nearest player
-      const currentDist = distanceMiles(newLat, newLng, nearest.latitude, nearest.longitude);
-      if (currentDist <= BOT_ATTACK_RADIUS && !botShielded) {
-        await botAttack(bot, nearest, io);
-      }
+      // Bots move toward players but do NOT attack - they are targets for players to hunt
     }
   } catch (err) {
     console.error('[BotAI] tick error:', err);

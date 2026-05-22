@@ -352,43 +352,71 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
         throw new Error(`Target is too far away (${dist.toFixed(2)} miles). Max: ${config.attackRadiusMiles} miles.`);
       }
 
-      // Check if defender has active shield
+      // Check if defender is a bot
       const defenderEmail = (await q(`SELECT email FROM users WHERE id = $1`, [defender.user_id])).rows[0]?.email;
       const isBot = defenderEmail?.endsWith('@bot.local');
-      const defenderShieldsRemaining = parseInt(defender.shields_remaining || '0', 10);
+
+      if (isBot) {
+        // Bot attack: each hit removes 1 hit point, no coins stolen until bot is defeated
+        const hitsRemaining = parseInt(defender.shields_remaining || '0', 10);
+
+        if (hitsRemaining > 1) {
+          // Bot still has hit points - remove one, no coins change hands
+          await q(
+            `UPDATE game_sessions SET shields_remaining = shields_remaining - 1 WHERE id = $1`,
+            [defender.id],
+          );
+          await q(
+            `INSERT INTO attacks (attacker_id, defender_id, attacker_coins, defender_coins, coins_stolen, defender_had_shield, success, latitude, longitude)
+             VALUES ($1, $2, $3, $4, 0, true, false, $5, $6)`,
+            [attacker.user_id, defender.user_id, attacker.map_coins, defender.map_coins, attacker.latitude, attacker.longitude],
+          );
+          const left = hitsRemaining - 1;
+          return {
+            success: false,
+            coinsStolen: 0,
+            defenderHadShield: true,
+            shieldsLeft: left,
+            message: `Hit! ${left} hit(s) remaining on this bot.`,
+          };
+        }
+
+        // Final hit - bot is defeated, player takes ALL bot coins
+        const botCoins = parseInt(defender.map_coins || '0', 10);
+        await Promise.all([
+          q(`UPDATE game_sessions SET map_coins = map_coins + $1 WHERE id = $2`, [botCoins, attacker.id]),
+          q(`UPDATE game_sessions SET map_coins = 0, shields_remaining = 0, is_active = false WHERE id = $1`, [defender.id]),
+        ]);
+        await q(
+          `INSERT INTO attacks (attacker_id, defender_id, attacker_coins, defender_coins, coins_stolen, defender_had_shield, success, latitude, longitude)
+           VALUES ($1, $2, $3, $4, $5, false, true, $6, $7)`,
+          [attacker.user_id, defender.user_id, attacker.map_coins, defender.map_coins, botCoins, attacker.latitude, attacker.longitude],
+        );
+        await q(
+          `INSERT INTO transactions (user_id, type, amount, description, related_user_id)
+           VALUES ($1, 'attack_win', $2, $3, $4)`,
+          [attacker.user_id, botCoins, `Defeated bot ${defender.defender_name} and took ${botCoins} coins!`, defender.user_id],
+        );
+        return {
+          success: true,
+          coinsStolen: botCoins,
+          defenderHadShield: false,
+          message: `Bot defeated! You took all ${botCoins} coins!`,
+        };
+      }
+
+      // Player-vs-player attack
       const defenderTimeShieldActive = defender.shield_active_until
         ? new Date(defender.shield_active_until) > new Date()
         : false;
 
-      const defenderHasShield = isBot
-        ? (defenderTimeShieldActive || defenderShieldsRemaining > 0)
-        : defenderTimeShieldActive;
-
-      if (defenderHasShield) {
-        if (isBot) {
-          if (defenderTimeShieldActive) {
-            // Bot's current shield is still active - attack blocked, no shield consumed
-          } else if (defenderShieldsRemaining > 0) {
-            // Activate a new 10-min shield and consume one shield life
-            const shieldExpiry = new Date(Date.now() + 10 * 60 * 1000);
-            await q(
-              `UPDATE game_sessions SET shields_remaining = shields_remaining - 1, shield_active_until = $1 WHERE id = $2`,
-              [shieldExpiry, defender.id],
-            );
-          }
-        }
+      if (defenderTimeShieldActive) {
         await q(
           `INSERT INTO attacks (attacker_id, defender_id, attacker_coins, defender_coins, coins_stolen, defender_had_shield, success, latitude, longitude)
            VALUES ($1, $2, $3, $4, 0, true, false, $5, $6)`,
           [attacker.user_id, defender.user_id, attacker.map_coins, defender.map_coins, attacker.latitude, attacker.longitude],
         );
-        const shieldsLeft = isBot
-          ? (defenderTimeShieldActive ? defenderShieldsRemaining : Math.max(0, defenderShieldsRemaining - 1))
-          : 0;
-        const shieldMsg = isBot
-          ? `Attack blocked! Shield activated for 10 minutes. ${shieldsLeft} shield(s) remaining after this one expires.`
-          : 'Attack blocked by shield!';
-        return { success: false, coinsStolen: 0, defenderHadShield: true, shieldsLeft, message: shieldMsg };
+        return { success: false, coinsStolen: 0, defenderHadShield: true, shieldsLeft: 0, message: 'Attack blocked by shield!' };
       }
 
       // Steal 20% of defender's coins (min 1, max 50)
