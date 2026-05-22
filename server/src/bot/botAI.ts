@@ -10,6 +10,8 @@ const BOT_ATTACK_RADIUS = 0.5;
 const MAX_HUNT_RADIUS_MILES = 150;
 
 let tickHandle: ReturnType<typeof setInterval> | null = null;
+const botAttackCooldowns = new Map<string, number>();
+const BOT_ATTACK_COOLDOWN_MS = 15000;
 
 function distanceMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 3958.8;
@@ -103,7 +105,13 @@ async function botTick(io: SocketIOServer) {
         ts: Date.now(),
       });
 
-      // Bots move toward players but do NOT attack - they are targets for players to hunt
+      // If within attack range and cooldown expired, bot attacks
+      const currentDist = distanceMiles(newLat, newLng, nearest.latitude, nearest.longitude);
+      const lastAttack = botAttackCooldowns.get(bot.session_id) || 0;
+      if (currentDist <= BOT_ATTACK_RADIUS && Date.now() - lastAttack > BOT_ATTACK_COOLDOWN_MS) {
+        botAttackCooldowns.set(bot.session_id, Date.now());
+        await botAttack(bot, nearest, io);
+      }
     }
   } catch (err) {
     console.error('[BotAI] tick error:', err);
@@ -117,7 +125,6 @@ async function botAttack(
 ) {
   try {
     await transaction(async (q) => {
-      // Check target still has active session
       const tRes = await q(
         `SELECT gs.*, u.username FROM game_sessions gs JOIN users u ON u.id = gs.user_id
          WHERE gs.id = $1 AND gs.is_active = true LIMIT 1`,
@@ -126,43 +133,49 @@ async function botAttack(
       if (tRes.rows.length === 0) return;
       const defender = tRes.rows[0];
 
-      // Check if defender has active shield
-      const defenderShielded = defender.shield_active_until
-        ? new Date(defender.shield_active_until) > new Date()
-        : false;
+      // Check bot's remaining hit points
+      const botHitsLeft = parseInt(bot.shields_remaining || '0', 10);
+      if (botHitsLeft <= 0) return;
 
-      if (defenderShielded) {
+      // Bot takes 1 shield from the player (if they have any)
+      const playerShieldsRemaining = parseInt(defender.shields_remaining || '0', 10);
+      if (playerShieldsRemaining > 0) {
         await q(
-          `INSERT INTO attacks (attacker_id, defender_id, attacker_coins, defender_coins, coins_stolen, defender_had_shield, success, latitude, longitude)
-           VALUES ($1, $2, $3, $4, 0, true, false, $5, $6)`,
-          [bot.user_id, defender.user_id, bot.map_coins, defender.map_coins, bot.latitude, bot.longitude],
+          `UPDATE game_sessions SET shields_remaining = shields_remaining - 1 WHERE id = $1`,
+          [target.session_id],
         );
-        return;
       }
 
-      // Steal 20% of defender's coins (min 1, max 50)
-      const coinsStolen = Math.max(1, Math.min(50, Math.floor(defender.map_coins * 0.2)));
-      if (coinsStolen <= 0) return;
-
-      await Promise.all([
-        q(`UPDATE game_sessions SET map_coins = map_coins + $1 WHERE id = $2`, [coinsStolen, bot.session_id]),
-        q(`UPDATE game_sessions SET map_coins = GREATEST(0, map_coins - $1) WHERE id = $2`, [coinsStolen, target.session_id]),
-      ]);
+      // Bot loses 1 hit point
+      const newBotHits = botHitsLeft - 1;
+      if (newBotHits <= 0) {
+        await q(
+          `UPDATE game_sessions SET shields_remaining = 0, is_active = false WHERE id = $1`,
+          [bot.session_id],
+        );
+      } else {
+        await q(
+          `UPDATE game_sessions SET shields_remaining = $1 WHERE id = $2`,
+          [newBotHits, bot.session_id],
+        );
+      }
 
       await q(
         `INSERT INTO attacks (attacker_id, defender_id, attacker_coins, defender_coins, coins_stolen, defender_had_shield, success, latitude, longitude)
-         VALUES ($1, $2, $3, $4, $5, false, true, $6, $7)`,
-        [bot.user_id, defender.user_id, bot.map_coins, defender.map_coins, coinsStolen, bot.latitude, bot.longitude],
+         VALUES ($1, $2, $3, $4, 0, false, true, $5, $6)`,
+        [bot.user_id, defender.user_id, bot.map_coins, defender.map_coins, bot.latitude, bot.longitude],
       );
 
-      await Promise.all([
-        q(`INSERT INTO transactions (user_id, type, amount, description, related_user_id) VALUES ($1, 'attack_win', $2, $3, $4)`,
-          [bot.user_id, coinsStolen, `Bot stole ${coinsStolen} coins from ${defender.username}`, defender.user_id]),
-        q(`INSERT INTO transactions (user_id, type, amount, description, related_user_id) VALUES ($1, 'attack_loss', $2, $3, $4)`,
-          [defender.user_id, -coinsStolen, `Lost ${coinsStolen} coins to bot ${bot.username}`, bot.user_id]),
-      ]);
+      // Notify the player via socket
+      io.to('game').emit('bot:attacked', {
+        botUserId: bot.user_id,
+        botName: bot.username,
+        targetUserId: defender.user_id,
+        shieldTaken: playerShieldsRemaining > 0,
+        botHitsLeft: newBotHits,
+      });
 
-      console.log(`[BotAI] ${bot.username} attacked ${defender.username}, stole ${coinsStolen} coins`);
+      console.log(`[BotAI] ${bot.username} hit ${defender.username} (shield taken: ${playerShieldsRemaining > 0}, bot hits left: ${newBotHits})`);
     });
   } catch (err) {
     console.error('[BotAI] attack error:', err);

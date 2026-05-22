@@ -34,6 +34,8 @@ export interface NearbyPlayer {
   sessionId: string;
   distanceMiles?: number;
   coinTier?: string;
+  isBot?: boolean;
+  hitsRemaining?: number;
 }
 
 export interface AttackResult {

@@ -112,6 +112,22 @@ function LeafletMap({ lat, lng, nearbyPlayers, session, coinDrops, commandRef }:
   .enemy-marker.shielded:hover{
     box-shadow:0 0 16px #7c4dff;
   }
+  .enemy-marker.bot{
+    background:#ff6d00;border-color:#ff6d00;
+    box-shadow:0 0 8px #ff6d00;
+  }
+  .enemy-marker.bot:hover{
+    box-shadow:0 0 16px #ff6d00;
+  }
+  .bot-hits{
+    position:absolute;top:-8px;right:-8px;
+    background:#ff6d00;color:#fff;
+    font-size:9px;font-weight:900;
+    width:16px;height:16px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    border:1px solid #0a0e1a;
+    box-shadow:0 0 4px #ff6d00;
+  }
   .enemy-info{
     display:flex;flex-direction:column;align-items:center;
     margin-top:2px;pointer-events:none;
@@ -121,6 +137,9 @@ function LeafletMap({ lat, lng, nearbyPlayers, session, coinDrops, commandRef }:
     text-align:center;white-space:nowrap;
     text-shadow:0 0 4px rgba(0,0,0,0.8);
     letter-spacing:1px;
+  }
+  .enemy-name.bot-name{
+    color:#ff6d00;
   }
   .enemy-coins{
     color:#ffd700;font-size:9px;font-weight:600;
@@ -172,10 +191,12 @@ var enemyMarkers = {};
 var coinMarkers = {};
 
 function makeEnemyIcon(en){
-  var cls = en.shielded ? 'enemy-marker shielded' : 'enemy-marker';
-  var html = '<div class="'+cls+'" data-sid="'+en.sid+'"></div>'
+  var cls = en.isBot ? 'enemy-marker bot' : (en.shielded ? 'enemy-marker shielded' : 'enemy-marker');
+  var hitsBadge = en.isBot ? '<div class="bot-hits">'+en.hits+'</div>' : '';
+  var nameCls = en.isBot ? 'enemy-name bot-name' : 'enemy-name';
+  var html = '<div class="'+cls+'" data-sid="'+en.sid+'" style="position:relative">'+hitsBadge+'</div>'
     +'<div class="enemy-info">'
-    +'<span class="enemy-name">'+en.name+'</span>'
+    +'<span class="'+nameCls+'">'+en.name+'</span>'
     +'<span class="enemy-coins">'+en.coins+'⛄</span>'
     +'</div>';
   return L.divIcon({className:'',html:html,iconSize:[16,42],iconAnchor:[8,8]});
@@ -333,6 +354,8 @@ window.addEventListener('message',function(e){
       coins: p.mapCoins,
       shielded: p.shieldActive,
       sid: p.sessionId,
+      isBot: p.isBot || false,
+      hits: p.hitsRemaining ?? 0,
     }));
     const coins = coinDrops.map(c => ({
       id: c.id,

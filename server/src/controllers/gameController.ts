@@ -204,8 +204,9 @@ export async function getNearbyPlayers(req: AuthRequest, res: Response): Promise
       .map((row) => {
         const dist = distanceMiles(myLat, myLng, row.latitude, row.longitude);
         const isBot = row.email?.endsWith('@bot.local');
+        const hitsRemaining = isBot ? parseInt(row.shields_remaining || '0', 10) : undefined;
         const shieldActive = isBot
-          ? parseInt(row.shields_remaining || '0', 10) > 0
+          ? hitsRemaining! > 0
           : (row.shield_active_until ? new Date(row.shield_active_until) > new Date() : false);
         return {
           sessionId: row.session_id,
@@ -215,6 +216,8 @@ export async function getNearbyPlayers(req: AuthRequest, res: Response): Promise
           longitude: row.longitude,
           mapCoins: row.map_coins,
           shieldActive,
+          isBot,
+          hitsRemaining,
           distanceMiles: Math.round(dist * 1000) / 1000,
         };
       })
@@ -268,8 +271,9 @@ export async function getAllPlayers(req: AuthRequest, res: Response): Promise<vo
 
     const players = result.rows.map((row) => {
       const isBot = row.email?.endsWith('@bot.local');
+      const hitsRemaining = isBot ? parseInt(row.shields_remaining || '0', 10) : undefined;
       const shieldActive = isBot
-        ? (parseInt(row.shields_remaining || '0', 10) > 0 || (row.shield_active_until ? new Date(row.shield_active_until) > new Date() : false))
+        ? hitsRemaining! > 0
         : (row.shield_active_until ? new Date(row.shield_active_until) > new Date() : false);
       return {
         sessionId: row.session_id,
@@ -280,6 +284,8 @@ export async function getAllPlayers(req: AuthRequest, res: Response): Promise<vo
         mapCoins: parseInt(row.map_coins, 10),
         coinTier: row.coin_tier,
         shieldActive,
+        isBot,
+        hitsRemaining,
       };
     });
 
