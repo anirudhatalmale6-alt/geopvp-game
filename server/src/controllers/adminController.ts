@@ -268,8 +268,8 @@ export async function spawnBots(req: AuthRequest, res: Response): Promise<void> 
       const lat = Math.max(-90, Math.min(90, centerLat + latOffset));
       const lng = ((centerLng + lngOffset + 540) % 360) - 180;
 
-      const tier = COIN_TIERS[Math.floor(Math.random() * COIN_TIERS.length)];
-      const mapCoins = tier.dollar * 10;
+      const tier = COIN_TIERS[4]; // bronze ($5)
+      const mapCoins = 50;
       const botId = crypto.randomUUID();
       const botName = `bot_${botId.slice(0, 6)}`;
 
@@ -285,8 +285,8 @@ export async function spawnBots(req: AuthRequest, res: Response): Promise<void> 
       );
 
       await query(
-        `INSERT INTO game_sessions (user_id, buyin_amount, coin_tier, map_coins, latitude, longitude, last_location_update, is_active, shields_purchased, shields_remaining)
-         VALUES ($1, $2, $3, $4, $5, $6, now(), true, 0, 0)`,
+        `INSERT INTO game_sessions (user_id, buyin_amount, coin_tier, map_coins, latitude, longitude, last_location_update, is_active, shields_purchased, shields_remaining, shield_active_until)
+         VALUES ($1, $2, $3, $4, $5, $6, now(), true, 3, 3, now() + interval '24 hours')`,
         [userResult.rows[0].id, tier.dollar * 100, tier.name, mapCoins, lat, lng],
       );
 

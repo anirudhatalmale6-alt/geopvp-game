@@ -280,7 +280,14 @@ window.addEventListener('message',function(e){
   const webViewRef = useRef<any>(null);
 
   const buildPayload = useCallback(() => {
-    const enemies = nearbyPlayers.map(p => ({
+    const withDist = nearbyPlayers.map(p => {
+      const dLat = p.latitude - lat;
+      const dLng = p.longitude - lng;
+      return { ...p, _dist: dLat * dLat + dLng * dLng };
+    });
+    withDist.sort((a, b) => a._dist - b._dist);
+    const closest = withDist.slice(0, 100);
+    const enemies = closest.map(p => ({
       name: p.username.substring(0, 8),
       lat: p.latitude,
       lng: p.longitude,
@@ -443,7 +450,7 @@ export default function MapScreen() {
       } catch {}
 
       locationSub.current = await Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.Balanced, timeInterval: 5000, distanceInterval: 10 },
+        { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 2000, distanceInterval: 3 },
         (pos) => setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
       );
     })();
@@ -658,6 +665,27 @@ export default function MapScreen() {
     ? new Date(session.shieldActiveUntil) > new Date()
     : false;
 
+  const ATTACK_RADIUS_MILES = 0.25;
+  const nearestInRange = React.useMemo(() => {
+    if (!session || !location || nearbyPlayers.length === 0) return null;
+    let best: NearbyPlayer | null = null;
+    let bestDist = Infinity;
+    for (const p of nearbyPlayers) {
+      const dLat = (p.latitude - location.lat) * Math.PI / 180;
+      const dLng = (p.longitude - location.lng) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) ** 2 +
+        Math.cos(location.lat * Math.PI / 180) * Math.cos(p.latitude * Math.PI / 180) *
+        Math.sin(dLng / 2) ** 2;
+      const dist = 3958.8 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = p;
+      }
+    }
+    if (!best || bestDist > ATTACK_RADIUS_MILES) return null;
+    return best;
+  }, [session, location, nearbyPlayers]);
+
   // -------------------------------------------------------------------------
   // Render
   // -------------------------------------------------------------------------
@@ -815,6 +843,25 @@ export default function MapScreen() {
           ) : (
             <View style={styles.sessionBtns}>
               <TouchableOpacity
+                style={[styles.attackBtn, !nearestInRange && styles.attackBtnDisabled]}
+                onPress={() => {
+                  if (nearestInRange) {
+                    setAttackTarget({
+                      sessionId: nearestInRange.sessionId,
+                      username: nearestInRange.username,
+                      coins: nearestInRange.mapCoins,
+                      shielded: nearestInRange.shieldActive,
+                    });
+                  }
+                }}
+                activeOpacity={nearestInRange ? 0.85 : 1}
+              >
+                <Ionicons name="flash" size={18} color={nearestInRange ? '#fff' : colors.textMuted} />
+                <Text style={[styles.attackBtnText, !nearestInRange && { color: colors.textMuted }]}>
+                  {nearestInRange ? `ATTACK ${nearestInRange.username.substring(0, 8).toUpperCase()}` : 'NO TARGET IN RANGE'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
                 style={[styles.shieldBtn, shieldIsActive && styles.shieldBtnActive]}
                 onPress={handleBuyShield}
                 disabled={shieldIsActive}
@@ -824,9 +871,6 @@ export default function MapScreen() {
                   size={18}
                   color={shieldIsActive ? colors.background : colors.primary}
                 />
-                <Text style={[styles.shieldBtnText, shieldIsActive && { color: colors.background }]}>
-                  {shieldIsActive ? 'SHIELDED' : 'BUY SHIELD — $1'}
-                </Text>
               </TouchableOpacity>
             </View>
           )}
@@ -1080,12 +1124,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
   },
-  shieldBtn: {
+  attackBtn: {
     flex: 1,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: spacing.sm,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.secondary,
+  },
+  attackBtnDisabled: {
+    backgroundColor: 'rgba(26, 34, 53, 0.9)',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  attackBtnText: {
+    color: '#fff',
+    fontWeight: '900',
+    fontSize: fontSize.sm,
+    letterSpacing: 1,
+  },
+  shieldBtn: {
+    width: 52,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
     borderRadius: borderRadius.md,
     paddingVertical: spacing.md,
     borderWidth: 1,
