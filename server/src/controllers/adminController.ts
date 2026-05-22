@@ -1,7 +1,17 @@
 import { Response } from 'express';
 import { z } from 'zod';
+import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 import { query } from '../config/database';
 import { AuthRequest } from '../middleware/auth';
+import { COIN_TIERS } from '../utils/coins';
+
+const spawnBotsSchema = z.object({
+  count: z.number().int().min(1).max(2000),
+  centerLat: z.number().min(-90).max(90),
+  centerLng: z.number().min(-180).max(180),
+  radiusKm: z.number().min(0.1).max(500).default(50),
+});
 
 const dropCoinSchema = z.object({
   latitude: z.number().min(-90).max(90),
@@ -232,6 +242,85 @@ export async function getActivePlayers(req: AuthRequest, res: Response): Promise
     res.json({ players, count: players.length });
   } catch (err) {
     console.error('getActivePlayers error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+export async function spawnBots(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    if (!(await requireAdmin(req, res))) return;
+
+    const parsed = spawnBotsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0].message });
+      return;
+    }
+
+    const { count, centerLat, centerLng, radiusKm } = parsed.data;
+    const hashedPassword = await bcrypt.hash('BotPass123!', 4);
+    let created = 0;
+
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * 2 * Math.PI;
+      const dist = Math.sqrt(Math.random()) * radiusKm;
+      const latOffset = (dist / 111.32) * Math.cos(angle);
+      const lngOffset = (dist / (111.32 * Math.cos(centerLat * Math.PI / 180))) * Math.sin(angle);
+      const lat = Math.max(-90, Math.min(90, centerLat + latOffset));
+      const lng = ((centerLng + lngOffset + 540) % 360) - 180;
+
+      const tier = COIN_TIERS[Math.floor(Math.random() * COIN_TIERS.length)];
+      const mapCoins = tier.dollar * 10;
+      const botId = crypto.randomUUID();
+      const botName = `bot_${botId.slice(0, 6)}`;
+
+      const userResult = await query(
+        `INSERT INTO users (id, username, email, password_hash, is_verified)
+         VALUES ($1, $2, $3, $4, true) RETURNING id`,
+        [botId, botName, `${botName}@bot.local`, hashedPassword],
+      );
+
+      await query(
+        `INSERT INTO wallets (user_id, balance) VALUES ($1, 0) ON CONFLICT DO NOTHING`,
+        [userResult.rows[0].id],
+      );
+
+      await query(
+        `INSERT INTO game_sessions (user_id, buyin_amount, coin_tier, map_coins, latitude, longitude, last_location_update, is_active, shields_purchased, shields_remaining)
+         VALUES ($1, $2, $3, $4, $5, $6, now(), true, 0, 0)`,
+        [userResult.rows[0].id, tier.dollar * 100, tier.name, mapCoins, lat, lng],
+      );
+
+      created++;
+    }
+
+    res.status(201).json({ ok: true, botsCreated: created });
+  } catch (err) {
+    console.error('spawnBots error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+export async function clearBots(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    if (!(await requireAdmin(req, res))) return;
+
+    const sessions = await query(
+      `DELETE FROM game_sessions WHERE user_id IN (SELECT id FROM users WHERE email LIKE '%@bot.local') RETURNING id`,
+    );
+    const wallets = await query(
+      `DELETE FROM wallets WHERE user_id IN (SELECT id FROM users WHERE email LIKE '%@bot.local')`,
+    );
+    const users = await query(
+      `DELETE FROM users WHERE email LIKE '%@bot.local' RETURNING id`,
+    );
+
+    res.json({
+      ok: true,
+      sessionsRemoved: sessions.rowCount,
+      usersRemoved: users.rowCount,
+    });
+  } catch (err) {
+    console.error('clearBots error:', err);
     res.status(500).json({ error: 'Internal server error.' });
   }
 }

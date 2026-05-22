@@ -10,6 +10,8 @@ import {
   listUsers,
   toggleAdmin,
   getActivePlayers,
+  spawnBots,
+  clearBots,
 } from '../controllers/adminController';
 
 const router = Router();
@@ -25,5 +27,7 @@ router.post('/coins/bulk-drop', bulkDropCoins);
 router.get('/coins', listCoinDrops);
 router.delete('/coins/:id', deleteCoinDrop);
 router.delete('/coins', clearAllDrops);
+router.post('/bots/spawn', spawnBots);
+router.delete('/bots', clearBots);
 
 export default router;
