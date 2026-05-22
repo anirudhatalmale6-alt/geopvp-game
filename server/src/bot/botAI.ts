@@ -6,6 +6,7 @@ const MPH_TO_DEG_PER_SEC = 1 / (69 * 3600); // ~1 degree lat ≈ 69 miles
 const BOT_SPEED_MPH = 10;
 const TICK_INTERVAL_MS = 5000;
 const ATTACK_RADIUS = config.attackRadiusMiles;
+const MAX_HUNT_RADIUS_MILES = 150;
 
 let tickHandle: ReturnType<typeof setInterval> | null = null;
 
@@ -54,12 +55,12 @@ async function botTick(io: SocketIOServer) {
         ? new Date(bot.shield_active_until) > new Date()
         : false;
 
-      // Find nearest real player
+      // Find nearest real player within hunt radius (keeps bots in their area)
       let nearest = null;
       let nearestDist = Infinity;
       for (const p of realPlayers) {
         const d = distanceMiles(bot.latitude, bot.longitude, p.latitude, p.longitude);
-        if (d < nearestDist) {
+        if (d < nearestDist && d <= MAX_HUNT_RADIUS_MILES) {
           nearestDist = d;
           nearest = p;
         }
