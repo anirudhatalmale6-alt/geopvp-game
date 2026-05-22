@@ -152,14 +152,17 @@ export async function signup(req: Request, res: Response): Promise<void> {
       [userId],
     );
 
-    // In dev mode (no real SMTP), auto-verify the user
+    // In dev mode (no real SMTP), auto-verify and return tokens
     const devMode = config.smtp.pass === 'placeholder_for_now';
     if (devMode) {
       await query(
         'UPDATE users SET is_verified = true, verification_code = NULL, verification_expires = NULL WHERE id = $1',
         [userId],
       );
-      res.status(201).json({ message: 'Account created and auto-verified (dev mode).' });
+      const user = { id: userId, email: email.toLowerCase(), username: username.toLowerCase() };
+      const token = generateAccessToken(user);
+      const refreshToken = generateRefreshToken(user);
+      res.status(201).json({ user, token, refreshToken });
     } else {
       await sendVerificationEmail(email, verificationCode);
       res.status(201).json({ message: 'Account created. Check your email for verification code.' });
