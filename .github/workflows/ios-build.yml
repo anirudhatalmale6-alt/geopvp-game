@@ -5,7 +5,7 @@ on:
 
 env:
   EXPO_NO_TELEMETRY: 1
-  EXPO_PUBLIC_API_URL: https://english-ext-mazda-pda.trycloudflare.com/api
+  EXPO_PUBLIC_API_URL: https://calcium-drugs-booth-meaningful.trycloudflare.com/api
 
 jobs:
   build:
