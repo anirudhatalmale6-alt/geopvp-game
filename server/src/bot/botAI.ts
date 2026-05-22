@@ -59,15 +59,26 @@ async function botTick(io: SocketIOServer) {
     const dtSeconds = TICK_INTERVAL_MS / 1000;
     const moveDegs = BOT_SPEED_MPH * MPH_TO_DEG_PER_SEC * dtSeconds;
 
-    for (const bot of botsRes.rows) {
-      const botShielded = bot.shield_active_until
-        ? new Date(bot.shield_active_until) > new Date()
-        : false;
+    // Track which players already have a bot chasing them this tick
+    const playerBeingChased = new Set<string>();
 
-      // Find nearest real player within hunt radius (keeps bots in their area)
+    // Sort bots by distance to nearest player so closer bots get first pick
+    const botsWithDist = botsRes.rows.map((bot: any) => {
+      let minDist = Infinity;
+      for (const p of realPlayers) {
+        const d = distanceMiles(bot.latitude, bot.longitude, p.latitude, p.longitude);
+        if (d < minDist) minDist = d;
+      }
+      return { ...bot, _minDist: minDist };
+    });
+    botsWithDist.sort((a: any, b: any) => a._minDist - b._minDist);
+
+    for (const bot of botsWithDist) {
+      // Find nearest real player within hunt radius that isn't already being chased
       let nearest = null;
       let nearestDist = Infinity;
       for (const p of realPlayers) {
+        if (playerBeingChased.has(p.user_id)) continue;
         const d = distanceMiles(bot.latitude, bot.longitude, p.latitude, p.longitude);
         if (d < nearestDist && d <= MAX_HUNT_RADIUS_MILES) {
           nearestDist = d;
@@ -76,6 +87,7 @@ async function botTick(io: SocketIOServer) {
       }
 
       if (!nearest) continue;
+      playerBeingChased.add(nearest.user_id);
 
       // Move toward nearest player
       const dLat = nearest.latitude - bot.latitude;
