@@ -5,7 +5,7 @@ on:
 
 env:
   EXPO_NO_TELEMETRY: 1
-  EXPO_PUBLIC_API_URL: https://kingdom-blackjack-remembered-allowing.trycloudflare.com/api
+  EXPO_PUBLIC_API_URL: http://45.32.220.85/api
 
 jobs:
   build:
