@@ -8,6 +8,7 @@ import authRoutes from './routes/auth';
 import gameRoutes from './routes/game';
 import walletRoutes from './routes/wallet';
 import adminRoutes from './routes/admin';
+import publicRoutes from './routes/public';
 import { setupGameSocket } from './socket/gameSocket';
 import { startBotAI } from './bot/botAI';
 
@@ -30,6 +31,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/game', gameRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/public', publicRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {
@@ -43,15 +45,15 @@ const adminPath = path.resolve(__dirname, '../public/admin');
 app.use('/admin', express.static(adminPath));
 
 // ---------------------------------------------------------------------------
-// Serve web build (static files from mobile/dist)
+// Serve CoinProwl website
 // ---------------------------------------------------------------------------
-const webDistPath = path.resolve(__dirname, '../../mobile/dist');
-app.use(express.static(webDistPath));
+const websitePath = path.resolve(__dirname, '../public/website');
+app.use(express.static(websitePath));
 app.get('*', (_req, res, next) => {
   if (_req.path.startsWith('/api') || _req.path === '/health' || _req.path.startsWith('/socket.io') || _req.path.startsWith('/admin')) {
     return next();
   }
-  res.sendFile(path.join(webDistPath, 'index.html'));
+  res.sendFile(path.join(websitePath, 'index.html'));
 });
 
 // ---------------------------------------------------------------------------
@@ -68,6 +70,12 @@ const io = new SocketIOServer(server, {
 
 // Wire up game socket handlers (auth + player:location + players:update)
 setupGameSocket(io);
+
+// Spectator namespace for live map website (no auth, receive-only)
+const spectatorNs = io.of('/spectator');
+spectatorNs.on('connection', (socket) => {
+  socket.join('spectate');
+});
 
 // Start bot AI loop (bots move + attack every 5s)
 startBotAI(io);

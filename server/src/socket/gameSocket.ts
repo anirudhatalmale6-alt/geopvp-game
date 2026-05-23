@@ -83,14 +83,15 @@ export function setupGameSocket(io: SocketIOServer): void {
           [lat, lng, user.id],
         );
 
-        // Broadcast to all other clients in the game room
-        socket.to('game').emit('players:update', {
+        const updatePayload = {
           userId: user.id,
           username: user.username,
           lat,
           lng,
           ts: Date.now(),
-        });
+        };
+        socket.to('game').emit('players:update', updatePayload);
+        io.of('/spectator').emit('players:update', updatePayload);
       } catch (err) {
         console.error('[GameSocket] player:location error:', err);
       }

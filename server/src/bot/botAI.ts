@@ -169,13 +169,15 @@ async function botTick(io: SocketIOServer) {
         [newLat, newLng, bot.session_id],
       );
 
-      io.to('game').emit('players:update', {
+      const botUpdate = {
         userId: bot.user_id,
         username: bot.username,
         lat: newLat,
         lng: newLng,
         ts: Date.now(),
-      });
+      };
+      io.to('game').emit('players:update', botUpdate);
+      io.of('/spectator').emit('players:update', botUpdate);
 
       if (nearest) {
         const currentDist = distanceMiles(newLat, newLng, nearest.latitude, nearest.longitude);

@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CoinProwl - GPS PvP Battle Game</title>
+<meta name="description" content="Hunt, attack, and steal coins in a real-world GPS battle game. Walk, prowl, and dominate your area.">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#060a14;--bg2:#0a0e1a;--surface:#111827;--surface2:#1a2234;
+  --gold:#f0b90b;--gold2:#fcd535;--gold-dim:rgba(240,185,11,.15);
+  --cyan:#00e5ff;--cyan-dim:rgba(0,229,255,.12);
+  --red:#ff3b5c;--orange:#ff8a00;
+  --text:#e8eaed;--text2:#8b95a5;
+  --font-display:'Orbitron',monospace;--font-body:'Rajdhani',sans-serif;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--font-body);overflow-x:hidden}
+
+/* ===== HEADER ===== */
+header{
+  position:fixed;top:0;left:0;right:0;z-index:1000;
+  background:linear-gradient(180deg,rgba(6,10,20,.97) 0%,rgba(6,10,20,.85) 70%,rgba(6,10,20,0) 100%);
+  padding:16px 32px;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.logo{display:flex;align-items:center;gap:12px}
+.logo-icon{
+  width:42px;height:42px;border-radius:10px;
+  background:linear-gradient(135deg,var(--gold) 0%,#c98e00 100%);
+  display:flex;align-items:center;justify-content:center;
+  font-size:22px;font-weight:900;color:var(--bg);font-family:var(--font-display);
+  box-shadow:0 0 20px rgba(240,185,11,.3);
+}
+.logo-text{font-family:var(--font-display);font-size:22px;font-weight:700;letter-spacing:3px;color:var(--gold)}
+.logo-text span{color:var(--text);font-weight:400}
+nav{display:flex;gap:28px;align-items:center}
+nav a{color:var(--text2);text-decoration:none;font-size:15px;font-weight:500;letter-spacing:1px;
+  transition:color .2s;text-transform:uppercase}
+nav a:hover{color:var(--gold)}
+.nav-cta{
+  background:linear-gradient(135deg,var(--gold) 0%,#c98e00 100%);
+  color:var(--bg)!important;padding:8px 20px;border-radius:6px;font-weight:700;
+  transition:transform .2s,box-shadow .2s!important;
+}
+.nav-cta:hover{transform:translateY(-1px);box-shadow:0 4px 20px rgba(240,185,11,.4)}
+
+/* ===== HERO ===== */
+.hero{
+  position:relative;height:100vh;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;text-align:center;
+  overflow:hidden;
+}
+.hero-bg{
+  position:absolute;inset:0;
+  background:radial-gradient(ellipse at 50% 30%,rgba(240,185,11,.06) 0%,transparent 60%),
+             radial-gradient(ellipse at 20% 80%,rgba(0,229,255,.04) 0%,transparent 50%),
+             var(--bg);
+}
+.hero-grid{
+  position:absolute;inset:0;
+  background-image:
+    linear-gradient(rgba(240,185,11,.03) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(240,185,11,.03) 1px,transparent 1px);
+  background-size:60px 60px;
+  animation:gridScroll 20s linear infinite;
+}
+@keyframes gridScroll{0%{transform:translate(0,0)}100%{transform:translate(60px,60px)}}
+
+.hero-content{position:relative;z-index:2;max-width:800px;padding:0 24px}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  background:var(--gold-dim);border:1px solid rgba(240,185,11,.25);
+  border-radius:100px;padding:6px 18px;margin-bottom:24px;
+  font-size:13px;font-weight:600;color:var(--gold);letter-spacing:2px;
+  text-transform:uppercase;font-family:var(--font-display);
+}
+.badge-dot{width:6px;height:6px;border-radius:50%;background:var(--gold);
+  animation:pulse-dot 2s ease-in-out infinite}
+@keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.6)}}
+
+h1{
+  font-family:var(--font-display);font-size:clamp(36px,6vw,72px);font-weight:900;
+  line-height:1.1;margin-bottom:20px;letter-spacing:2px;
+  background:linear-gradient(135deg,#fff 0%,var(--gold) 50%,var(--gold2) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.hero-sub{font-size:clamp(16px,2.5vw,22px);color:var(--text2);line-height:1.6;
+  margin-bottom:36px;font-weight:400;max-width:600px;margin-left:auto;margin-right:auto}
+.hero-actions{display:flex;gap:16px;justify-content:center;flex-wrap:wrap}
+.btn{
+  display:inline-flex;align-items:center;gap:10px;padding:14px 32px;
+  border-radius:8px;font-size:16px;font-weight:700;font-family:var(--font-body);
+  text-decoration:none;transition:all .25s;cursor:pointer;border:none;
+  letter-spacing:1px;text-transform:uppercase;
+}
+.btn-primary{
+  background:linear-gradient(135deg,var(--gold) 0%,#d4a20a 100%);
+  color:var(--bg);box-shadow:0 4px 24px rgba(240,185,11,.3);
+}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(240,185,11,.45)}
+.btn-outline{
+  background:transparent;color:var(--cyan);
+  border:1px solid rgba(0,229,255,.3);
+}
+.btn-outline:hover{background:var(--cyan-dim);border-color:var(--cyan)}
+.scroll-hint{
+  position:absolute;bottom:32px;left:50%;transform:translateX(-50%);
+  color:var(--text2);font-size:13px;letter-spacing:2px;text-transform:uppercase;
+  animation:bounce 2s ease infinite;
+}
+@keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(8px)}}
+
+/* ===== LIVE MAP SECTION ===== */
+.map-section{position:relative;background:var(--bg2)}
+.map-header{
+  padding:48px 32px 16px;text-align:center;
+  background:linear-gradient(180deg,var(--bg) 0%,var(--bg2) 100%);
+}
+.map-header h2{
+  font-family:var(--font-display);font-size:clamp(24px,4vw,36px);font-weight:700;
+  color:var(--text);letter-spacing:2px;margin-bottom:8px;
+}
+.map-header p{color:var(--text2);font-size:16px}
+
+.map-stats{
+  display:flex;justify-content:center;gap:32px;padding:16px;flex-wrap:wrap;
+}
+.stat{
+  display:flex;align-items:center;gap:8px;
+  background:var(--surface);border:1px solid rgba(255,255,255,.06);
+  border-radius:8px;padding:8px 16px;
+}
+.stat-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.stat-dot.players{background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+.stat-dot.bots{background:var(--orange);box-shadow:0 0 8px var(--orange)}
+.stat-dot.total{background:var(--gold);box-shadow:0 0 8px var(--gold)}
+.stat-label{color:var(--text2);font-size:13px;font-weight:500;text-transform:uppercase;letter-spacing:1px}
+.stat-value{color:var(--text);font-size:18px;font-weight:700;font-family:var(--font-display)}
+
+#livemap{width:100%;height:70vh;min-height:500px}
+
+/* ===== HOW IT WORKS ===== */
+.how-section{padding:80px 32px;background:var(--bg);text-align:center}
+.how-section h2{
+  font-family:var(--font-display);font-size:clamp(24px,4vw,36px);font-weight:700;
+  color:var(--text);letter-spacing:2px;margin-bottom:48px;
+}
+.how-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  gap:24px;max-width:1100px;margin:0 auto;
+}
+.how-card{
+  background:var(--surface);border:1px solid rgba(255,255,255,.05);
+  border-radius:12px;padding:32px 24px;text-align:left;
+  transition:border-color .3s,transform .3s;
+}
+.how-card:hover{border-color:rgba(240,185,11,.2);transform:translateY(-4px)}
+.how-num{
+  font-family:var(--font-display);font-size:48px;font-weight:900;
+  background:linear-gradient(135deg,var(--gold),var(--gold2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;line-height:1;margin-bottom:12px;
+}
+.how-card h3{font-size:20px;font-weight:700;margin-bottom:8px;color:var(--text)}
+.how-card p{color:var(--text2);font-size:15px;line-height:1.6}
+
+/* ===== FOOTER ===== */
+footer{
+  border-top:1px solid rgba(255,255,255,.06);padding:40px 32px;
+  text-align:center;background:var(--bg);
+}
+footer .logo{justify-content:center;margin-bottom:16px}
+footer p{color:var(--text2);font-size:13px}
+
+/* ===== PARTICLES ===== */
+.particle{
+  position:absolute;border-radius:50%;pointer-events:none;
+  animation:float linear infinite;
+}
+@keyframes float{
+  0%{transform:translateY(0) scale(1);opacity:0}
+  10%{opacity:1}
+  90%{opacity:1}
+  100%{transform:translateY(-100vh) scale(0);opacity:0}
+}
+
+/* ===== LEAFLET OVERRIDES ===== */
+.leaflet-container{background:var(--bg2)!important}
+.leaflet-control-zoom{border:none!important}
+.leaflet-control-zoom a{
+  background:var(--surface)!important;color:var(--text)!important;
+  border:1px solid rgba(255,255,255,.1)!important;
+}
+.leaflet-control-zoom a:hover{background:var(--surface2)!important}
+.leaflet-control-attribution{
+  background:rgba(6,10,20,.8)!important;color:var(--text2)!important;
+  font-size:10px!important;
+}
+.leaflet-control-attribution a{color:var(--text2)!important}
+
+/* ===== MOBILE ===== */
+@media(max-width:768px){
+  header{padding:12px 16px}
+  .logo-text{font-size:16px}
+  nav a:not(.nav-cta){display:none}
+  .hero-content{padding:0 16px}
+  .map-stats{gap:12px}
+  .stat{padding:6px 12px}
+  .how-section{padding:48px 16px}
+  #livemap{height:60vh;min-height:400px}
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">C</div>
+    <div class="logo-text">COIN<span>PROWL</span></div>
+  </div>
+  <nav>
+    <a href="#livemap-section">Live Map</a>
+    <a href="#how">How It Works</a>
+    <a href="#livemap-section" class="nav-cta">Watch Live</a>
+  </nav>
+</header>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-grid"></div>
+  <div class="hero-content">
+    <div class="hero-badge">
+      <span class="badge-dot"></span>
+      Live GPS PvP Game
+    </div>
+    <h1>HUNT. ATTACK. STEAL COINS.</h1>
+    <p class="hero-sub">
+      Walk the streets. Prowl your neighborhood. Attack nearby players and steal their coins
+      in a real-world GPS battle game. Every step counts.
+    </p>
+    <div class="hero-actions">
+      <a href="#livemap-section" class="btn btn-primary">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+        Watch Live Map
+      </a>
+      <a href="#how" class="btn btn-outline">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        Learn More
+      </a>
+    </div>
+  </div>
+  <div class="scroll-hint">&#8595; Scroll to see the live map</div>
+</section>
+
+<!-- LIVE MAP -->
+<section class="map-section" id="livemap-section">
+  <div class="map-header">
+    <h2>LIVE GAME MAP</h2>
+    <p>Real-time player positions across the United States</p>
+    <div class="map-stats">
+      <div class="stat">
+        <div class="stat-dot players"></div>
+        <div>
+          <div class="stat-label">Players</div>
+          <div class="stat-value" id="player-count">0</div>
+        </div>
+      </div>
+      <div class="stat">
+        <div class="stat-dot bots"></div>
+        <div>
+          <div class="stat-label">Prowlers</div>
+          <div class="stat-value" id="bot-count">0</div>
+        </div>
+      </div>
+      <div class="stat">
+        <div class="stat-dot total"></div>
+        <div>
+          <div class="stat-label">Coins in Play</div>
+          <div class="stat-value" id="total-coins">0</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="livemap"></div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="how-section" id="how">
+  <h2>HOW IT WORKS</h2>
+  <div class="how-grid">
+    <div class="how-card">
+      <div class="how-num">01</div>
+      <h3>Buy In</h3>
+      <p>Choose your stake from $1 to $25. Your buy-in converts to coins on the map. Higher stakes mean more coins to hunt with.</p>
+    </div>
+    <div class="how-card">
+      <div class="how-num">02</div>
+      <h3>Hunt & Prowl</h3>
+      <p>Walk around your area in real life. Your GPS position shows on the map. Find other players and AI prowlers near you.</p>
+    </div>
+    <div class="how-card">
+      <div class="how-num">03</div>
+      <h3>Attack & Defend</h3>
+      <p>Get close to enemies and attack to steal their coins. Buy shields to protect yourself. Defeat bots to take all their coins.</p>
+    </div>
+    <div class="how-card">
+      <div class="how-num">04</div>
+      <h3>Cash Out</h3>
+      <p>When you're ready, cash out your coins for real money. The more you prowl and steal, the bigger your payout.</p>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="logo">
+    <div class="logo-icon" style="width:32px;height:32px;font-size:16px">C</div>
+    <div class="logo-text" style="font-size:16px">COIN<span>PROWL</span></div>
+  </div>
+  <p>&copy; 2026 CoinProwl. All rights reserved. GPS PvP Battle Game.</p>
+</footer>
+
+<!-- PARTICLES -->
+<script>
+(function(){
+  const hero = document.querySelector('.hero');
+  for(let i=0;i<20;i++){
+    const p=document.createElement('div');
+    p.className='particle';
+    const s=Math.random()*3+1;
+    p.style.cssText=`
+      width:${s}px;height:${s}px;left:${Math.random()*100}%;bottom:-10px;
+      background:${Math.random()>.5?'var(--gold)':'var(--cyan)'};
+      opacity:${Math.random()*.4+.1};
+      animation-duration:${Math.random()*8+6}s;
+      animation-delay:${Math.random()*8}s;
+    `;
+    hero.appendChild(p);
+  }
+})();
+</script>
+
+<!-- LIVE MAP LOGIC -->
+<script>
+(function(){
+  const map = L.map('livemap',{
+    center:[39.5,-98.5],
+    zoom:4,
+    zoomControl:true,
+    attributionControl:true,
+    maxBounds:[[-10,-170],[72,-30]],
+    minZoom:3,
+  });
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+    subdomains:'abcd',
+    maxZoom:18,
+  }).addTo(map);
+
+  const markers = new Map();
+  let playerCount = 0;
+  let botCount = 0;
+  let totalCoins = 0;
+
+  function createIcon(isBot){
+    const color = isBot ? '#ff8a00' : '#00e5ff';
+    const glow = isBot ? 'rgba(255,138,0,.6)' : 'rgba(0,229,255,.6)';
+    return L.divIcon({
+      className:'',
+      iconSize:[14,14],
+      iconAnchor:[7,7],
+      html:`<div style="
+        width:14px;height:14px;border-radius:50%;
+        background:${color};
+        box-shadow:0 0 8px ${glow},0 0 16px ${glow};
+        border:2px solid rgba(255,255,255,.3);
+        transition:all .8s ease;
+      "></div>`,
+    });
+  }
+
+  function updateStats(players){
+    let pc=0,bc=0,tc=0;
+    players.forEach(p=>{
+      if(p.isBot) bc++; else pc++;
+      tc += p.mapCoins || 0;
+    });
+    playerCount=pc; botCount=bc; totalCoins=tc;
+    document.getElementById('player-count').textContent = pc.toLocaleString();
+    document.getElementById('bot-count').textContent = bc.toLocaleString();
+    document.getElementById('total-coins').textContent = tc.toLocaleString();
+  }
+
+  function loadPlayers(){
+    fetch('/api/public/players')
+      .then(r=>r.json())
+      .then(data=>{
+        if(!data.players) return;
+        const seen = new Set();
+        data.players.forEach(p=>{
+          seen.add(p.id);
+          if(markers.has(p.id)){
+            markers.get(p.id).setLatLng([p.latitude,p.longitude]);
+          } else {
+            const m = L.marker([p.latitude,p.longitude],{
+              icon:createIcon(p.isBot),
+            }).addTo(map);
+            m.bindTooltip(
+              `<b>${p.username}</b><br>${p.mapCoins} coins${p.isBot ? '<br><i>AI Prowler</i>' : ''}`,
+              {className:'prowl-tooltip',direction:'top',offset:[0,-10]}
+            );
+            markers.set(p.id, m);
+          }
+        });
+        markers.forEach((m,id)=>{
+          if(!seen.has(id)){m.remove();markers.delete(id);}
+        });
+        updateStats(data.players);
+      })
+      .catch(()=>{});
+  }
+
+  loadPlayers();
+  setInterval(loadPlayers, 10000);
+
+  const socket = io('/spectator',{transports:['websocket','polling']});
+  socket.on('connect',()=> console.log('[CoinProwl] Live map connected'));
+  socket.on('players:update',(data)=>{
+    if(!data.userId) return;
+    if(markers.has(data.userId)){
+      markers.get(data.userId).setLatLng([data.lat, data.lng]);
+    }
+  });
+
+  // Tooltip styles injected
+  const style=document.createElement('style');
+  style.textContent=`
+    .prowl-tooltip{
+      background:rgba(10,14,26,.92)!important;
+      border:1px solid rgba(240,185,11,.3)!important;
+      color:#e8eaed!important;border-radius:6px!important;
+      font-family:'Rajdhani',sans-serif!important;font-size:13px!important;
+      padding:6px 10px!important;box-shadow:0 4px 20px rgba(0,0,0,.5)!important;
+    }
+    .prowl-tooltip::before{
+      border-top-color:rgba(240,185,11,.3)!important;
+    }
+    .leaflet-tooltip-top:before{
+      border-top-color:rgba(240,185,11,.3)!important;
+    }
+  `;
+  document.head.appendChild(style);
+})();
+</script>
+</body>
+</html>
