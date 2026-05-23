@@ -28,6 +28,7 @@ import {
 } from '../../api/game';
 import { connectSocket, disconnectSocket, emitLocation, onPlayersUpdate } from '../../api/socket';
 import BuyInModal from './BuyInModal';
+import { getTierColor } from '../../utils/tierColors';
 import { checkMockLocation } from '../../utils/anticheat';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -841,7 +842,7 @@ export default function MapScreen() {
           </View>
           {session && (
             <View style={styles.topRight}>
-              <Ionicons name="logo-bitcoin" size={14} color={colors.gold} />
+              <Ionicons name="logo-bitcoin" size={14} color={getTierColor(session.coinTier)} />
               <Text style={styles.coinsText}>{session.mapCoins}</Text>
             </View>
           )}
@@ -851,8 +852,8 @@ export default function MapScreen() {
         {session && (
           <View style={styles.hudRow}>
             <View style={styles.hudCard}>
-              <Ionicons name="logo-bitcoin" size={18} color={colors.gold} />
-              <Text style={styles.hudValue}>{session.mapCoins}</Text>
+              <Ionicons name="logo-bitcoin" size={18} color={getTierColor(session.coinTier)} />
+              <Text style={[styles.hudValue, { color: getTierColor(session.coinTier) }]}>{session.mapCoins}</Text>
               <Text style={styles.hudLabel}>COINS</Text>
             </View>
             <View style={styles.hudCard}>

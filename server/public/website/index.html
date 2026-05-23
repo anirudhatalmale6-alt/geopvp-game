@@ -373,17 +373,20 @@ footer p{color:var(--text2);font-size:13px}
   let botCount = 0;
   let totalCoins = 0;
 
-  function createIcon(isBot){
-    const color = isBot ? '#ff8a00' : '#00e5ff';
-    const glow = isBot ? 'rgba(255,138,0,.6)' : 'rgba(0,229,255,.6)';
+  function createIcon(isBot, tierColor){
+    const color = isBot ? '#ff8a00' : (tierColor || '#00e5ff');
+    const glow = color.replace('#','');
+    const r=parseInt(glow.substr(0,2),16),g=parseInt(glow.substr(2,2),16),b=parseInt(glow.substr(4,2),16);
+    const glowRgba = `rgba(${r},${g},${b},.6)`;
+    const size = isBot ? 12 : 16;
     return L.divIcon({
       className:'',
-      iconSize:[14,14],
-      iconAnchor:[7,7],
+      iconSize:[size,size],
+      iconAnchor:[size/2,size/2],
       html:`<div style="
-        width:14px;height:14px;border-radius:50%;
+        width:${size}px;height:${size}px;border-radius:50%;
         background:${color};
-        box-shadow:0 0 8px ${glow},0 0 16px ${glow};
+        box-shadow:0 0 8px ${glowRgba},0 0 16px ${glowRgba};
         border:2px solid rgba(255,255,255,.3);
         transition:all .8s ease;
       "></div>`,
@@ -414,10 +417,11 @@ footer p{color:var(--text2);font-size:13px}
             markers.get(p.id).setLatLng([p.latitude,p.longitude]);
           } else {
             const m = L.marker([p.latitude,p.longitude],{
-              icon:createIcon(p.isBot),
+              icon:createIcon(p.isBot, p.tierColor),
             }).addTo(map);
+            const tierLabel = p.isBot ? '<i>AI Prowler</i>' : `<span style="color:${p.tierColor||'#ffd700'}">${p.tierColor ? '● ' : ''}Player</span>`;
             m.bindTooltip(
-              `<b>${p.username}</b><br>${p.mapCoins} coins${p.isBot ? '<br><i>AI Prowler</i>' : ''}`,
+              `<b>${p.username}</b><br>${p.mapCoins} coins<br>${tierLabel}`,
               {className:'prowl-tooltip',direction:'top',offset:[0,-10]}
             );
             markers.set(p.id, m);

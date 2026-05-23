@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { query } from '../config/database';
+import { getTierByName } from '../utils/coins';
 
 const router = Router();
 
@@ -11,6 +12,7 @@ router.get('/players', async (_req: Request, res: Response) => {
          gs.latitude,
          gs.longitude,
          gs.map_coins,
+         gs.coin_tier,
          u.username,
          u.email
        FROM game_sessions gs
@@ -21,14 +23,19 @@ router.get('/players', async (_req: Request, res: Response) => {
        LIMIT 2000`,
     );
 
-    const players = result.rows.map((row) => ({
-      id: row.id,
-      username: row.username,
-      latitude: parseFloat(row.latitude),
-      longitude: parseFloat(row.longitude),
-      mapCoins: parseInt(row.map_coins, 10),
-      isBot: row.email?.endsWith('@bot.local') || false,
-    }));
+    const players = result.rows.map((row) => {
+      const isBot = row.email?.endsWith('@bot.local') || false;
+      const tier = getTierByName(row.coin_tier);
+      return {
+        id: row.id,
+        username: row.username,
+        latitude: parseFloat(row.latitude),
+        longitude: parseFloat(row.longitude),
+        mapCoins: parseInt(row.map_coins, 10),
+        isBot,
+        tierColor: tier?.color || '#ffd700',
+      };
+    });
 
     res.json({ players });
   } catch (err) {
