@@ -5,7 +5,7 @@ on:
 
 env:
   EXPO_NO_TELEMETRY: 1
-  EXPO_PUBLIC_API_URL: https://set-powerpoint-naples-sell.trycloudflare.com/api
+  EXPO_PUBLIC_API_URL: https://activities-diamond-pci-essence.trycloudflare.com/api
 
 jobs:
   build:
