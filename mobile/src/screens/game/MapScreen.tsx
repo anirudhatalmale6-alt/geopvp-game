@@ -482,6 +482,7 @@ export default function MapScreen() {
   const [attackResult, setAttackResult] = useState<string | null>(null);
 
   const [statusMessage, setStatusMessage] = useState<string>('LIVE MAP');
+  const [spawnSecsLeft, setSpawnSecsLeft] = useState(0);
   const [zoomedOut, setZoomedOut] = useState(false);
   const mapRef = useRef<any>(null);
   const locationSub = useRef<Location.LocationSubscription | null>(null);
@@ -499,6 +500,22 @@ export default function MapScreen() {
       return () => { document.head.removeChild(style); };
     }
   }, []);
+
+  // -------------------------------------------------------------------------
+  // Spawn protection countdown (2 minutes after buy-in)
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    if (!session?.spawnedAt) { setSpawnSecsLeft(0); return; }
+    const calc = () => {
+      const elapsed = Date.now() - new Date(session.spawnedAt).getTime();
+      const remaining = Math.max(0, 120 - Math.floor(elapsed / 1000));
+      setSpawnSecsLeft(remaining);
+      return remaining;
+    };
+    if (calc() <= 0) return;
+    const iv = setInterval(() => { if (calc() <= 0) clearInterval(iv); }, 1000);
+    return () => clearInterval(iv);
+  }, [session?.spawnedAt]);
 
   // -------------------------------------------------------------------------
   // Location permission + GPS watch
@@ -728,6 +745,12 @@ export default function MapScreen() {
   // -------------------------------------------------------------------------
   const handleAttack = async () => {
     if (!attackTarget) return;
+    if (spawnSecsLeft > 0) {
+      setAttackResult(`Spawn protection active! Wait ${spawnSecsLeft}s before attacking.`);
+      setTimeout(() => setAttackResult(null), 3000);
+      setAttackTarget(null);
+      return;
+    }
     const target = attackTarget;
     setAttackTarget(null);
 
@@ -891,6 +914,16 @@ export default function MapScreen() {
               </Text>
               <Text style={styles.hudLabel}>DROPS</Text>
             </View>
+          </View>
+        )}
+
+        {/* Spawn protection countdown */}
+        {spawnSecsLeft > 0 && (
+          <View style={styles.spawnBanner}>
+            <Ionicons name="shield-checkmark" size={18} color="#00e5ff" />
+            <Text style={styles.spawnText}>
+              SPAWN PROTECTION {Math.floor(spawnSecsLeft / 60)}:{(spawnSecsLeft % 60).toString().padStart(2, '0')}
+            </Text>
           </View>
         )}
 
@@ -1177,6 +1210,25 @@ const styles = StyleSheet.create({
   zoomBtnActive: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
+  },
+  spawnBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: 'rgba(0, 229, 255, 0.12)',
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginTop: spacing.sm,
+    marginHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.4)',
+  },
+  spawnText: {
+    fontSize: fontSize.sm,
+    fontWeight: '700' as const,
+    color: '#00e5ff',
+    letterSpacing: 1,
   },
   toastBanner: {
     flexDirection: 'row',

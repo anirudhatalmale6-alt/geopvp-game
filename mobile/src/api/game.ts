@@ -22,6 +22,7 @@ export interface GameSession {
   lastLocationUpdate: string | null;
   isActive: boolean;
   createdAt: string;
+  spawnedAt: string;
 }
 
 export interface NearbyPlayer {

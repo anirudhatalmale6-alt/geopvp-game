@@ -369,6 +369,21 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
         throw new Error(`Target is too far away (${dist.toFixed(2)} miles). Max: ${config.attackRadiusMiles} miles.`);
       }
 
+      // Spawn protection: 2-minute grace period after buy-in
+      const SPAWN_PROTECTION_MS = 2 * 60 * 1000;
+      const attackerSpawn = attacker.spawned_at ? new Date(attacker.spawned_at).getTime() : 0;
+      const defenderSpawn = defender.spawned_at ? new Date(defender.spawned_at).getTime() : 0;
+      const now = Date.now();
+
+      if (now - attackerSpawn < SPAWN_PROTECTION_MS) {
+        const secsLeft = Math.ceil((SPAWN_PROTECTION_MS - (now - attackerSpawn)) / 1000);
+        throw new Error(`Spawn protection active! You can't attack for ${secsLeft} more seconds.`);
+      }
+      if (now - defenderSpawn < SPAWN_PROTECTION_MS) {
+        const secsLeft = Math.ceil((SPAWN_PROTECTION_MS - (now - defenderSpawn)) / 1000);
+        throw new Error(`That player just spawned and is protected for ${secsLeft} more seconds.`);
+      }
+
       // Check if defender is a bot
       const defenderEmail = (await q(`SELECT email FROM users WHERE id = $1`, [defender.user_id])).rows[0]?.email;
       const isBot = defenderEmail?.endsWith('@bot.local');
@@ -834,5 +849,6 @@ function formatSession(row: Record<string, any>) {
     lastLocationUpdate: row.last_location_update,
     isActive: row.is_active,
     createdAt: row.created_at,
+    spawnedAt: row.spawned_at || row.created_at,
   };
 }

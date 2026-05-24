@@ -54,13 +54,14 @@ async function botTick(io: SocketIOServer) {
   try {
     const realPlayersRes = await query(
       `SELECT gs.id AS session_id, gs.user_id, gs.latitude, gs.longitude, gs.map_coins,
-              gs.shield_active_until, u.username
+              gs.shield_active_until, gs.spawned_at, u.username
        FROM game_sessions gs
        JOIN users u ON u.id = gs.user_id
        WHERE gs.is_active = true
          AND gs.latitude IS NOT NULL
          AND u.email NOT LIKE '%@bot.local'
-         AND gs.last_location_update > now() - interval '30 minutes'`,
+         AND gs.last_location_update > now() - interval '30 minutes'
+         AND (gs.spawned_at IS NULL OR gs.spawned_at < now() - interval '2 minutes')`,
     );
     const realPlayers = realPlayersRes.rows;
 
