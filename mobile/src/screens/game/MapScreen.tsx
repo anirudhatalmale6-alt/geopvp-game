@@ -231,7 +231,7 @@ window.addEventListener('message',function(e){
       if(d.type==='init'){
         map.setView([d.lat,d.lng],16,{animate:false});
       } else if(zoomMode==='player'){
-        map.panTo([d.lat,d.lng],{animate:true,duration:1.0,easeLinearity:0.25});
+        map.setView([d.lat,d.lng],map.getZoom(),{animate:true,duration:1.5,easeLinearity:0.1,noMoveStart:true});
       }
       playerMarker.setLatLng([d.lat,d.lng]);
 
@@ -531,7 +531,7 @@ export default function MapScreen() {
     } catch {}
 
     locationSub.current = await Location.watchPositionAsync(
-      { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 2000, distanceInterval: 1 },
+      { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 3000, distanceInterval: 5 },
       (pos) => {
         if (checkMockLocation(pos)) {
           console.warn('[AntiCheat] Mock location detected, ignoring update');
