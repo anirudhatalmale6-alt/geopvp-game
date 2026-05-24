@@ -145,9 +145,9 @@ function LeafletMap({ lat, lng, nearbyPlayers, session, coinDrops, commandRef }:
   .enemy-name.bot-name{
     color:#ff6d00;
   }
-  .enemy-coins{
-    color:#ffd700;font-size:9px;font-weight:600;
-    text-shadow:0 0 4px rgba(0,0,0,0.8);
+  .enemy-tier{
+    display:inline-block;width:6px;height:6px;border-radius:50%;
+    margin-top:1px;
   }
   .coin-marker{
     width:18px;height:18px;border-radius:50%;
@@ -197,10 +197,11 @@ function makeEnemyIcon(en){
   var cls = en.isBot ? 'enemy-marker bot' : (en.shielded ? 'enemy-marker shielded' : 'enemy-marker');
   var hitsBadge = en.isBot ? '<div class="bot-hits">'+en.hits+'</div>' : '';
   var nameCls = en.isBot ? 'enemy-name bot-name' : 'enemy-name';
+  var tierDot = '<span class="enemy-tier" style="background:'+en.tierColor+';box-shadow:0 0 6px '+en.tierColor+'"></span>';
   var html = '<div class="'+cls+'" data-sid="'+en.sid+'" style="position:relative">'+hitsBadge+'</div>'
     +'<div class="enemy-info">'
     +'<span class="'+nameCls+'">'+en.name+'</span>'
-    +'<span class="enemy-coins">'+en.coins+'</span>'
+    +tierDot
     +'</div>';
   return L.divIcon({className:'',html:html,iconSize:[16,42],iconAnchor:[8,8]});
 }
@@ -354,7 +355,7 @@ window.addEventListener('message',function(e){
       name: p.username.substring(0, 8),
       lat: p.latitude,
       lng: p.longitude,
-      coins: p.mapCoins,
+      tierColor: p.coinTier ? getTierColor(p.coinTier) : '#ffd700',
       shielded: p.shieldActive,
       sid: p.sessionId,
       isBot: p.isBot || false,
@@ -477,7 +478,7 @@ export default function MapScreen() {
   const [attackTarget, setAttackTarget] = useState<{
     sessionId: string;
     username: string;
-    coins: number;
+    tierColor: string;
     shielded: boolean;
   } | null>(null);
   const [attackResult, setAttackResult] = useState<string | null>(null);
@@ -1040,7 +1041,7 @@ export default function MapScreen() {
           <View style={styles.attackPanel} pointerEvents="auto">
             <Text style={styles.attackPanelTitle}>ATTACK TARGET</Text>
             <Text style={styles.attackPanelName}>{attackTarget.username.toUpperCase()}</Text>
-            <Text style={styles.attackPanelCoins}>{attackTarget.coins} coins</Text>
+            <View style={[styles.attackPanelTierDot, { backgroundColor: attackTarget.tierColor, shadowColor: attackTarget.tierColor }]} />
             {attackTarget.shielded && (
               <View style={styles.shieldWarning}>
                 <Ionicons name="shield" size={14} color={colors.warning} />
@@ -1082,7 +1083,7 @@ export default function MapScreen() {
                     setAttackTarget({
                       sessionId: nearestInRange.sessionId,
                       username: nearestInRange.username,
-                      coins: nearestInRange.mapCoins,
+                      tierColor: nearestInRange.coinTier ? getTierColor(nearestInRange.coinTier) : '#ffd700',
                       shielded: nearestInRange.shieldActive,
                     });
                   }
@@ -1325,10 +1326,16 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 2,
   },
-  attackPanelCoins: {
-    fontSize: fontSize.md,
-    color: colors.gold,
-    fontWeight: '700',
+  attackPanelTierDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    alignSelf: 'center',
+    marginVertical: spacing.xs,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+    elevation: 4,
   },
   shieldWarning: {
     flexDirection: 'row',
