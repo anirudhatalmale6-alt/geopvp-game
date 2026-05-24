@@ -794,11 +794,11 @@ export default function MapScreen() {
     if (remaining <= 0) return;
     Alert.alert(
       'Buy Shield?',
-      `Purchase a shield for $1.99 (active for 10 minutes). You can buy ${remaining} more this session.`,
+      `Purchase a shield for $1 (active for 10 minutes). You can buy ${remaining} more this session.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Buy $1.99',
+          text: 'Buy $1',
           onPress: async () => {
             try {
               const updated = await buyShield();
@@ -1053,7 +1053,7 @@ export default function MapScreen() {
                   color={shieldIsActive ? colors.background : (session?.shieldsPurchased ?? 0) >= 3 ? colors.textMuted : colors.primary}
                 />
                 <Text style={{ fontSize: 9, color: shieldIsActive ? colors.background : colors.textMuted, fontWeight: '700' }}>
-                  {shieldIsActive ? 'ON' : (session?.shieldsPurchased ?? 0) >= 3 ? 'MAX' : '$1.99'}
+                  {shieldIsActive ? 'ON' : (session?.shieldsPurchased ?? 0) >= 3 ? 'MAX' : '$1'}
                 </Text>
               </TouchableOpacity>
             </View>

@@ -560,7 +560,7 @@ export async function buyShield(req: AuthRequest, res: Response): Promise<void> 
       return;
     }
 
-    const SHIELD_COST_CENTS = 199; // $1.99 per shield
+    const SHIELD_COST_CENTS = 100; // $1.00 per shield
     const shieldExpiry = new Date(Date.now() + config.shieldDurationMinutes * 60 * 1000);
 
     const updated = await query(
@@ -575,7 +575,7 @@ export async function buyShield(req: AuthRequest, res: Response): Promise<void> 
     await query(
       `INSERT INTO transactions (user_id, type, amount, description)
        VALUES ($1, 'shield', $2, $3)`,
-      [userId, -SHIELD_COST_CENTS, `Shield purchased ($1.99) — active for ${config.shieldDurationMinutes} minutes`],
+      [userId, -SHIELD_COST_CENTS, `Shield purchased ($1.00) — active for ${config.shieldDurationMinutes} minutes`],
     );
 
     res.json({ session: formatSession(updated.rows[0]) });
