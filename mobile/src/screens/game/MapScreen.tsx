@@ -29,6 +29,7 @@ import {
 } from '../../api/game';
 import { connectSocket, disconnectSocket, emitLocation, onPlayersUpdate, onEliminated, onBotHit } from '../../api/socket';
 import BuyInModal from './BuyInModal';
+import { startBackgroundLocation, stopBackgroundLocation } from '../../services/backgroundLocation';
 import { getTierColor } from '../../utils/tierColors';
 import { checkMockLocation } from '../../utils/anticheat';
 
@@ -668,10 +669,13 @@ export default function MapScreen() {
     emitLocation(location.lat, location.lng);
   }, [location?.lat, location?.lng, session?.id]);
 
-  // Disconnect socket when session ends
+  // Disconnect socket and stop background location when session ends
   useEffect(() => {
     if (!session) {
       disconnectSocket();
+      stopBackgroundLocation();
+    } else {
+      startBackgroundLocation();
     }
   }, [session]);
 
@@ -684,6 +688,17 @@ export default function MapScreen() {
 
     const poll = async () => {
       try {
+        // Check if session is still active (detect elimination)
+        const currentSession = await getActiveSession();
+        if (!currentSession && session) {
+          Alert.alert(
+            'SESSION ENDED',
+            'Your session has been terminated. You may have been attacked! Buy in again to keep playing.',
+            [{ text: 'OK', onPress: () => { setSession(null); setShowBuyIn(true); } }],
+          );
+          return;
+        }
+        if (currentSession) setSession(currentSession);
         // Still send REST location update as fallback
         await updateLocation(location.lat, location.lng);
         const { players, totalOnMap } = await getAllPlayers();
@@ -693,8 +708,8 @@ export default function MapScreen() {
     };
 
     poll();
-    // Poll every 30s — socket handles the in-between updates
-    pollRef.current = setInterval(poll, 30_000);
+    // Poll every 10s — check session status + update player list
+    pollRef.current = setInterval(poll, 10_000);
 
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);

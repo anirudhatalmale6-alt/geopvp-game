@@ -22,7 +22,8 @@
         "ITSAppUsesNonExemptEncryption": false,
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
-        }
+        },
+        "UIBackgroundModes": ["location"]
       }
     },
     "android": {
@@ -35,7 +36,10 @@
       "package": "com.coinprowl.app",
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION"
       ]
     },
     "web": {
@@ -46,7 +50,10 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "CoinProwl needs your location to show you on the game map."
+          "locationWhenInUsePermission": "CoinProwl needs your location to show you on the game map.",
+          "locationAlwaysAndWhenInUsePermission": "CoinProwl tracks your position even when the app is in the background so other players can find you.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true
         }
       ]
     ],
