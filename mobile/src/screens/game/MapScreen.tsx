@@ -649,9 +649,9 @@ export default function MapScreen() {
       try {
         // Still send REST location update as fallback
         await updateLocation(location.lat, location.lng);
-        const players = await getAllPlayers();
+        const { players, totalOnMap } = await getAllPlayers();
         setNearbyPlayers(players);
-        setStatusMessage(`${players.length} HUNTER${players.length !== 1 ? 'S' : ''} ON MAP`);
+        setStatusMessage(`${totalOnMap} HUNTER${totalOnMap !== 1 ? 'S' : ''} ON MAP`);
       } catch {}
     };
 

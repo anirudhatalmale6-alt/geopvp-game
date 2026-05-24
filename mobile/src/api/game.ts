@@ -106,12 +106,12 @@ export async function getNearbyPlayers(): Promise<NearbyPlayer[]> {
   }
 }
 
-export async function getAllPlayers(): Promise<NearbyPlayer[]> {
+export async function getAllPlayers(): Promise<{ players: NearbyPlayer[]; totalOnMap: number }> {
   try {
-    const { data } = await api.get<{ players: NearbyPlayer[] }>('/game/players');
-    return data.players;
+    const { data } = await api.get<{ players: NearbyPlayer[]; totalOnMap: number }>('/game/players');
+    return { players: data.players, totalOnMap: data.totalOnMap ?? data.players.length };
   } catch {
-    return [];
+    return { players: [], totalOnMap: 0 };
   }
 }
 

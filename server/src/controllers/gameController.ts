@@ -246,28 +246,39 @@ export async function getAllPlayers(req: AuthRequest, res: Response): Promise<vo
     const myLat = mySession.rows[0]?.latitude ?? 0;
     const myLng = mySession.rows[0]?.longitude ?? 0;
 
-    const result = await query(
-      `SELECT
-         gs.id AS session_id,
-         gs.user_id,
-         gs.latitude,
-         gs.longitude,
-         gs.map_coins,
-         gs.shield_active_until,
-         gs.shields_remaining,
-         gs.coin_tier,
-         u.username,
-         u.email
-       FROM game_sessions gs
-       JOIN users u ON u.id = gs.user_id
-       WHERE gs.is_active = true
-         AND gs.user_id != $1
-         AND gs.latitude IS NOT NULL
-         AND (gs.last_location_update > now() - interval '30 minutes' OR u.email LIKE '%@bot.local')
-       ORDER BY (gs.latitude - $2)*(gs.latitude - $2) + (gs.longitude - $3)*(gs.longitude - $3) ASC
-       LIMIT 200`,
-      [userId, myLat, myLng],
-    );
+    const [result, countResult] = await Promise.all([
+      query(
+        `SELECT
+           gs.id AS session_id,
+           gs.user_id,
+           gs.latitude,
+           gs.longitude,
+           gs.map_coins,
+           gs.shield_active_until,
+           gs.shields_remaining,
+           gs.coin_tier,
+           u.username,
+           u.email
+         FROM game_sessions gs
+         JOIN users u ON u.id = gs.user_id
+         WHERE gs.is_active = true
+           AND gs.user_id != $1
+           AND gs.latitude IS NOT NULL
+           AND (gs.last_location_update > now() - interval '30 minutes' OR u.email LIKE '%@bot.local')
+         ORDER BY (gs.latitude - $2)*(gs.latitude - $2) + (gs.longitude - $3)*(gs.longitude - $3) ASC
+         LIMIT 1500`,
+        [userId, myLat, myLng],
+      ),
+      query(
+        `SELECT COUNT(*) AS total FROM game_sessions gs
+         JOIN users u ON u.id = gs.user_id
+         WHERE gs.is_active = true
+           AND gs.latitude IS NOT NULL
+           AND (gs.last_location_update > now() - interval '30 minutes' OR u.email LIKE '%@bot.local')`,
+      ),
+    ]);
+
+    const totalOnMap = parseInt(countResult.rows[0]?.total || '0', 10);
 
     const players = result.rows.map((row) => {
       const isBot = row.email?.endsWith('@bot.local');
@@ -289,7 +300,7 @@ export async function getAllPlayers(req: AuthRequest, res: Response): Promise<vo
       };
     });
 
-    res.json({ players });
+    res.json({ players, totalOnMap });
   } catch (err) {
     console.error('getAllPlayers error:', err);
     res.status(500).json({ error: 'Internal server error.' });
