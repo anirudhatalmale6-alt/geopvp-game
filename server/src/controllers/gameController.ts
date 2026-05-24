@@ -6,6 +6,7 @@ import { AuthRequest } from '../middleware/auth';
 import { distanceMiles } from '../utils/geo';
 import { getCoinTier } from '../utils/coins';
 import { getIO } from '../socket/ioInstance';
+import { sendPushNotification } from '../utils/pushNotification';
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -522,16 +523,24 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
       }
       await Promise.all(txPromises);
 
+      const savedMsg = excessCoins > 0 ? ` ${excessCoins} coins saved to your wallet.` : '';
+      const eliminationMsg = `${attacker.attacker_name} took ${coinsStolen} coins!${savedMsg} You've been eliminated.`;
+
       const io = getIO();
       if (io) {
-        const savedMsg = excessCoins > 0 ? ` ${excessCoins} coins saved to your wallet.` : '';
         io.to(`user:${defender.user_id}`).emit('session:eliminated', {
           attackerName: attacker.attacker_name,
           coinsLost: coinsStolen,
           coinsSaved: excessCoins,
-          message: `${attacker.attacker_name} took ${coinsStolen} coins!${savedMsg} You've been eliminated.`,
+          message: eliminationMsg,
         });
       }
+
+      sendPushNotification(
+        defender.user_id,
+        'You were attacked!',
+        eliminationMsg,
+      ).catch(() => {});
 
       return {
         success: true,

@@ -1,6 +1,7 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { query, transaction } from '../config/database';
 import { config } from '../config/env';
+import { sendPushNotification } from '../utils/pushNotification';
 
 const MPH_TO_DEG_PER_SEC = 1 / (69 * 3600);
 const BOT_SPEED_MPH = 5;
@@ -282,13 +283,21 @@ async function botAttack(
         botHitsLeft: newBotHits,
       });
 
+      const botMsg = shieldTaken
+        ? `${bot.username} attacked you! A shield was consumed.`
+        : `${bot.username} attacked you!`;
+
       io.to(`user:${defender.user_id}`).emit('bot:hit-you', {
         botName: bot.username,
         shieldTaken,
-        message: shieldTaken
-          ? `${bot.username} attacked you! A shield was consumed.`
-          : `${bot.username} attacked you!`,
+        message: botMsg,
       });
+
+      sendPushNotification(
+        defender.user_id,
+        'Bot Attack!',
+        botMsg,
+      ).catch(() => {});
 
       console.log(`[BotAI] ${bot.username} hit ${defender.username} (shield taken: ${shieldTaken}, bot hits left: ${newBotHits})`);
     });

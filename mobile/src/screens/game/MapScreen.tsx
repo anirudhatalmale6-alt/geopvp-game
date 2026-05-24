@@ -30,6 +30,7 @@ import {
 import { connectSocket, disconnectSocket, emitLocation, onPlayersUpdate, onEliminated, onBotHit } from '../../api/socket';
 import BuyInModal from './BuyInModal';
 import { startBackgroundLocation, stopBackgroundLocation } from '../../services/backgroundLocation';
+import { registerForPushNotifications } from '../../services/notifications';
 import { getTierColor } from '../../utils/tierColors';
 import { checkMockLocation } from '../../utils/anticheat';
 
@@ -483,6 +484,7 @@ export default function MapScreen() {
 
   const [statusMessage, setStatusMessage] = useState<string>('LIVE MAP');
   const [spawnSecsLeft, setSpawnSecsLeft] = useState(0);
+  const [shieldSecsLeft, setShieldSecsLeft] = useState(0);
   const [zoomedOut, setZoomedOut] = useState(false);
   const mapRef = useRef<any>(null);
   const locationSub = useRef<Location.LocationSubscription | null>(null);
@@ -516,6 +518,21 @@ export default function MapScreen() {
     const iv = setInterval(() => { if (calc() <= 0) clearInterval(iv); }, 1000);
     return () => clearInterval(iv);
   }, [session?.spawnedAt]);
+
+  // -------------------------------------------------------------------------
+  // Shield countdown timer
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    if (!session?.shieldActiveUntil) { setShieldSecsLeft(0); return; }
+    const calc = () => {
+      const remaining = Math.max(0, Math.floor((new Date(session.shieldActiveUntil!).getTime() - Date.now()) / 1000));
+      setShieldSecsLeft(remaining);
+      return remaining;
+    };
+    if (calc() <= 0) return;
+    const iv = setInterval(() => { if (calc() <= 0) clearInterval(iv); }, 1000);
+    return () => clearInterval(iv);
+  }, [session?.shieldActiveUntil]);
 
   // -------------------------------------------------------------------------
   // Location permission + GPS watch
@@ -676,6 +693,7 @@ export default function MapScreen() {
       stopBackgroundLocation();
     } else {
       startBackgroundLocation();
+      registerForPushNotifications().catch(() => {});
     }
   }, [session]);
 
@@ -933,7 +951,9 @@ export default function MapScreen() {
             <View style={styles.hudCard}>
               <Ionicons name="shield" size={18} color={shieldIsActive ? colors.primary : colors.textMuted} />
               <Text style={[styles.hudValue, { color: shieldIsActive ? colors.primary : colors.text }]}>
-                {shieldIsActive ? 'ON' : 'OFF'}
+                {shieldIsActive
+                  ? `${Math.floor(shieldSecsLeft / 60)}:${(shieldSecsLeft % 60).toString().padStart(2, '0')}`
+                  : 'OFF'}
               </Text>
               <Text style={styles.hudLabel}>{`${session?.shieldsPurchased ?? 0}/3 BOUGHT`}</Text>
             </View>

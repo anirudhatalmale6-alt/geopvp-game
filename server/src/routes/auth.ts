@@ -12,6 +12,7 @@ import {
   getProfile,
   updateProfile,
   deleteAccount,
+  savePushToken,
 } from '../controllers/authController';
 
 const router = Router();
@@ -29,6 +30,7 @@ router.post('/reset-password', resetPassword);
 router.post('/change-password', authenticate, changePassword);
 router.get('/profile', authenticate, getProfile);
 router.put('/profile', authenticate, updateProfile);
+router.post('/push-token', authenticate, savePushToken);
 router.delete('/account', authenticate, deleteAccount);
 
 export default router;

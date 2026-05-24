@@ -600,6 +600,21 @@ export async function updateProfile(req: AuthRequest, res: Response): Promise<vo
   }
 }
 
+export async function savePushToken(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const { pushToken } = req.body;
+    if (!pushToken || typeof pushToken !== 'string') {
+      res.status(400).json({ error: 'pushToken is required.' });
+      return;
+    }
+    await query('UPDATE users SET push_token = $1 WHERE id = $2', [pushToken, req.user!.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('savePushToken error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
 export async function deleteAccount(req: AuthRequest, res: Response): Promise<void> {
   try {
     const parsed = deleteAccountSchema.safeParse(req.body);
