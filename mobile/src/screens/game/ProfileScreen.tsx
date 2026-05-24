@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, fontSize } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../api/client';
+import { getCombatStats, CombatStats } from '../../api/game';
 
 // ---------------------------------------------------------------------------
 // Avatar color from username
@@ -187,6 +188,16 @@ const cpStyles = StyleSheet.create({
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [stats, setStats] = useState<CombatStats | null>(null);
+
+  const loadStats = useCallback(async () => {
+    const s = await getCombatStats();
+    setStats(s);
+  }, []);
+
+  useEffect(() => {
+    loadStats();
+  }, [loadStats]);
 
   const avatarColor = user?.username ? getAvatarColor(user.username) : colors.primary;
   const initials = user?.username?.substring(0, 2).toUpperCase() ?? '??';
@@ -225,12 +236,12 @@ export default function ProfileScreen() {
       <Text style={styles.sectionTitle}>COMBAT STATS</Text>
       <View style={styles.statsGrid}>
         {[
-          { label: 'SESSIONS',     value: '0', icon: 'game-controller-outline', color: colors.primary },
-          { label: 'COINS EARNED', value: '0', icon: 'logo-bitcoin',            color: colors.gold },
-          { label: 'ATTACKS WON',  value: '0', icon: 'flash',                   color: colors.success },
-          { label: 'ATTACKS LOST', value: '0', icon: 'skull-outline',           color: colors.secondary },
-          { label: 'SHIELDS USED', value: '0', icon: 'shield',                  color: colors.primary },
-          { label: 'PLAYERS HIT',  value: '0', icon: 'people',                  color: colors.warning },
+          { label: 'SESSIONS',     value: String(stats?.sessions ?? 0),     icon: 'game-controller-outline', color: colors.primary },
+          { label: 'COINS EARNED', value: String(stats?.coinsEarned ?? 0),  icon: 'logo-bitcoin',            color: colors.gold },
+          { label: 'ATTACKS WON',  value: String(stats?.attacksWon ?? 0),   icon: 'flash',                   color: colors.success },
+          { label: 'ATTACKS LOST', value: String(stats?.attacksLost ?? 0),  icon: 'skull-outline',           color: colors.secondary },
+          { label: 'SHIELDS USED', value: String(stats?.shieldsUsed ?? 0),  icon: 'shield',                  color: colors.primary },
+          { label: 'PLAYERS HIT',  value: String(stats?.playersHit ?? 0),   icon: 'people',                  color: colors.warning },
         ].map((stat) => (
           <View key={stat.label} style={styles.statCard}>
             <Ionicons name={stat.icon as any} size={22} color={stat.color} />

@@ -65,6 +65,15 @@ export interface WalletData {
   userId: string;
 }
 
+export interface CombatStats {
+  sessions: number;
+  coinsEarned: number;
+  attacksWon: number;
+  attacksLost: number;
+  shieldsUsed: number;
+  playersHit: number;
+}
+
 export interface Transaction {
   id: string;
   type: string;
@@ -144,6 +153,19 @@ export async function getCoinDrops(): Promise<CoinDrop[]> {
 export async function collectCoinDrop(dropId: string): Promise<CollectResult> {
   const { data } = await api.post<CollectResult>(`/game/coins/${dropId}/collect`);
   return data;
+}
+
+// ---------------------------------------------------------------------------
+// Combat Stats API
+// ---------------------------------------------------------------------------
+
+export async function getCombatStats(): Promise<CombatStats> {
+  try {
+    const { data } = await api.get<CombatStats>('/game/stats');
+    return data;
+  } catch {
+    return { sessions: 0, coinsEarned: 0, attacksWon: 0, attacksLost: 0, shieldsUsed: 0, playersHit: 0 };
+  }
 }
 
 // ---------------------------------------------------------------------------

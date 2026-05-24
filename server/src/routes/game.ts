@@ -10,6 +10,7 @@ import {
   buyShield,
   getWallet,
   getTransactions,
+  getCombatStats,
   getActiveCoinDrops,
   collectCoinDrop,
 } from '../controllers/gameController';
@@ -29,6 +30,9 @@ router.get('/nearby', getNearbyPlayers);
 router.get('/players', getAllPlayers);
 router.post('/attack', attackPlayer);
 router.post('/shield', buyShield);
+
+// Stats
+router.get('/stats', getCombatStats);
 
 // Coin drop routes
 router.get('/coins', getActiveCoinDrops);

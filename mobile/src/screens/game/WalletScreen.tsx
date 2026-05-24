@@ -125,7 +125,7 @@ export default function WalletScreen() {
       <View style={styles.balanceCard}>
         <Text style={styles.balanceLabel}>TOTAL BALANCE</Text>
         <Text style={styles.balanceAmount}>${balanceDollars}</Text>
-        <Text style={styles.balanceSub}>{balance} coins</Text>
+        <Text style={styles.balanceSub}>{Math.floor(balance / 10)} coins</Text>
 
         <TouchableOpacity style={styles.cashOutBtn} onPress={handleCashOut} activeOpacity={0.85}>
           <Ionicons name="arrow-up-circle" size={18} color={colors.background} />

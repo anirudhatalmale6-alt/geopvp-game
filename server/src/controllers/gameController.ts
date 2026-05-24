@@ -473,9 +473,11 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
         return { success: false, coinsStolen: 0, defenderHadShield: true, shieldsLeft: 0, message: 'Attack blocked by shield!' };
       }
 
-      // Take ALL of the defender's coins and end their session
+      // Only take what the defender bought in with — excess coins are safe
       const defenderCoins = parseInt(defender.map_coins, 10);
-      const coinsStolen = defenderCoins;
+      const defenderBuyinCoins = Math.floor(parseInt(defender.buyin_amount, 10) / 10);
+      const coinsStolen = Math.min(defenderCoins, defenderBuyinCoins);
+      const excessCoins = defenderCoins - coinsStolen;
 
       await Promise.all([
         q(
@@ -495,26 +497,39 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
       );
 
       const stolenCents = coinsStolen * 10;
-      await Promise.all([
+      const txPromises = [
         q(
           `INSERT INTO transactions (user_id, type, amount, description, related_user_id)
            VALUES ($1, 'attack_win', $2, $3, $4)`,
-          [attacker.user_id, stolenCents, `Took all ${coinsStolen} coins from ${defender.defender_name}!`, defender.user_id],
+          [attacker.user_id, stolenCents, `Took ${coinsStolen} coins from ${defender.defender_name}!`, defender.user_id],
         ),
         q(
           `INSERT INTO transactions (user_id, type, amount, description, related_user_id)
            VALUES ($1, 'attack_loss', $2, $3, $4)`,
-          [defender.user_id, -stolenCents, `Lost all ${coinsStolen} coins to ${attacker.attacker_name}`, attacker.user_id],
+          [defender.user_id, -stolenCents, `Lost ${coinsStolen} coins to ${attacker.attacker_name}`, attacker.user_id],
         ),
-      ]);
+      ];
 
-      // Notify the defender via socket
+      if (excessCoins > 0) {
+        const excessCents = excessCoins * 10;
+        txPromises.push(
+          q(
+            `INSERT INTO transactions (user_id, type, amount, description)
+             VALUES ($1, 'salvage', $2, $3)`,
+            [defender.user_id, excessCents, `Saved ${excessCoins} coins to wallet after elimination`],
+          ),
+        );
+      }
+      await Promise.all(txPromises);
+
       const io = getIO();
       if (io) {
+        const savedMsg = excessCoins > 0 ? ` ${excessCoins} coins saved to your wallet.` : '';
         io.to(`user:${defender.user_id}`).emit('session:eliminated', {
           attackerName: attacker.attacker_name,
           coinsLost: coinsStolen,
-          message: `${attacker.attacker_name} attacked you and took all ${coinsStolen} coins! You've been eliminated.`,
+          coinsSaved: excessCoins,
+          message: `${attacker.attacker_name} took ${coinsStolen} coins!${savedMsg} You've been eliminated.`,
         });
       }
 
@@ -522,7 +537,7 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
         success: true,
         coinsStolen,
         defenderHadShield: false,
-        message: `Attack successful! Took all ${coinsStolen} coins from ${defender.defender_name}! They've been eliminated.`,
+        message: `Attack successful! Took ${coinsStolen} coins from ${defender.defender_name}! They've been eliminated.`,
       };
     });
 
@@ -602,21 +617,13 @@ export async function getWallet(req: AuthRequest, res: Response): Promise<void> 
     const userId = req.user!.id;
 
     const result = await query(
-      `SELECT user_id, balance FROM wallets WHERE user_id = $1`,
+      `SELECT COALESCE(SUM(amount), 0) AS balance FROM transactions WHERE user_id = $1`,
       [userId],
     );
 
-    if (result.rows.length === 0) {
-      // Auto-create
-      await query(`INSERT INTO wallets (user_id, balance) VALUES ($1, 0) ON CONFLICT DO NOTHING`, [userId]);
-      res.json({ userId, balance: 0 });
-      return;
-    }
+    const balance = parseInt(result.rows[0].balance, 10);
 
-    res.json({
-      userId: result.rows[0].user_id,
-      balance: parseInt(result.rows[0].balance, 10),
-    });
+    res.json({ userId, balance });
   } catch (err) {
     console.error('getWallet error:', err);
     res.status(500).json({ error: 'Internal server error.' });
@@ -652,6 +659,37 @@ export async function getTransactions(req: AuthRequest, res: Response): Promise<
     res.json({ transactions });
   } catch (err) {
     console.error('getTransactions error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/game/stats  — combat stats for profile
+// ---------------------------------------------------------------------------
+
+export async function getCombatStats(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const userId = req.user!.id;
+
+    const [sessionsRes, winsRes, lossesRes, shieldsRes, playersHitRes, coinsEarnedRes] = await Promise.all([
+      query(`SELECT COUNT(*) AS count FROM transactions WHERE user_id = $1 AND type = 'buyin'`, [userId]),
+      query(`SELECT COUNT(*) AS count FROM transactions WHERE user_id = $1 AND type = 'attack_win'`, [userId]),
+      query(`SELECT COUNT(*) AS count FROM transactions WHERE user_id = $1 AND type = 'attack_loss'`, [userId]),
+      query(`SELECT COUNT(*) AS count FROM transactions WHERE user_id = $1 AND type = 'shield'`, [userId]),
+      query(`SELECT COUNT(*) AS count FROM attacks WHERE attacker_id = $1 AND success = true`, [userId]),
+      query(`SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE user_id = $1 AND type = 'attack_win'`, [userId]),
+    ]);
+
+    res.json({
+      sessions: parseInt(sessionsRes.rows[0].count, 10),
+      coinsEarned: Math.floor(parseInt(coinsEarnedRes.rows[0].total, 10) / 10),
+      attacksWon: parseInt(winsRes.rows[0].count, 10),
+      attacksLost: parseInt(lossesRes.rows[0].count, 10),
+      shieldsUsed: parseInt(shieldsRes.rows[0].count, 10),
+      playersHit: parseInt(playersHitRes.rows[0].count, 10),
+    });
+  } catch (err) {
+    console.error('getCombatStats error:', err);
     res.status(500).json({ error: 'Internal server error.' });
   }
 }
