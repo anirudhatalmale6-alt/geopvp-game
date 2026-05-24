@@ -199,7 +199,7 @@ function makeEnemyIcon(en){
   var html = '<div class="'+cls+'" data-sid="'+en.sid+'" style="position:relative">'+hitsBadge+'</div>'
     +'<div class="enemy-info">'
     +'<span class="'+nameCls+'">'+en.name+'</span>'
-    +'<span class="enemy-coins">'+en.coins+'⛄</span>'
+    +'<span class="enemy-coins">'+en.coins+'</span>'
     +'</div>';
   return L.divIcon({className:'',html:html,iconSize:[16,42],iconAnchor:[8,8]});
 }
