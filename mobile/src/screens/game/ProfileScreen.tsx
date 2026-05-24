@@ -8,12 +8,16 @@ import {
   Alert,
   TextInput,
   ActivityIndicator,
+  Switch,
+  Linking,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, fontSize } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../api/client';
 import { getCombatStats, CombatStats } from '../../api/game';
+import { getNotificationPermissionStatus, registerForPushNotifications } from '../../services/notifications';
 
 // ---------------------------------------------------------------------------
 // Avatar color from username
@@ -189,15 +193,50 @@ export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [stats, setStats] = useState<CombatStats | null>(null);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
   const loadStats = useCallback(async () => {
     const s = await getCombatStats();
     setStats(s);
   }, []);
 
+  const checkNotificationStatus = useCallback(async () => {
+    const enabled = await getNotificationPermissionStatus();
+    setNotificationsEnabled(enabled);
+  }, []);
+
   useEffect(() => {
     loadStats();
-  }, [loadStats]);
+    checkNotificationStatus();
+  }, [loadStats, checkNotificationStatus]);
+
+  const handleNotificationToggle = async () => {
+    if (notificationsEnabled) {
+      Alert.alert(
+        'Disable Notifications',
+        'To turn off notifications, go to your iPhone Settings > CoinProwl > Notifications.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() },
+        ],
+      );
+    } else {
+      const token = await registerForPushNotifications();
+      if (token) {
+        setNotificationsEnabled(true);
+        Alert.alert('Notifications Enabled', 'You will now receive attack alerts and game notifications.');
+      } else {
+        Alert.alert(
+          'Permission Required',
+          'Notifications are blocked. Please enable them in your iPhone Settings > CoinProwl > Notifications.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ],
+        );
+      }
+    }
+  };
 
   const avatarColor = user?.username ? getAvatarColor(user.username) : colors.primary;
   const initials = user?.username?.substring(0, 2).toUpperCase() ?? '??';
@@ -277,14 +316,20 @@ export default function ProfileScreen() {
 
         <View style={styles.divider} />
 
-        <TouchableOpacity style={styles.settingRow} onPress={() => {}}>
+        <TouchableOpacity style={styles.settingRow} onPress={handleNotificationToggle} activeOpacity={0.7}>
           <View style={styles.settingLeft}>
             <View style={[styles.settingIcon, { backgroundColor: colors.warning + '20' }]}>
               <Ionicons name="notifications-outline" size={18} color={colors.warning} />
             </View>
             <Text style={styles.settingLabel}>Notifications</Text>
           </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          <Switch
+            value={notificationsEnabled}
+            onValueChange={handleNotificationToggle}
+            trackColor={{ false: colors.border, true: colors.primary + '60' }}
+            thumbColor={notificationsEnabled ? colors.primary : colors.textMuted}
+            ios_backgroundColor={colors.border}
+          />
         </TouchableOpacity>
 
         <View style={styles.divider} />

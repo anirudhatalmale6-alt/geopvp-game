@@ -12,6 +12,12 @@ Notifications.setNotificationHandler({
   }),
 });
 
+export async function getNotificationPermissionStatus(): Promise<boolean> {
+  if (Platform.OS === 'web') return false;
+  const { status } = await Notifications.getPermissionsAsync();
+  return status === 'granted';
+}
+
 export async function registerForPushNotifications(): Promise<string | null> {
   if (Platform.OS === 'web') return null;
 
