@@ -153,7 +153,6 @@ function LeafletMap({ lat, lng, nearbyPlayers, session, coinDrops, commandRef }:
     box-shadow:0 0 10px #ffd700,0 0 20px #ffd70060;
     display:flex;align-items:center;justify-content:center;
     font-size:10px;font-weight:900;color:#0a0e1a;
-    animation:coin-pulse 1.8s ease-out infinite;
     cursor:pointer;
     user-select:none;
   }
