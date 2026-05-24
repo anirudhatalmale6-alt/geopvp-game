@@ -8,6 +8,7 @@ import {
   Dimensions,
   ActivityIndicator,
   AppState,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
@@ -764,11 +765,24 @@ export default function MapScreen() {
   // -------------------------------------------------------------------------
   // Shield handler
   // -------------------------------------------------------------------------
-  const handleBuyShield = async () => {
-    try {
-      const updated = await buyShield();
-      setSession(updated);
-    } catch {}
+  const handleBuyShield = () => {
+    const shieldsLeft = 3 - (session?.shieldsPurchased ?? 0);
+    Alert.alert(
+      'Activate Shield?',
+      `This will activate a shield for ${10} minutes ($1.99). You have ${shieldsLeft} shield${shieldsLeft !== 1 ? 's' : ''} left this session.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Activate',
+          onPress: async () => {
+            try {
+              const updated = await buyShield();
+              setSession(updated);
+            } catch {}
+          },
+        },
+      ],
+    );
   };
 
   const shieldIsActive = session?.shieldActiveUntil
