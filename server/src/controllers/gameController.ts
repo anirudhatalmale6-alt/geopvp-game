@@ -416,7 +416,7 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
         await q(
           `INSERT INTO transactions (user_id, type, amount, description, related_user_id)
            VALUES ($1, 'attack_win', $2, $3, $4)`,
-          [attacker.user_id, botCoins, `Defeated bot ${defender.defender_name} and took ${botCoins} coins!`, defender.user_id],
+          [attacker.user_id, botCoins * 10, `Defeated bot ${defender.defender_name} and took ${botCoins} coins!`, defender.user_id],
         );
         return {
           success: true,
@@ -464,17 +464,18 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
         [attacker.user_id, defender.user_id, attacker.map_coins, defender.map_coins, coinsStolen, attacker.latitude, attacker.longitude],
       );
 
-      // Record transactions
+      // Record transactions (coins * 10 = cents, since 10 coins = $1)
+      const stolenCents = coinsStolen * 10;
       await Promise.all([
         q(
           `INSERT INTO transactions (user_id, type, amount, description, related_user_id)
            VALUES ($1, 'attack_win', $2, $3, $4)`,
-          [attacker.user_id, coinsStolen, `Stole ${coinsStolen} coins from ${defender.defender_name}`, defender.user_id],
+          [attacker.user_id, stolenCents, `Stole ${coinsStolen} coins from ${defender.defender_name}`, defender.user_id],
         ),
         q(
           `INSERT INTO transactions (user_id, type, amount, description, related_user_id)
            VALUES ($1, 'attack_loss', $2, $3, $4)`,
-          [defender.user_id, -coinsStolen, `Lost ${coinsStolen} coins to ${attacker.attacker_name}`, attacker.user_id],
+          [defender.user_id, -stolenCents, `Lost ${coinsStolen} coins to ${attacker.attacker_name}`, attacker.user_id],
         ),
       ]);
 
@@ -777,7 +778,7 @@ export async function collectCoinDrop(req: AuthRequest, res: Response): Promise<
       query(
         `INSERT INTO transactions (user_id, type, amount, description)
          VALUES ($1, 'coin_collect', $2, $3)`,
-        [userId, drop.amount, `Collected ${drop.amount} coin${drop.amount !== 1 ? 's' : ''} from map`],
+        [userId, drop.amount * 10, `Collected ${drop.amount} coin${drop.amount !== 1 ? 's' : ''} from map`],
       ),
     ]);
 
