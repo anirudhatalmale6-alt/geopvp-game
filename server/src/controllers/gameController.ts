@@ -427,12 +427,12 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
           };
         }
 
-        // Final hit - bot is defeated, player takes ALL bot coins
+        // Final hit - bot is defeated, coins go straight to wallet
         const botCoins = parseInt(defender.map_coins || '0', 10);
-        await Promise.all([
-          q(`UPDATE game_sessions SET map_coins = map_coins + $1 WHERE id = $2`, [botCoins, attacker.id]),
-          q(`UPDATE game_sessions SET map_coins = 0, shields_remaining = 0, is_active = false WHERE id = $1`, [defender.id]),
-        ]);
+        await q(
+          `UPDATE game_sessions SET map_coins = 0, shields_remaining = 0, is_active = false WHERE id = $1`,
+          [defender.id],
+        );
         await q(
           `INSERT INTO attacks (attacker_id, defender_id, attacker_coins, defender_coins, coins_stolen, defender_had_shield, success, latitude, longitude)
            VALUES ($1, $2, $3, $4, $5, false, true, $6, $7)`,
@@ -480,16 +480,10 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
       const coinsStolen = Math.min(defenderCoins, defenderBuyinCoins);
       const excessCoins = defenderCoins - coinsStolen;
 
-      await Promise.all([
-        q(
-          `UPDATE game_sessions SET map_coins = map_coins + $1 WHERE id = $2`,
-          [coinsStolen, attacker.id],
-        ),
-        q(
-          `UPDATE game_sessions SET map_coins = 0, is_active = false WHERE id = $1`,
-          [defender.id],
-        ),
-      ]);
+      await q(
+        `UPDATE game_sessions SET map_coins = 0, is_active = false WHERE id = $1`,
+        [defender.id],
+      );
 
       await q(
         `INSERT INTO attacks (attacker_id, defender_id, attacker_coins, defender_coins, coins_stolen, defender_had_shield, success, latitude, longitude)
@@ -851,15 +845,11 @@ export async function collectCoinDrop(req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    // Mark collected + add coins to session
+    // Mark collected — coins go straight to wallet via transaction
     await Promise.all([
       query(
         `UPDATE coin_drops SET is_active = false, picked_up_by = $1, picked_up_at = now() WHERE id = $2`,
         [userId, dropId],
-      ),
-      query(
-        `UPDATE game_sessions SET map_coins = map_coins + $1 WHERE id = $2`,
-        [drop.amount, session.id],
       ),
       query(
         `INSERT INTO transactions (user_id, type, amount, description)

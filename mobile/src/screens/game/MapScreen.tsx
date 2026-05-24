@@ -826,11 +826,8 @@ export default function MapScreen() {
   const handleCollectCoin = async (dropId: string, amount: number) => {
     try {
       const result = await collectCoinDrop(dropId);
-      setAttackResult(`+${result.amount} COIN${result.amount !== 1 ? 'S' : ''} COLLECTED!`);
-      // Remove from local state immediately
+      setAttackResult(`+${result.amount} COIN${result.amount !== 1 ? 'S' : ''} ADDED TO WALLET!`);
       setCoinDrops(prev => prev.filter(c => c.id !== dropId));
-      // Update session coin count
-      setSession(prev => prev ? { ...prev, mapCoins: result.mapCoins } : prev);
       setTimeout(() => setAttackResult(null), 3000);
     } catch (err: any) {
       setAttackResult(err.message?.includes('Too far') ? 'MOVE CLOSER TO COLLECT!' : 'Already collected!');
@@ -1171,7 +1168,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    paddingTop: spacing.lg,
+    paddingTop: Platform.OS === 'ios' ? 54 : spacing.lg,
     backgroundColor: 'rgba(10, 14, 26, 0.85)',
   },
   topLeft: {
