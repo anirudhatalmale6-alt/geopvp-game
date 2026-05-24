@@ -29,13 +29,15 @@ function formatDate(iso: string): string {
 
 function txIcon(type: string): { name: string; color: string } {
   switch (type) {
-    case 'buyin':      return { name: 'enter-outline',     color: colors.primary };
-    case 'attack_win': return { name: 'flash',             color: colors.gold };
-    case 'attack_loss':return { name: 'alert-circle',      color: colors.secondary };
-    case 'withdrawal': return { name: 'arrow-up-circle',   color: colors.warning };
-    case 'deposit':    return { name: 'arrow-down-circle', color: colors.success };
-    case 'shield':     return { name: 'shield',            color: colors.primary };
-    default:           return { name: 'swap-horizontal',   color: colors.textSecondary };
+    case 'buyin':        return { name: 'enter-outline',     color: colors.primary };
+    case 'attack_win':   return { name: 'flash',             color: colors.gold };
+    case 'attack_loss':  return { name: 'alert-circle',      color: colors.secondary };
+    case 'withdrawal':   return { name: 'arrow-up-circle',   color: colors.warning };
+    case 'deposit':      return { name: 'arrow-down-circle', color: colors.success };
+    case 'shield':       return { name: 'shield',            color: colors.primary };
+    case 'coin_collect': return { name: 'logo-bitcoin',      color: colors.gold };
+    case 'salvage':      return { name: 'wallet-outline',    color: colors.success };
+    default:             return { name: 'swap-horizontal',   color: colors.textSecondary };
   }
 }
 
