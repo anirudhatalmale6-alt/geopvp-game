@@ -121,9 +121,8 @@ export default function WalletScreen() {
   const balance = wallet?.balance ?? 0;
   const balanceDollars = (balance / 100).toFixed(2);
 
-  return (
-    <View style={styles.container}>
-      {/* Balance card */}
+  const listHeader = (
+    <>
       <View style={styles.balanceCard}>
         <Text style={styles.balanceLabel}>TOTAL BALANCE</Text>
         <Text style={styles.balanceAmount}>${balanceDollars}</Text>
@@ -135,7 +134,6 @@ export default function WalletScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Stats row */}
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
           <Ionicons name="flash" size={18} color={colors.gold} />
@@ -160,13 +158,17 @@ export default function WalletScreen() {
         </View>
       </View>
 
-      {/* Transactions list */}
       <View style={styles.txSection}>
         <Text style={styles.txHeader}>TRANSACTION HISTORY</Text>
       </View>
+    </>
+  );
 
+  return (
+    <View style={styles.container}>
       <FlatList
         data={transactions}
+        ListHeaderComponent={listHeader}
         keyExtractor={(item) => item.id}
         style={styles.list}
         contentContainerStyle={styles.listContent}
