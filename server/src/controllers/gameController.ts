@@ -715,7 +715,7 @@ export async function generateCoinDrops(
   for (let i = 0; i < count; i++) {
     const dropLat = lat + randomOffset(0.005);
     const dropLng = lng + randomOffset(0.005);
-    const amount = Math.floor(Math.random() * 5) + 1; // 1–5 coins
+    const amount = (Math.floor(Math.random() * 5) + 1) * 10; // 10–50 coins ($1–$5)
     await query(
       `INSERT INTO coin_drops (amount, latitude, longitude, created_by, is_active)
        VALUES ($1, $2, $3, $4, true)`,
