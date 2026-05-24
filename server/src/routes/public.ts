@@ -19,7 +19,6 @@ router.get('/players', async (_req: Request, res: Response) => {
        JOIN users u ON u.id = gs.user_id
        WHERE gs.is_active = true
          AND gs.latitude IS NOT NULL
-         AND (gs.last_location_update > now() - interval '30 minutes' OR u.email LIKE '%@bot.local')
        LIMIT 2000`,
     );
 

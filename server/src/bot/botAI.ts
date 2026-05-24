@@ -60,7 +60,7 @@ async function botTick(io: SocketIOServer) {
        WHERE gs.is_active = true
          AND gs.latitude IS NOT NULL
          AND u.email NOT LIKE '%@bot.local'
-         AND gs.last_location_update > now() - interval '30 minutes'
+         AND gs.last_location_update > now() - interval '24 hours'
          AND (gs.spawned_at IS NULL OR gs.spawned_at < now() - interval '2 minutes')`,
     );
     const realPlayers = realPlayersRes.rows;

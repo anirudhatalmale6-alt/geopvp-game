@@ -197,7 +197,7 @@ export async function getNearbyPlayers(req: AuthRequest, res: Response): Promise
          AND gs.latitude IS NOT NULL
          AND gs.latitude BETWEEN $2 AND $3
          AND gs.longitude BETWEEN $4 AND $5
-         AND (gs.last_location_update > now() - interval '5 minutes' OR u.email LIKE '%@bot.local')`,
+`,
       [userId, myLat - delta, myLat + delta, myLng - delta, myLng + delta],
     );
 
@@ -265,17 +265,14 @@ export async function getAllPlayers(req: AuthRequest, res: Response): Promise<vo
          WHERE gs.is_active = true
            AND gs.user_id != $1
            AND gs.latitude IS NOT NULL
-           AND (gs.last_location_update > now() - interval '30 minutes' OR u.email LIKE '%@bot.local')
          ORDER BY (gs.latitude - $2)*(gs.latitude - $2) + (gs.longitude - $3)*(gs.longitude - $3) ASC
          LIMIT 1500`,
         [userId, myLat, myLng],
       ),
       query(
         `SELECT COUNT(*) AS total FROM game_sessions gs
-         JOIN users u ON u.id = gs.user_id
          WHERE gs.is_active = true
-           AND gs.latitude IS NOT NULL
-           AND (gs.last_location_update > now() - interval '30 minutes' OR u.email LIKE '%@bot.local')`,
+           AND gs.latitude IS NOT NULL`,
       ),
     ]);
 
