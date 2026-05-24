@@ -163,7 +163,7 @@ export default function BuyInModal({ visible, onClose, onSessionCreated }: BuyIn
             </View>
             <View style={styles.summaryDivider} />
             <View style={styles.summaryItem}>
-              <Ionicons name="logo-bitcoin" size={16} color={colors.gold} />
+              <Ionicons name="cash-outline" size={16} color={colors.gold} />
               <Text style={styles.summaryLabel}>Coins</Text>
               <Text style={[styles.summaryValue, { color: colors.gold }]}>{selectedTier.coins}</Text>
             </View>

@@ -35,7 +35,7 @@ function txIcon(type: string): { name: string; color: string } {
     case 'withdrawal':   return { name: 'arrow-up-circle',   color: colors.warning };
     case 'deposit':      return { name: 'arrow-down-circle', color: colors.success };
     case 'shield':       return { name: 'shield',            color: colors.primary };
-    case 'coin_collect': return { name: 'logo-bitcoin',      color: colors.gold };
+    case 'coin_collect': return { name: 'cash-outline',       color: colors.gold };
     case 'salvage':      return { name: 'wallet-outline',    color: colors.success };
     default:             return { name: 'swap-horizontal',   color: colors.textSecondary };
   }

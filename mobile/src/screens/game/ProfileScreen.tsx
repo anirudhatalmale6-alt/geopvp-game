@@ -276,7 +276,7 @@ export default function ProfileScreen() {
       <View style={styles.statsGrid}>
         {[
           { label: 'SESSIONS',     value: String(stats?.sessions ?? 0),     icon: 'game-controller-outline', color: colors.primary },
-          { label: 'COINS EARNED', value: String(stats?.coinsEarned ?? 0),  icon: 'logo-bitcoin',            color: colors.gold },
+          { label: 'COINS EARNED', value: String(stats?.coinsEarned ?? 0),  icon: 'cash-outline',             color: colors.gold },
           { label: 'ATTACKS WON',  value: String(stats?.attacksWon ?? 0),   icon: 'flash',                   color: colors.success },
           { label: 'ATTACKS LOST', value: String(stats?.attacksLost ?? 0),  icon: 'skull-outline',           color: colors.secondary },
           { label: 'SHIELDS USED', value: String(stats?.shieldsUsed ?? 0),  icon: 'shield',                  color: colors.primary },

@@ -932,7 +932,7 @@ export default function MapScreen() {
           </View>
           {session && (
             <View style={styles.topRight}>
-              <Ionicons name="logo-bitcoin" size={14} color={getTierColor(session.coinTier)} />
+              <Ionicons name="cash-outline" size={14} color={getTierColor(session.coinTier)} />
               <Text style={styles.coinsText}>{session.mapCoins}</Text>
             </View>
           )}
@@ -942,7 +942,7 @@ export default function MapScreen() {
         {session && (
           <View style={styles.hudRow}>
             <View style={styles.hudCard}>
-              <Ionicons name="logo-bitcoin" size={18} color={getTierColor(session.coinTier)} />
+              <Ionicons name="cash-outline" size={18} color={getTierColor(session.coinTier)} />
               <Text style={[styles.hudValue, { color: getTierColor(session.coinTier) }]}>{session.mapCoins}</Text>
               <Text style={styles.hudLabel}>COINS</Text>
             </View>
