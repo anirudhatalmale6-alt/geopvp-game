@@ -789,14 +789,16 @@ export default function MapScreen() {
   // Shield handler
   // -------------------------------------------------------------------------
   const handleBuyShield = () => {
-    const shieldsLeft = 3 - (session?.shieldsPurchased ?? 0);
+    const purchased = session?.shieldsPurchased ?? 0;
+    const remaining = 3 - purchased;
+    if (remaining <= 0) return;
     Alert.alert(
-      'Activate Shield?',
-      `This will activate a shield for ${10} minutes ($1.99). You have ${shieldsLeft} shield${shieldsLeft !== 1 ? 's' : ''} left this session.`,
+      'Buy Shield?',
+      `Purchase a shield for $1.99 (active for 10 minutes). You can buy ${remaining} more this session.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Activate',
+          text: 'Buy $1.99',
           onPress: async () => {
             try {
               const updated = await buyShield();
@@ -898,7 +900,7 @@ export default function MapScreen() {
               <Text style={[styles.hudValue, { color: shieldIsActive ? colors.primary : colors.text }]}>
                 {shieldIsActive ? 'ON' : 'OFF'}
               </Text>
-              <Text style={styles.hudLabel}>SHIELD</Text>
+              <Text style={styles.hudLabel}>{`${session?.shieldsPurchased ?? 0}/3 BOUGHT`}</Text>
             </View>
             <View style={styles.hudCard}>
               <Ionicons name="people" size={18} color={nearbyPlayers.length > 0 ? colors.secondary : colors.textMuted} />
@@ -1051,7 +1053,7 @@ export default function MapScreen() {
                   color={shieldIsActive ? colors.background : (session?.shieldsPurchased ?? 0) >= 3 ? colors.textMuted : colors.primary}
                 />
                 <Text style={{ fontSize: 9, color: shieldIsActive ? colors.background : colors.textMuted, fontWeight: '700' }}>
-                  {shieldIsActive ? 'ON' : `${3 - (session?.shieldsPurchased ?? 0)}`}
+                  {shieldIsActive ? 'ON' : (session?.shieldsPurchased ?? 0) >= 3 ? 'MAX' : '$1.99'}
                 </Text>
               </TouchableOpacity>
             </View>
