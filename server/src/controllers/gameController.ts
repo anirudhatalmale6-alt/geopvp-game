@@ -428,7 +428,14 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
         };
       }
 
-      // Player-vs-player attack
+      // Player-vs-player attack — big bank takes little bank
+      const attackerBuyin = parseInt(attacker.buyin_amount, 10);
+      const defenderBuyin = parseInt(defender.buyin_amount, 10);
+
+      if (attackerBuyin < defenderBuyin) {
+        throw new Error(`Cannot attack a higher-tier player. Your buy-in: $${attackerBuyin / 100}, theirs: $${defenderBuyin / 100}. You can only attack players at your tier or lower.`);
+      }
+
       const defenderTimeShieldActive = defender.shield_active_until
         ? new Date(defender.shield_active_until) > new Date()
         : false;
@@ -442,40 +449,38 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
         return { success: false, coinsStolen: 0, defenderHadShield: true, shieldsLeft: 0, message: 'Attack blocked by shield!' };
       }
 
-      // Steal 20% of defender's coins (min 1, max 50)
-      const coinsStolen = Math.max(1, Math.min(50, Math.floor(defender.map_coins * 0.2)));
+      // Take ALL of the defender's coins and end their session
+      const defenderCoins = parseInt(defender.map_coins, 10);
+      const coinsStolen = defenderCoins;
 
-      // Update sessions
       await Promise.all([
         q(
           `UPDATE game_sessions SET map_coins = map_coins + $1 WHERE id = $2`,
           [coinsStolen, attacker.id],
         ),
         q(
-          `UPDATE game_sessions SET map_coins = GREATEST(0, map_coins - $1) WHERE id = $2`,
-          [coinsStolen, defender.id],
+          `UPDATE game_sessions SET map_coins = 0, is_active = false WHERE id = $1`,
+          [defender.id],
         ),
       ]);
 
-      // Record attack
       await q(
         `INSERT INTO attacks (attacker_id, defender_id, attacker_coins, defender_coins, coins_stolen, defender_had_shield, success, latitude, longitude)
          VALUES ($1, $2, $3, $4, $5, false, true, $6, $7)`,
         [attacker.user_id, defender.user_id, attacker.map_coins, defender.map_coins, coinsStolen, attacker.latitude, attacker.longitude],
       );
 
-      // Record transactions (coins * 10 = cents, since 10 coins = $1)
       const stolenCents = coinsStolen * 10;
       await Promise.all([
         q(
           `INSERT INTO transactions (user_id, type, amount, description, related_user_id)
            VALUES ($1, 'attack_win', $2, $3, $4)`,
-          [attacker.user_id, stolenCents, `Stole ${coinsStolen} coins from ${defender.defender_name}`, defender.user_id],
+          [attacker.user_id, stolenCents, `Took all ${coinsStolen} coins from ${defender.defender_name}!`, defender.user_id],
         ),
         q(
           `INSERT INTO transactions (user_id, type, amount, description, related_user_id)
            VALUES ($1, 'attack_loss', $2, $3, $4)`,
-          [defender.user_id, -stolenCents, `Lost ${coinsStolen} coins to ${attacker.attacker_name}`, attacker.user_id],
+          [defender.user_id, -stolenCents, `Lost all ${coinsStolen} coins to ${attacker.attacker_name}`, attacker.user_id],
         ),
       ]);
 
@@ -483,7 +488,7 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
         success: true,
         coinsStolen,
         defenderHadShield: false,
-        message: `Attack successful! Stole ${coinsStolen} coins from ${defender.defender_name}!`,
+        message: `Attack successful! Took all ${coinsStolen} coins from ${defender.defender_name}! They've been eliminated.`,
       };
     });
 
