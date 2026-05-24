@@ -45,8 +45,9 @@ export function setupGameSocket(io: SocketIOServer): void {
 
     console.log(`[GameSocket] ${user.username} (${user.id}) connected — socket ${socket.id}`);
 
-    // Join the shared game room
+    // Join the shared game room + personal room for targeted events
     socket.join('game');
+    socket.join(`user:${user.id}`);
 
     // -----------------------------------------------------------------------
     // player:location — client sends their current GPS coords

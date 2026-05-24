@@ -92,6 +92,18 @@ export function onPlayersUpdate(callback: (data: PlayersUpdatePayload) => void):
   };
 }
 
+export function onEliminated(callback: (data: { attackerName: string; coinsLost: number; message: string }) => void): () => void {
+  if (!_socket) return () => {};
+  _socket.on('session:eliminated', callback);
+  return () => { _socket?.off('session:eliminated', callback); };
+}
+
+export function onBotHit(callback: (data: { botName: string; shieldTaken: boolean; message: string }) => void): () => void {
+  if (!_socket) return () => {};
+  _socket.on('bot:hit-you', callback);
+  return () => { _socket?.off('bot:hit-you', callback); };
+}
+
 export function getSocket(): Socket | null {
   return _socket;
 }

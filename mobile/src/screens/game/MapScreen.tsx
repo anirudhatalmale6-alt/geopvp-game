@@ -27,7 +27,7 @@ import {
   NearbyPlayer,
   CoinDrop,
 } from '../../api/game';
-import { connectSocket, disconnectSocket, emitLocation, onPlayersUpdate } from '../../api/socket';
+import { connectSocket, disconnectSocket, emitLocation, onPlayersUpdate, onEliminated, onBotHit } from '../../api/socket';
 import BuyInModal from './BuyInModal';
 import { getTierColor } from '../../utils/tierColors';
 import { checkMockLocation } from '../../utils/anticheat';
@@ -631,6 +631,27 @@ export default function MapScreen() {
         });
       });
       socketUnsubRef.current = unsub;
+
+      // Listen for elimination (PvP attack killed your session)
+      const unsubElim = onEliminated((data) => {
+        Alert.alert(
+          'YOU WERE ELIMINATED!',
+          `${data.attackerName} attacked you and took all ${data.coinsLost} coins! Buy in again to keep playing.`,
+          [{ text: 'OK', onPress: () => { setSession(null); setShowBuyIn(true); } }],
+        );
+      });
+
+      // Listen for bot attacks
+      const unsubBot = onBotHit((data) => {
+        setAttackResult(data.message);
+        refreshSession();
+        setTimeout(() => setAttackResult(null), 4000);
+      });
+
+      return () => {
+        unsubElim();
+        unsubBot();
+      };
     })();
 
     return () => {

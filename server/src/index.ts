@@ -10,6 +10,7 @@ import walletRoutes from './routes/wallet';
 import adminRoutes from './routes/admin';
 import publicRoutes from './routes/public';
 import { setupGameSocket } from './socket/gameSocket';
+import { setIO } from './socket/ioInstance';
 import { startBotAI } from './bot/botAI';
 
 const app = express();
@@ -67,6 +68,8 @@ const io = new SocketIOServer(server, {
     methods: ['GET', 'POST'],
   },
 });
+
+setIO(io);
 
 // Wire up game socket handlers (auth + player:location + players:update)
 setupGameSocket(io);

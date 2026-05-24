@@ -5,6 +5,7 @@ import { config } from '../config/env';
 import { AuthRequest } from '../middleware/auth';
 import { distanceMiles } from '../utils/geo';
 import { getCoinTier } from '../utils/coins';
+import { getIO } from '../socket/ioInstance';
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -509,6 +510,16 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
           [defender.user_id, -stolenCents, `Lost all ${coinsStolen} coins to ${attacker.attacker_name}`, attacker.user_id],
         ),
       ]);
+
+      // Notify the defender via socket
+      const io = getIO();
+      if (io) {
+        io.to(`user:${defender.user_id}`).emit('session:eliminated', {
+          attackerName: attacker.attacker_name,
+          coinsLost: coinsStolen,
+          message: `${attacker.attacker_name} attacked you and took all ${coinsStolen} coins! You've been eliminated.`,
+        });
+      }
 
       return {
         success: true,

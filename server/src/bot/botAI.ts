@@ -282,6 +282,14 @@ async function botAttack(
         botHitsLeft: newBotHits,
       });
 
+      io.to(`user:${defender.user_id}`).emit('bot:hit-you', {
+        botName: bot.username,
+        shieldTaken,
+        message: shieldTaken
+          ? `${bot.username} attacked you! A shield was consumed.`
+          : `${bot.username} attacked you!`,
+      });
+
       console.log(`[BotAI] ${bot.username} hit ${defender.username} (shield taken: ${shieldTaken}, bot hits left: ${newBotHits})`);
     });
   } catch (err) {
