@@ -3,19 +3,25 @@ import { query, transaction } from '../config/database';
 import { config } from '../config/env';
 
 const MPH_TO_DEG_PER_SEC = 1 / (69 * 3600);
-const BOT_SPEED_MPH = 30;
+const BOT_SPEED_MPH = 5;
 const TICK_INTERVAL_MS = 3000;
-const ATTACK_RADIUS = config.attackRadiusMiles;
 const BOT_ATTACK_RADIUS = 0.5;
-const MAX_HUNT_RADIUS_MILES = 150;
 const MAX_BOT_HITS_PER_PLAYER_PER_WEEK = 2;
 const MIN_BOT_SPACING_MILES = 10;
 const MIN_BOT_SPACING_DEGS = MIN_BOT_SPACING_MILES / 69;
+const LEASH_RADIUS_DEGS = 1.5; // ~100 miles - bots stay within this radius of home
+const MAX_CHASE_RADIUS_MILES = 30;
+
+// Continental US bounds
+const US_LAT_MIN = 25;
+const US_LAT_MAX = 48;
+const US_LNG_MIN = -125;
+const US_LNG_MAX = -67;
 
 let tickHandle: ReturnType<typeof setInterval> | null = null;
 
-// Persistent wander headings per bot (survives across ticks, not across restarts - that's fine)
 const botWanderAngles = new Map<string, number>();
+const botHomePositions = new Map<string, { lat: number; lng: number }>();
 
 function distanceMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 3958.8;
@@ -31,11 +37,17 @@ function getWanderAngle(botId: string): number {
   if (!botWanderAngles.has(botId)) {
     botWanderAngles.set(botId, Math.random() * 2 * Math.PI);
   }
-  // Slowly drift the heading each tick for natural-looking patrol movement
   let angle = botWanderAngles.get(botId)!;
-  angle += (Math.random() - 0.5) * 0.3;
+  angle += (Math.random() - 0.5) * 0.2;
   botWanderAngles.set(botId, angle);
   return angle;
+}
+
+function clampToUS(lat: number, lng: number): { lat: number; lng: number } {
+  return {
+    lat: Math.max(US_LAT_MIN, Math.min(US_LAT_MAX, lat)),
+    lng: Math.max(US_LNG_MIN, Math.min(US_LNG_MAX, lng)),
+  };
 }
 
 async function botTick(io: SocketIOServer) {
@@ -51,11 +63,6 @@ async function botTick(io: SocketIOServer) {
          AND gs.last_location_update > now() - interval '30 minutes'`,
     );
     const realPlayers = realPlayersRes.rows;
-    if (realPlayers.length === 0) return;
-
-    if (Date.now() % 60000 < TICK_INTERVAL_MS) {
-      console.log(`[BotAI] ${realPlayers.length} real players online`);
-    }
 
     const weeklyHitsRes = await query(
       `SELECT a.attacker_id, a.defender_id, MAX(a.created_at) as last_hit
@@ -91,38 +98,37 @@ async function botTick(io: SocketIOServer) {
     const moveDegs = BOT_SPEED_MPH * MPH_TO_DEG_PER_SEC * dtSeconds;
     const allBots = botsRes.rows;
 
-    const playerBeingChased = new Set<string>();
-
-    const botsWithDist = allBots.map((bot: any) => {
-      let minDist = Infinity;
-      for (const p of realPlayers) {
-        const d = distanceMiles(bot.latitude, bot.longitude, p.latitude, p.longitude);
-        if (d < minDist) minDist = d;
+    // Record home positions for new bots
+    for (const bot of allBots) {
+      if (!botHomePositions.has(bot.user_id)) {
+        botHomePositions.set(bot.user_id, { lat: bot.latitude, lng: bot.longitude });
       }
-      return { ...bot, _minDist: minDist };
-    });
-    botsWithDist.sort((a: any, b: any) => a._minDist - b._minDist);
+    }
 
-    // Track updated positions so later bots repel from already-moved bots
+    const playerBeingChased = new Set<string>();
     const updatedPositions = new Map<string, { lat: number; lng: number }>();
 
-    for (const bot of botsWithDist) {
+    for (const bot of allBots) {
+      const home = botHomePositions.get(bot.user_id)!;
+
+      // Only chase players within a short radius (keeps bots near their area)
       let nearest = null;
       let nearestDist = Infinity;
-      for (const p of realPlayers) {
-        if (playerBeingChased.has(p.user_id)) continue;
-        const cooldownKey = `${bot.user_id}:${p.user_id}`;
-        if (dbCooldowns.has(cooldownKey)) continue;
-        const distinctBots = playerDistinctBotHits.get(p.user_id);
-        if (distinctBots && distinctBots.size >= MAX_BOT_HITS_PER_PLAYER_PER_WEEK) continue;
-        const d = distanceMiles(bot.latitude, bot.longitude, p.latitude, p.longitude);
-        if (d < nearestDist && d <= MAX_HUNT_RADIUS_MILES) {
-          nearestDist = d;
-          nearest = p;
+      if (realPlayers.length > 0) {
+        for (const p of realPlayers) {
+          if (playerBeingChased.has(p.user_id)) continue;
+          const cooldownKey = `${bot.user_id}:${p.user_id}`;
+          if (dbCooldowns.has(cooldownKey)) continue;
+          const distinctBots = playerDistinctBotHits.get(p.user_id);
+          if (distinctBots && distinctBots.size >= MAX_BOT_HITS_PER_PLAYER_PER_WEEK) continue;
+          const d = distanceMiles(bot.latitude, bot.longitude, p.latitude, p.longitude);
+          if (d < nearestDist && d <= MAX_CHASE_RADIUS_MILES) {
+            nearestDist = d;
+            nearest = p;
+          }
         }
       }
 
-      // Calculate base movement direction
       let moveLat = 0;
       let moveLng = 0;
 
@@ -136,13 +142,27 @@ async function botTick(io: SocketIOServer) {
           moveLng = (dLng / rawDist) * moveDegs;
         }
       } else {
-        // Wander with a persistent heading
+        // Wander with persistent heading
         const angle = getWanderAngle(bot.user_id);
         moveLat = Math.cos(angle) * moveDegs;
         moveLng = Math.sin(angle) * moveDegs;
       }
 
-      // Bot-to-bot repulsion: push away from any bot within MIN_BOT_SPACING_MILES
+      // Leash: pull back toward home if too far
+      const dHomeLat = bot.latitude - home.lat;
+      const dHomeLng = bot.longitude - home.lng;
+      const homeDist = Math.sqrt(dHomeLat * dHomeLat + dHomeLng * dHomeLng);
+      if (homeDist > LEASH_RADIUS_DEGS * 0.7) {
+        const pullStrength = Math.min(1, (homeDist - LEASH_RADIUS_DEGS * 0.7) / (LEASH_RADIUS_DEGS * 0.3));
+        moveLat -= (dHomeLat / homeDist) * moveDegs * pullStrength * 3;
+        moveLng -= (dHomeLng / homeDist) * moveDegs * pullStrength * 3;
+        // Flip wander angle toward home
+        if (pullStrength > 0.5) {
+          botWanderAngles.set(bot.user_id, Math.atan2(-dHomeLng, -dHomeLat));
+        }
+      }
+
+      // Bot-to-bot repulsion
       let repelLat = 0;
       let repelLng = 0;
       for (const other of allBots) {
@@ -152,35 +172,42 @@ async function botTick(io: SocketIOServer) {
         const dLng = bot.longitude - oPos.lng;
         const degDist = Math.sqrt(dLat * dLat + dLng * dLng);
         if (degDist < MIN_BOT_SPACING_DEGS && degDist > 0.0001) {
-          // Stronger repulsion the closer they are
           const strength = (MIN_BOT_SPACING_DEGS - degDist) / MIN_BOT_SPACING_DEGS;
           repelLat += (dLat / degDist) * moveDegs * strength * 2;
           repelLng += (dLng / degDist) * moveDegs * strength * 2;
         }
       }
 
-      let newLat = bot.latitude + moveLat + repelLat;
-      let newLng = bot.longitude + moveLng + repelLng;
+      const clamped = clampToUS(
+        bot.latitude + moveLat + repelLat,
+        bot.longitude + moveLng + repelLng,
+      );
 
-      updatedPositions.set(bot.user_id, { lat: newLat, lng: newLng });
+      // If hitting US boundary, flip wander angle
+      if (clamped.lat !== bot.latitude + moveLat + repelLat ||
+          clamped.lng !== bot.longitude + moveLng + repelLng) {
+        botWanderAngles.set(bot.user_id, Math.random() * 2 * Math.PI);
+      }
+
+      updatedPositions.set(bot.user_id, clamped);
 
       await query(
         `UPDATE game_sessions SET latitude = $1, longitude = $2, last_location_update = now() WHERE id = $3`,
-        [newLat, newLng, bot.session_id],
+        [clamped.lat, clamped.lng, bot.session_id],
       );
 
       const botUpdate = {
         userId: bot.user_id,
         username: bot.username,
-        lat: newLat,
-        lng: newLng,
+        lat: clamped.lat,
+        lng: clamped.lng,
         ts: Date.now(),
       };
       io.to('game').emit('players:update', botUpdate);
       io.of('/spectator').emit('players:update', botUpdate);
 
       if (nearest) {
-        const currentDist = distanceMiles(newLat, newLng, nearest.latitude, nearest.longitude);
+        const currentDist = distanceMiles(clamped.lat, clamped.lng, nearest.latitude, nearest.longitude);
         const cooldownKey = `${bot.user_id}:${nearest.user_id}`;
         if (currentDist <= BOT_ATTACK_RADIUS && !dbCooldowns.has(cooldownKey)) {
           const distinctBots = playerDistinctBotHits.get(nearest.user_id);
@@ -263,7 +290,7 @@ async function botAttack(
 
 export function startBotAI(io: SocketIOServer): void {
   if (tickHandle) return;
-  console.log(`[BotAI] Starting bot AI loop (${TICK_INTERVAL_MS}ms tick, ${BOT_SPEED_MPH}mph)`);
+  console.log(`[BotAI] Starting bot AI loop (${TICK_INTERVAL_MS}ms tick, ${BOT_SPEED_MPH}mph, leash ${Math.round(LEASH_RADIUS_DEGS * 69)}mi)`);
   tickHandle = setInterval(() => botTick(io), TICK_INTERVAL_MS);
 }
 
