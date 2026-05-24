@@ -739,7 +739,7 @@ function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number):
   return EARTH_RADIUS_M * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-const COLLECT_RADIUS_METERS = 50;
+const COLLECT_RADIUS_METERS = 500;
 
 export async function collectCoinDrop(req: AuthRequest, res: Response): Promise<void> {
   try {
