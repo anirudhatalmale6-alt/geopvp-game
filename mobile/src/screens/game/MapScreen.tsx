@@ -142,10 +142,6 @@ function LeafletMap({ lat, lng, nearbyPlayers, session, coinDrops, commandRef }:
   .enemy-name.bot-name{
     color:#ff6d00;
   }
-  .enemy-tier{
-    display:inline-block;width:6px;height:6px;border-radius:50%;
-    margin-top:1px;
-  }
   .coin-marker{
     width:18px;height:18px;border-radius:50%;
     background:#ffd700;border:2px solid #ffb300;
@@ -196,14 +192,12 @@ function makeEnemyIcon(en){
     return L.divIcon({className:'',html:html,iconSize:[12,12],iconAnchor:[6,6]});
   }
   var cls = en.shielded ? 'enemy-marker shielded' : 'enemy-marker';
-  var nameCls = 'enemy-name';
-  var tierDot = '<span class="enemy-tier" style="background:'+en.tierColor+';box-shadow:0 0 6px '+en.tierColor+'"></span>';
-  var html = '<div class="'+cls+'" data-sid="'+en.sid+'"></div>'
+  var markerStyle = en.shielded ? '' : 'background:'+en.tierColor+';border-color:'+en.tierColor+';box-shadow:0 0 8px '+en.tierColor+';';
+  var html = '<div class="'+cls+'" data-sid="'+en.sid+'" style="'+markerStyle+'"></div>'
     +'<div class="enemy-info">'
-    +'<span class="'+nameCls+'">'+en.name+'</span>'
-    +tierDot
+    +'<span class="enemy-name" style="color:'+en.tierColor+'">'+en.name+'</span>'
     +'</div>';
-  return L.divIcon({className:'',html:html,iconSize:[16,42],iconAnchor:[8,8]});
+  return L.divIcon({className:'',html:html,iconSize:[16,32],iconAnchor:[8,8]});
 }
 
 function makeCoinIcon(amount){
@@ -1042,8 +1036,7 @@ export default function MapScreen() {
         {attackTarget && (
           <View style={styles.attackPanel} pointerEvents="auto">
             <Text style={styles.attackPanelTitle}>ATTACK TARGET</Text>
-            <Text style={styles.attackPanelName}>{attackTarget.username.toUpperCase()}</Text>
-            <View style={[styles.attackPanelTierDot, { backgroundColor: attackTarget.tierColor, shadowColor: attackTarget.tierColor }]} />
+            <Text style={[styles.attackPanelName, { color: attackTarget.tierColor }]}>{attackTarget.username.toUpperCase()}</Text>
             {attackTarget.shielded && (
               <View style={styles.shieldWarning}>
                 <Ionicons name="shield" size={14} color={colors.warning} />
