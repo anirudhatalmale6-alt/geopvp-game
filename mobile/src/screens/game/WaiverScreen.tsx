@@ -30,21 +30,23 @@ PLEASE READ THIS AGREEMENT CAREFULLY BEFORE USING COINPROWL. BY TAPPING "I AGREE
 
 2. COMPLIANCE WITH ALL APPLICABLE LAWS
 
-2.1. You agree to comply with ALL federal, state, and local laws, regulations, ordinances, and rules of the United States and any jurisdiction in which you use this application. This includes, but is not limited to:
+2.1. You agree to comply with ALL national, federal, state, provincial, municipal, and local laws, regulations, ordinances, and rules of your country, territory, and any jurisdiction in which you use this application. This includes, but is not limited to:
 
-  a) TRAFFIC LAWS: You shall not exceed posted speed limits, run red lights or stop signs, drive recklessly, operate a vehicle while distracted by this application, or violate any traffic law or regulation while using CoinProwl. You agree to NEVER use CoinProwl while operating a motor vehicle, bicycle, scooter, or any other mode of transportation that requires your attention.
+  a) TRAFFIC LAWS: You shall not exceed posted speed limits, run red lights or stop signs, drive recklessly, operate a vehicle while distracted by this application, or violate any traffic law or regulation in your jurisdiction while using CoinProwl. You agree to NEVER use CoinProwl while operating a motor vehicle, bicycle, scooter, or any other mode of transportation that requires your attention.
 
-  b) TRESPASS LAWS: You shall not enter private property without the express permission of the property owner. You shall not enter restricted areas, military installations, government buildings, construction sites, or any area where public access is prohibited or restricted. You shall respect all posted signs including "No Trespassing," "Private Property," "Keep Out," and similar notices.
+  b) TRESPASS LAWS: You shall not enter private property without the express permission of the property owner. You shall not enter restricted areas, military installations, government buildings, construction sites, or any area where public access is prohibited or restricted under the laws of your jurisdiction. You shall respect all posted signs including "No Trespassing," "Private Property," "Keep Out," and similar notices in any language.
 
-  c) CRIMINAL LAWS: You shall not engage in any criminal activity while using CoinProwl, including but not limited to theft, assault, harassment, stalking, vandalism, breaking and entering, disorderly conduct, or any other unlawful behavior.
+  c) CRIMINAL LAWS: You shall not engage in any criminal activity while using CoinProwl, including but not limited to theft, assault, harassment, stalking, vandalism, breaking and entering, disorderly conduct, or any other unlawful behavior as defined by the laws of your country, state, province, or municipality.
 
-  d) PARK AND PUBLIC SPACE REGULATIONS: You shall comply with all park hours, trail restrictions, wildlife protection rules, noise ordinances, and any other regulations governing public spaces.
+  d) PARK AND PUBLIC SPACE REGULATIONS: You shall comply with all park hours, trail restrictions, wildlife protection rules, noise ordinances, and any other regulations governing public spaces in your jurisdiction.
 
-  e) DRONE AND AVIATION LAWS: If applicable, you shall comply with all FAA regulations and local ordinances regarding the use of drones or any aerial equipment.
+  e) DRONE AND AVIATION LAWS: If applicable, you shall comply with all aviation authority regulations (including but not limited to FAA, EASA, CAA, and equivalent regulatory bodies in your country) and local ordinances regarding the use of drones or any aerial equipment.
 
-  f) DIGITAL AND PRIVACY LAWS: You shall not use CoinProwl to stalk, harass, or surveil any individual. You shall respect the privacy rights of all persons.
+  f) DIGITAL AND PRIVACY LAWS: You shall not use CoinProwl to stalk, harass, or surveil any individual. You shall respect the privacy rights of all persons. You shall comply with all applicable data protection and privacy laws in your jurisdiction, including but not limited to GDPR, CCPA, PIPEDA, and equivalent regulations.
 
-2.2. You acknowledge that laws vary by jurisdiction and it is YOUR sole responsibility to know and comply with all applicable laws in your specific location.
+  g) INTERNATIONAL LAWS: If you use CoinProwl while traveling internationally, you are responsible for complying with the laws of both your home country and the country you are visiting. CoinProwl makes no representation that the application is appropriate or available for use in any particular jurisdiction.
+
+2.2. You acknowledge that laws vary significantly by country, state, province, territory, and municipality. It is YOUR sole responsibility to know and comply with all applicable laws in your specific location. CoinProwl does not provide legal advice and cannot advise you on the laws of your jurisdiction.
 
 3. PROHIBITED CONDUCT
 
@@ -120,13 +122,13 @@ PLEASE READ THIS AGREEMENT CAREFULLY BEFORE USING COINPROWL. BY TAPPING "I AGREE
 
 10. DISPUTE RESOLUTION
 
-10.1. Any dispute arising out of or relating to this Agreement or the use of CoinProwl shall be resolved through binding arbitration in accordance with the rules of the American Arbitration Association. The arbitration shall take place in the State of Florida, and the decision of the arbitrator shall be final and binding.
+10.1. Any dispute arising out of or relating to this Agreement or the use of CoinProwl shall be resolved through binding arbitration in accordance with the rules of the American Arbitration Association (or, for users outside the United States, in accordance with the arbitration rules of a recognized arbitration body in the user's country of residence). The arbitration shall take place in the State of Florida, United States, or, at CoinProwl's discretion, in the jurisdiction where the user resides. The decision of the arbitrator shall be final and binding.
 
-10.2. You agree to waive any right to a jury trial or to participate in a class action lawsuit against the CoinProwl Parties.
+10.2. To the fullest extent permitted by the laws of your jurisdiction, you agree to waive any right to a jury trial or to participate in a class action lawsuit against the CoinProwl Parties.
 
 11. GOVERNING LAW
 
-11.1. This Agreement shall be governed by and construed in accordance with the laws of the State of Florida, United States of America, without regard to its conflict of law provisions.
+11.1. This Agreement shall be governed by and construed in accordance with the laws of the State of Florida, United States of America, without regard to its conflict of law provisions. If you are located outside the United States, you acknowledge that mandatory consumer protection laws of your jurisdiction may also apply to the extent they cannot be waived.
 
 12. SEVERABILITY
 
@@ -151,9 +153,10 @@ PLEASE READ THIS AGREEMENT CAREFULLY BEFORE USING COINPROWL. BY TAPPING "I AGREE
   - You are solely responsible for your own safety and legal compliance
   - You assume all risks associated with using CoinProwl
   - You waive all claims against the CoinProwl Parties
-  - Any violation of applicable laws while using CoinProwl is your sole legal responsibility
-  - CoinProwl does not encourage, endorse, or condone any illegal activity
-  - CoinProwl is not responsible for any actions taken by users while playing the game`;
+  - Any violation of applicable laws in any country or jurisdiction while using CoinProwl is your sole legal responsibility
+  - CoinProwl does not encourage, endorse, or condone any illegal activity in any jurisdiction
+  - CoinProwl is not responsible for any actions taken by users while playing the game
+  - You are responsible for knowing and following the laws of whatever country, state, province, or municipality you are in while playing`;
 
 export default function WaiverScreen({ onAccepted }: WaiverScreenProps) {
   const [loading, setLoading] = useState(false);
