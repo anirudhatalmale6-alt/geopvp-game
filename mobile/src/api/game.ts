@@ -95,12 +95,8 @@ export async function createSession(tierDollars: number): Promise<GameSession> {
 }
 
 export async function getActiveSession(): Promise<GameSession | null> {
-  try {
-    const { data } = await api.get<{ session: GameSession | null }>('/game/sessions/active');
-    return data.session;
-  } catch {
-    return null;
-  }
+  const { data } = await api.get<{ session: GameSession | null }>('/game/sessions/active');
+  return data.session;
 }
 
 export async function updateLocation(lat: number, lng: number): Promise<void> {
