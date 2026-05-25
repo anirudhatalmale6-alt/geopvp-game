@@ -258,7 +258,7 @@ window.addEventListener('message',function(e){
                   type:'attackPlayer',
                   sessionId:enemy.sid,
                   username:enemy.name,
-                  coins:enemy.coins,
+                  tierColor:enemy.tierColor,
                   shielded:enemy.shielded
                 }),'*');
               });
@@ -762,7 +762,7 @@ export default function MapScreen() {
         setAttackTarget({
           sessionId: d.sessionId,
           username: d.username,
-          coins: d.coins,
+          tierColor: d.tierColor || '#ffd700',
           shielded: !!d.shielded,
         });
       }
@@ -862,10 +862,10 @@ export default function MapScreen() {
     : false;
 
   const ATTACK_RADIUS_MILES = 0.25;
-  const nearestInRange = React.useMemo(() => {
-    if (!session || !location || nearbyPlayers.length === 0) return null;
-    let best: NearbyPlayer | null = null;
-    let bestDist = Infinity;
+  const [targetIndex, setTargetIndex] = useState(0);
+  const playersInRange = React.useMemo(() => {
+    if (!session || !location || nearbyPlayers.length === 0) return [];
+    const inRange: { player: NearbyPlayer; dist: number }[] = [];
     for (const p of nearbyPlayers) {
       const dLat = (p.latitude - location.lat) * Math.PI / 180;
       const dLng = (p.longitude - location.lng) * Math.PI / 180;
@@ -873,14 +873,15 @@ export default function MapScreen() {
         Math.cos(location.lat * Math.PI / 180) * Math.cos(p.latitude * Math.PI / 180) *
         Math.sin(dLng / 2) ** 2;
       const dist = 3958.8 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      if (dist < bestDist) {
-        bestDist = dist;
-        best = p;
+      if (dist <= ATTACK_RADIUS_MILES) {
+        inRange.push({ player: p, dist });
       }
     }
-    if (!best || bestDist > ATTACK_RADIUS_MILES) return null;
-    return best;
+    inRange.sort((a, b) => a.dist - b.dist);
+    return inRange.map(x => x.player);
   }, [session, location, nearbyPlayers]);
+  const nearestInRange = playersInRange.length > 0 ? playersInRange[Math.min(targetIndex, playersInRange.length - 1)] : null;
+  useEffect(() => { if (targetIndex >= playersInRange.length) setTargetIndex(0); }, [playersInRange.length, targetIndex]);
 
   // -------------------------------------------------------------------------
   // Render
@@ -1071,6 +1072,16 @@ export default function MapScreen() {
             </TouchableOpacity>
           ) : (
             <View style={styles.sessionBtns}>
+              {playersInRange.length > 1 && (
+                <TouchableOpacity
+                  style={styles.cycleBtn}
+                  onPress={() => setTargetIndex(i => (i + 1) % playersInRange.length)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="swap-horizontal" size={18} color={colors.primary} />
+                  <Text style={styles.cycleBtnText}>{targetIndex + 1}/{playersInRange.length}</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 style={[styles.attackBtn, !nearestInRange && styles.attackBtnDisabled]}
                 onPress={() => {
@@ -1414,6 +1425,24 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(26, 34, 53, 0.9)',
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  cycleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.primary + '40',
+  },
+  cycleBtnText: {
+    color: colors.primary,
+    fontWeight: '800',
+    fontSize: fontSize.xs,
+    letterSpacing: 1,
   },
   attackBtnText: {
     color: '#fff',
