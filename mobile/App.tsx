@@ -12,6 +12,7 @@ import SignUpScreen from './src/screens/auth/SignUpScreen';
 import VerifyEmailScreen from './src/screens/auth/VerifyEmailScreen';
 import ForgotPasswordScreen from './src/screens/auth/ForgotPasswordScreen';
 import ResetPasswordScreen from './src/screens/auth/ResetPasswordScreen';
+import WaiverScreen from './src/screens/game/WaiverScreen';
 import MainTabs from './src/navigation/MainTabs';
 
 const AuthStackNav = createNativeStackNavigator();
@@ -62,9 +63,18 @@ function LoadingScreen() {
 }
 
 function AppNavigator() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user, refreshUser } = useAuth();
 
   if (isLoading) return <LoadingScreen />;
+
+  if (isAuthenticated && user && !user.waiverAcceptedAt) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <StatusBar style="light" />
+        <WaiverScreen onAccepted={refreshUser} />
+      </View>
+    );
+  }
 
   return (
     <NavigationContainer theme={DarkTheme}>

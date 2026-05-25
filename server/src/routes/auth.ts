@@ -13,6 +13,7 @@ import {
   updateProfile,
   deleteAccount,
   savePushToken,
+  acceptWaiver,
 } from '../controllers/authController';
 
 const router = Router();
@@ -32,5 +33,6 @@ router.get('/profile', authenticate, getProfile);
 router.put('/profile', authenticate, updateProfile);
 router.post('/push-token', authenticate, savePushToken);
 router.delete('/account', authenticate, deleteAccount);
+router.post('/accept-waiver', authenticate, acceptWaiver);
 
 export default router;

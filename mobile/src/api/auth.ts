@@ -14,6 +14,7 @@ export interface User {
   id: string;
   username: string;
   email: string;
+  waiverAcceptedAt?: string | null;
 }
 
 interface AuthResponse {
@@ -133,5 +134,10 @@ export async function deleteAccount(
   const { data } = await api.delete<MessageResponse>('/auth/account', {
     confirmation,
   });
+  return data;
+}
+
+export async function acceptWaiver(): Promise<{ accepted: boolean; acceptedAt: string }> {
+  const { data } = await api.post<{ accepted: boolean; acceptedAt: string }>('/auth/accept-waiver');
   return data;
 }

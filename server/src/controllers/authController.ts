@@ -283,7 +283,7 @@ export async function login(req: Request, res: Response): Promise<void> {
     const { email, password, deviceId } = parsed.data;
 
     const result = await query(
-      'SELECT id, username, email, password_hash, is_verified, device_id FROM users WHERE email = $1',
+      'SELECT id, username, email, password_hash, is_verified, device_id, waiver_accepted_at FROM users WHERE email = $1',
       [email.toLowerCase()],
     );
 
@@ -327,6 +327,7 @@ export async function login(req: Request, res: Response): Promise<void> {
         id: user.id,
         username: user.username,
         email: user.email,
+        waiverAcceptedAt: user.waiver_accepted_at || null,
       },
     });
   } catch (err) {
@@ -497,7 +498,7 @@ export async function getProfile(req: AuthRequest, res: Response): Promise<void>
     const userId = req.user!.id;
 
     const result = await query(
-      `SELECT u.id, u.username, u.email, u.is_verified, u.created_at,
+      `SELECT u.id, u.username, u.email, u.is_verified, u.created_at, u.waiver_accepted_at,
               COALESCE(w.balance, 0) AS balance
        FROM users u
        LEFT JOIN wallets w ON w.user_id = u.id
@@ -519,6 +520,7 @@ export async function getProfile(req: AuthRequest, res: Response): Promise<void>
         email: user.email,
         isVerified: user.is_verified,
         createdAt: user.created_at,
+        waiverAcceptedAt: user.waiver_accepted_at || null,
       },
       wallet: {
         balance: parseInt(user.balance, 10),
@@ -630,6 +632,20 @@ export async function deleteAccount(req: AuthRequest, res: Response): Promise<vo
     res.json({ message: 'Account deleted successfully.' });
   } catch (err) {
     console.error('Delete account error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+export async function acceptWaiver(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const userId = req.user!.id;
+    await query(
+      `UPDATE users SET waiver_accepted_at = now() WHERE id = $1`,
+      [userId],
+    );
+    res.json({ accepted: true, acceptedAt: new Date().toISOString() });
+  } catch (err) {
+    console.error('Accept waiver error:', err);
     res.status(500).json({ error: 'Internal server error.' });
   }
 }

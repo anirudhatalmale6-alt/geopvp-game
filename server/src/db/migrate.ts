@@ -99,6 +99,7 @@ CREATE TABLE IF NOT EXISTS payout_methods (
 );
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS waiver_accepted_at TIMESTAMPTZ;
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON game_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_active ON game_sessions(is_active) WHERE is_active = true;
