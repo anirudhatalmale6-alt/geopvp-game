@@ -392,15 +392,41 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
           throw new Error('You need an active shield to attack! Bots counter-attack instantly.');
         }
 
-        // Steal the bot's coins
+        // Check bot's shields
+        const botShields = parseInt(defender.shields_remaining || '0', 10);
+
+        if (botShields > 0) {
+          // Bot uses a shield to survive
+          await q(
+            `UPDATE game_sessions SET shields_remaining = shields_remaining - 1 WHERE id = $1`,
+            [defender.id],
+          );
+
+          await q(
+            `INSERT INTO attacks (attacker_id, defender_id, attacker_coins, defender_coins, coins_stolen, defender_had_shield, success, latitude, longitude)
+             VALUES ($1, $2, $3, $4, 0, true, false, $5, $6)`,
+            [attacker.user_id, defender.user_id, attacker.map_coins, defender.map_coins, attacker.latitude, attacker.longitude],
+          );
+
+          return {
+            success: false,
+            coinsStolen: 0,
+            defenderHadShield: true,
+            shieldConsumed: false,
+            message: `Attack blocked! They used a shield (${botShields - 1} shields left). Keep attacking!`,
+          };
+        }
+
+        // Bot has no shields left - player defeats it and takes all coins
         const botCoins = parseInt(defender.map_coins || '0', 10);
 
-        // Respawn bot with fresh coins at a new random location nearby
+        // Respawn bot with fresh coins and 3 shields at a new random location nearby
         const newLat = parseFloat(defender.latitude) + (Math.random() - 0.5) * 0.5;
         const newLng = parseFloat(defender.longitude) + (Math.random() - 0.5) * 0.5;
+        const botTierCoins = Math.random() < 0.5 ? 10 : 20;
         await q(
-          `UPDATE game_sessions SET map_coins = 50, latitude = $1, longitude = $2 WHERE id = $3`,
-          [newLat, newLng, defender.id],
+          `UPDATE game_sessions SET map_coins = $1, shields_remaining = 3, latitude = $2, longitude = $3 WHERE id = $4`,
+          [botTierCoins, newLat, newLng, defender.id],
         );
 
         await q(

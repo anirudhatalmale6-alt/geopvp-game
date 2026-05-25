@@ -5,13 +5,14 @@ import { sendPushNotification } from '../utils/pushNotification';
 
 const MPH_TO_DEG_PER_SEC = 1 / (69 * 3600);
 const BOT_SPEED_MPH = 10;
+const BOT_CHASE_SPEED_MPH = 18;
 const TICK_INTERVAL_MS = 3000;
 const BOT_ATTACK_RADIUS = 0.5;
-const MAX_BOT_HITS_PER_PLAYER_PER_WEEK = 2;
+const MAX_BOT_HITS_PER_PLAYER_PER_WEEK = 5;
 const MIN_BOT_SPACING_MILES = 10;
 const MIN_BOT_SPACING_DEGS = MIN_BOT_SPACING_MILES / 69;
-const LEASH_RADIUS_DEGS = 1.5; // ~100 miles - bots stay within this radius of home
-const MAX_CHASE_RADIUS_MILES = 30;
+const LEASH_RADIUS_DEGS = 2.0; // ~140 miles - bots stay within this radius of home
+const MAX_CHASE_RADIUS_MILES = 50;
 
 // Continental US bounds (with padding so bots don't pile up on borders)
 const US_LAT_MIN = 26;
@@ -104,7 +105,8 @@ async function botTick(io: SocketIOServer) {
     );
 
     const dtSeconds = TICK_INTERVAL_MS / 1000;
-    const moveDegs = BOT_SPEED_MPH * MPH_TO_DEG_PER_SEC * dtSeconds;
+    const wanderDegs = BOT_SPEED_MPH * MPH_TO_DEG_PER_SEC * dtSeconds;
+    const chaseDegs = BOT_CHASE_SPEED_MPH * MPH_TO_DEG_PER_SEC * dtSeconds;
     const allBots = botsRes.rows;
 
     // Record home positions for new bots
@@ -140,6 +142,7 @@ async function botTick(io: SocketIOServer) {
 
       let moveLat = 0;
       let moveLng = 0;
+      const moveDegs = nearest ? chaseDegs : wanderDegs;
 
       if (nearest) {
         playerBeingChased.add(nearest.user_id);
@@ -147,14 +150,14 @@ async function botTick(io: SocketIOServer) {
         const dLng = nearest.longitude - bot.longitude;
         const rawDist = Math.sqrt(dLat * dLat + dLng * dLng);
         if (rawDist > 0.0001) {
-          moveLat = (dLat / rawDist) * moveDegs;
-          moveLng = (dLng / rawDist) * moveDegs;
+          moveLat = (dLat / rawDist) * chaseDegs;
+          moveLng = (dLng / rawDist) * chaseDegs;
         }
       } else {
         // Wander with persistent heading
         const angle = getWanderAngle(bot.user_id);
-        moveLat = Math.cos(angle) * moveDegs;
-        moveLng = Math.sin(angle) * moveDegs;
+        moveLat = Math.cos(angle) * wanderDegs;
+        moveLng = Math.sin(angle) * wanderDegs;
       }
 
       // Leash: pull back toward home if too far
