@@ -15,6 +15,7 @@ export interface GameSession {
   coinTier: string;
   mapCoins: number;
   shieldsPurchased: number;
+  shieldsBought24h: number;
   shieldsRemaining: number;
   shieldActiveUntil: string | null;
   latitude: number | null;

@@ -840,12 +840,12 @@ export default function MapScreen() {
   // Shield handler
   // -------------------------------------------------------------------------
   const handleBuyShield = () => {
-    const purchased = session?.shieldsPurchased ?? 0;
-    const remaining = 3 - purchased;
+    const bought24h = session?.shieldsBought24h ?? 0;
+    const remaining = 3 - bought24h;
     if (remaining <= 0) return;
     Alert.alert(
       'Buy Shield?',
-      `Purchase a shield for $1 (active for 10 minutes). You can buy ${remaining} more this session.`,
+      `Purchase a shield for $1 (active for 10 minutes). You can buy ${remaining} more today.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -954,7 +954,7 @@ export default function MapScreen() {
                   ? `${Math.floor(shieldSecsLeft / 60)}:${(shieldSecsLeft % 60).toString().padStart(2, '0')}`
                   : 'OFF'}
               </Text>
-              <Text style={styles.hudLabel}>{`${session?.shieldsPurchased ?? 0}/3 BOUGHT`}</Text>
+              <Text style={styles.hudLabel}>{`${session?.shieldsBought24h ?? 0}/3 TODAY`}</Text>
             </View>
             <View style={styles.hudCard}>
               <Ionicons name="people" size={18} color={nearbyPlayers.length > 0 ? colors.secondary : colors.textMuted} />
@@ -1106,17 +1106,17 @@ export default function MapScreen() {
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.shieldBtn, shieldIsActive && styles.shieldBtnActive, (session?.shieldsPurchased ?? 0) >= 3 && !shieldIsActive && styles.shieldBtnUsed]}
+                style={[styles.shieldBtn, shieldIsActive && styles.shieldBtnActive, (session?.shieldsBought24h ?? 0) >= 3 && !shieldIsActive && styles.shieldBtnUsed]}
                 onPress={handleBuyShield}
-                disabled={shieldIsActive || (session?.shieldsPurchased ?? 0) >= 3}
+                disabled={shieldIsActive || (session?.shieldsBought24h ?? 0) >= 3}
               >
                 <Ionicons
                   name="shield"
                   size={18}
-                  color={shieldIsActive ? colors.background : (session?.shieldsPurchased ?? 0) >= 3 ? colors.textMuted : colors.primary}
+                  color={shieldIsActive ? colors.background : (session?.shieldsBought24h ?? 0) >= 3 ? colors.textMuted : colors.primary}
                 />
                 <Text style={{ fontSize: 9, color: shieldIsActive ? colors.background : colors.textMuted, fontWeight: '700' }}>
-                  {shieldIsActive ? 'ON' : (session?.shieldsPurchased ?? 0) >= 3 ? 'MAX' : '$1'}
+                  {shieldIsActive ? 'ON' : (session?.shieldsBought24h ?? 0) >= 3 ? 'MAX' : '$1'}
                 </Text>
               </TouchableOpacity>
             </View>

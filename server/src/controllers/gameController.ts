@@ -112,7 +112,14 @@ export async function getActiveSession(req: AuthRequest, res: Response): Promise
       return;
     }
 
-    res.json({ session: formatSession(result.rows[0]) });
+    const shieldsRes = await query(
+      `SELECT COUNT(*) AS count FROM transactions
+       WHERE user_id = $1 AND type = 'shield' AND created_at > NOW() - INTERVAL '24 hours'`,
+      [userId],
+    );
+    const shieldsBought24h = parseInt(shieldsRes.rows[0].count, 10);
+
+    res.json({ session: formatSession(result.rows[0], shieldsBought24h) });
   } catch (err) {
     console.error('getActiveSession error:', err);
     res.status(500).json({ error: 'Internal server error.' });
@@ -580,9 +587,15 @@ export async function buyShield(req: AuthRequest, res: Response): Promise<void> 
       return;
     }
 
-    const MAX_SHIELDS_PER_SESSION = 3;
-    if (parseInt(session.shields_purchased, 10) >= MAX_SHIELDS_PER_SESSION) {
-      res.status(400).json({ error: 'Maximum 3 shields per session. No more shields available.' });
+    // Check 24-hour rolling limit: max 3 shields per 24 hours across all sessions
+    const recentShields = await query(
+      `SELECT COUNT(*) AS count FROM transactions
+       WHERE user_id = $1 AND type = 'shield' AND created_at > NOW() - INTERVAL '24 hours'`,
+      [userId],
+    );
+    const shieldsBoughtLast24h = parseInt(recentShields.rows[0].count, 10);
+    if (shieldsBoughtLast24h >= 3) {
+      res.status(400).json({ error: 'Maximum 3 shields per 24 hours. Try again later.' });
       return;
     }
 
@@ -604,7 +617,7 @@ export async function buyShield(req: AuthRequest, res: Response): Promise<void> 
       [userId, -SHIELD_COST_CENTS, `Shield purchased ($1.00) — active for ${config.shieldDurationMinutes} minutes`],
     );
 
-    res.json({ session: formatSession(updated.rows[0]) });
+    res.json({ session: formatSession(updated.rows[0], shieldsBoughtLast24h + 1) });
   } catch (err) {
     console.error('buyShield error:', err);
     res.status(500).json({ error: 'Internal server error.' });
@@ -879,7 +892,7 @@ export async function collectCoinDrop(req: AuthRequest, res: Response): Promise<
 // Helpers
 // ---------------------------------------------------------------------------
 
-function formatSession(row: Record<string, any>) {
+function formatSession(row: Record<string, any>, shieldsBought24h?: number) {
   return {
     id: row.id,
     userId: row.user_id,
@@ -887,6 +900,7 @@ function formatSession(row: Record<string, any>) {
     coinTier: row.coin_tier,
     mapCoins: parseInt(row.map_coins, 10),
     shieldsPurchased: parseInt(row.shields_purchased, 10),
+    shieldsBought24h: shieldsBought24h ?? parseInt(row.shields_purchased, 10),
     shieldsRemaining: parseInt(row.shields_remaining, 10),
     shieldActiveUntil: row.shield_active_until,
     latitude: row.latitude ? parseFloat(row.latitude) : null,
