@@ -147,7 +147,7 @@ function LeafletMap({ lat, lng, nearbyPlayers, session, coinDrops, commandRef }:
     pointer-events:none;
   }
   .leaflet-marker-icon{
-    transition:transform 0.8s ease-out !important;
+    transition:transform 2.5s linear !important;
   }
   .leaflet-control-attribution{display:none!important}
   .leaflet-control-zoom{display:none!important}
@@ -191,6 +191,15 @@ function makeCoinIcon(amount){
 window.addEventListener('message',function(e){
   try{
     var d = JSON.parse(e.data);
+
+    if(d.type==='movePlayer'){
+      // Lightweight direct marker move — no full rebuild needed
+      var sid = d.sid;
+      if(enemyMarkers[sid]){
+        enemyMarkers[sid].setLatLng([d.lat,d.lng]);
+      }
+      return;
+    }
 
     if(d.type==='setZoom'){
       zoomMode = d.mode;
@@ -609,9 +618,14 @@ export default function MapScreen() {
       await connectSocket();
       if (!alive) return;
 
-      // Subscribe to players:update events
+      // Subscribe to players:update events — pipe directly to WebView for smooth animation
       const unsub = onPlayersUpdate((data) => {
-        // Update that specific player's position in the list
+        // Move the marker directly in the WebView (lightweight, no full state rebuild)
+        const sid = data.sessionId || data.userId;
+        if (mapRef.current) {
+          mapRef.current({ type: 'movePlayer', sid, lat: data.lat, lng: data.lng });
+        }
+        // Also update state for consistency (batched, won't trigger per-event re-render)
         setNearbyPlayers((prev) => {
           const existing = prev.find(p => p.id === data.userId);
           if (existing) {
@@ -621,7 +635,6 @@ export default function MapScreen() {
                 : p,
             );
           }
-          // New player appeared — will be picked up on next REST poll
           return prev;
         });
       });

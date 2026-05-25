@@ -210,6 +210,7 @@ async function botTick(io: SocketIOServer) {
 
       const botUpdate = {
         userId: bot.user_id,
+        sessionId: bot.session_id,
         username: bot.username,
         lat: clamped.lat,
         lng: clamped.lng,

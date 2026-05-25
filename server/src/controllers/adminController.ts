@@ -268,8 +268,8 @@ export async function spawnBots(req: AuthRequest, res: Response): Promise<void> 
       const lat = Math.max(-90, Math.min(90, centerLat + latOffset));
       const lng = ((centerLng + lngOffset + 540) % 360) - 180;
 
-      // Only $1 (copper) and $2 (tin) bots - small amounts to control money on map
-      const tier = Math.random() < 0.5 ? COIN_TIERS[0] : COIN_TIERS[1];
+      // $1 (copper) bots only - minimal money on map
+      const tier = COIN_TIERS[0];
       const mapCoins = tier.dollar * 10;
       const botId = crypto.randomUUID();
       // Human-like usernames

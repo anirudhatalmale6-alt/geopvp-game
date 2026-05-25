@@ -420,13 +420,12 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
         // Bot has no shields left - player defeats it and takes all coins
         const botCoins = parseInt(defender.map_coins || '0', 10);
 
-        // Respawn bot with fresh coins and 3 shields at a new random location nearby
+        // Respawn bot with 10 coins ($1) and 3 shields at a new random location nearby
         const newLat = parseFloat(defender.latitude) + (Math.random() - 0.5) * 0.5;
         const newLng = parseFloat(defender.longitude) + (Math.random() - 0.5) * 0.5;
-        const botTierCoins = Math.random() < 0.5 ? 10 : 20;
         await q(
-          `UPDATE game_sessions SET map_coins = $1, shields_remaining = 3, latitude = $2, longitude = $3 WHERE id = $4`,
-          [botTierCoins, newLat, newLng, defender.id],
+          `UPDATE game_sessions SET map_coins = 10, shields_remaining = 3, latitude = $1, longitude = $2 WHERE id = $3`,
+          [newLat, newLng, defender.id],
         );
 
         await q(

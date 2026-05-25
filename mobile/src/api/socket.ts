@@ -77,6 +77,7 @@ export function emitLocation(lat: number, lng: number): void {
 
 export type PlayersUpdatePayload = {
   userId: string;
+  sessionId?: string;
   username: string;
   lat: number;
   lng: number;
