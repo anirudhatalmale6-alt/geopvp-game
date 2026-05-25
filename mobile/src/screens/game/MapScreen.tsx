@@ -11,6 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 import * as Location from 'expo-location';
 // @ts-ignore — optional native dep
 const WebView = Platform.OS !== 'web' ? require('react-native-webview').default : null;
@@ -68,6 +69,7 @@ function LeafletMap({ lat, lng, nearbyPlayers, session, coinDrops, commandRef }:
 }) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [ready, setReady] = useState(false);
+  const [webViewKey, setWebViewKey] = useState(0);
 
   const html = `
 <!DOCTYPE html>
@@ -447,11 +449,13 @@ window.addEventListener('message',function(e){
   if (!WebView) return null;
   return (
     <WebView
+      key={webViewKey}
       ref={webViewRef}
       originWhitelist={['*']}
       source={{ html }}
       style={{ flex: 1, backgroundColor: '#0a0e1a' }}
       onMessage={handleNativeMessage}
+      onContentProcessDidTerminate={() => setWebViewKey(k => k + 1)}
       javaScriptEnabled
       domStorageEnabled
       geolocationEnabled
