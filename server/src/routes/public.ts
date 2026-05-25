@@ -23,7 +23,6 @@ router.get('/players', async (_req: Request, res: Response) => {
     );
 
     const players = result.rows.map((row) => {
-      const isBot = row.email?.endsWith('@bot.local') || false;
       const tier = getTierByName(row.coin_tier);
       return {
         id: row.id,
@@ -31,7 +30,6 @@ router.get('/players', async (_req: Request, res: Response) => {
         latitude: parseFloat(row.latitude),
         longitude: parseFloat(row.longitude),
         mapCoins: parseInt(row.map_coins, 10),
-        isBot,
         tierColor: tier?.color || '#ffd700',
       };
     });

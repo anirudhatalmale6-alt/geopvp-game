@@ -363,15 +363,8 @@ footer p{color:var(--text2);font-size:13px}
       <div class="stat">
         <div class="stat-dot players"></div>
         <div>
-          <div class="stat-label">Players</div>
+          <div class="stat-label">Hunters</div>
           <div class="stat-value" id="player-count">0</div>
-        </div>
-      </div>
-      <div class="stat">
-        <div class="stat-dot bots"></div>
-        <div>
-          <div class="stat-label">Prowlers</div>
-          <div class="stat-value" id="bot-count">0</div>
         </div>
       </div>
       <div class="stat">
@@ -403,7 +396,7 @@ footer p{color:var(--text2);font-size:13px}
     <div class="how-card">
       <div class="how-num">03</div>
       <h3>Attack & Defend</h3>
-      <p>Get close to enemies and attack to steal their coins. Buy shields to protect yourself. Defeat bots to take all their coins.</p>
+      <p>Get close to enemies and attack to steal their coins. Buy shields to protect yourself from incoming attacks.</p>
     </div>
     <div class="how-card">
       <div class="how-num">04</div>
@@ -447,7 +440,7 @@ footer p{color:var(--text2);font-size:13px}
         <li>Shields cost $1 each and last 10 minutes</li>
         <li>Maximum 3 shields per 24 hours</li>
         <li>Blocks all incoming attacks while active</li>
-        <li>Attacking bots costs one shield charge</li>
+        <li>Required when attacking certain players</li>
         <li>Use them strategically at key moments</li>
       </ul>
     </div>
@@ -561,10 +554,6 @@ footer p{color:var(--text2);font-size:13px}
       <div class="faq-a"><p>No. You can only attack players who have equal or fewer coins than you. This means higher-tier players can't just steamroll lower-tier ones. You need to be strategic about who you target.</p></div>
     </div>
     <div class="faq-item">
-      <div class="faq-q"><h3>What are bots / AI Prowlers?</h3><span class="faq-arrow">&#9660;</span></div>
-      <div class="faq-a"><p>Bots are AI-controlled players that roam the map. They move around and can be attacked. Attacking a bot costs one of your shield charges.</p></div>
-    </div>
-    <div class="faq-item">
       <div class="faq-q"><h3>Can I play while driving?</h3><span class="faq-arrow">&#9660;</span></div>
       <div class="faq-a"><p>Absolutely not. The player agreement explicitly prohibits using CoinProwl while operating any vehicle. Always play safely on foot and be aware of your surroundings.</p></div>
     </div>
@@ -644,15 +633,14 @@ footer p{color:var(--text2);font-size:13px}
 
   const markers = new Map();
   let playerCount = 0;
-  let botCount = 0;
   let totalCoins = 0;
 
   function createIcon(isBot, tierColor){
-    const color = isBot ? '#ff8a00' : (tierColor || '#00e5ff');
+    const color = tierColor || '#00e5ff';
     const glow = color.replace('#','');
     const r=parseInt(glow.substr(0,2),16),g=parseInt(glow.substr(2,2),16),b=parseInt(glow.substr(4,2),16);
     const glowRgba = `rgba(${r},${g},${b},.6)`;
-    const size = isBot ? 12 : 16;
+    const size = 16;
     return L.divIcon({
       className:'',
       iconSize:[size,size],
@@ -668,14 +656,13 @@ footer p{color:var(--text2);font-size:13px}
   }
 
   function updateStats(players){
-    let pc=0,bc=0,tc=0;
+    let pc=0,tc=0;
     players.forEach(p=>{
-      if(p.isBot) bc++; else pc++;
+      pc++;
       tc += p.mapCoins || 0;
     });
-    playerCount=pc; botCount=bc; totalCoins=tc;
+    playerCount=pc; totalCoins=tc;
     document.getElementById('player-count').textContent = pc.toLocaleString();
-    document.getElementById('bot-count').textContent = bc.toLocaleString();
     document.getElementById('total-coins').textContent = tc.toLocaleString();
   }
 
@@ -693,7 +680,7 @@ footer p{color:var(--text2);font-size:13px}
             const m = L.marker([p.latitude,p.longitude],{
               icon:createIcon(p.isBot, p.tierColor),
             }).addTo(map);
-            const tierLabel = p.isBot ? '<i>AI Prowler</i>' : `<span style="color:${p.tierColor||'#ffd700'}">${p.tierColor ? '● ' : ''}Player</span>`;
+            const tierLabel = `<span style="color:${p.tierColor||'#ffd700'}">● Player</span>`;
             m.bindTooltip(
               `<b>${p.username}</b><br>${p.mapCoins} coins<br>${tierLabel}`,
               {className:'prowl-tooltip',direction:'top',offset:[0,-10]}

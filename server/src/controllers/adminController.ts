@@ -268,10 +268,18 @@ export async function spawnBots(req: AuthRequest, res: Response): Promise<void> 
       const lat = Math.max(-90, Math.min(90, centerLat + latOffset));
       const lng = ((centerLng + lngOffset + 540) % 360) - 180;
 
-      const tier = COIN_TIERS[4]; // bronze ($5)
-      const mapCoins = 50;
+      // Random tier for natural look
+      const tierIndex = Math.floor(Math.random() * COIN_TIERS.length);
+      const tier = COIN_TIERS[tierIndex];
+      const mapCoins = tier.dollar * 10;
       const botId = crypto.randomUUID();
-      const botName = `bot_${botId.slice(0, 6)}`;
+      // Human-like usernames
+      const prefixes = ['shadow','ghost','prowl','hunt','dash','blaze','storm','swift','wolf','hawk','viper','cobra','raven','fox','ace','nova','zen','bolt','fury','claw','fang','spike','jet','max','rex','kai','zane','luke','finn','cole','jake','mark','tony','nick','sam','alex','ryan','mike','dave','joe','ben','leo','eli','ian'];
+      const suffixes = ['_x','99','_','23','88','_pro','7','42','13','_z','11','_q','33','77','55','01','_k','_r','66','44'];
+      const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+      const suffix = suffixes[Math.floor(Math.random() * suffixes.length)];
+      const rnd = Math.floor(Math.random() * 900 + 100);
+      const botName = `${prefix}${suffix}${rnd}`;
 
       const userResult = await query(
         `INSERT INTO users (id, username, email, password_hash, is_verified)

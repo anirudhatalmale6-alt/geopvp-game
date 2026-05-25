@@ -4,7 +4,7 @@ import { config } from '../config/env';
 import { sendPushNotification } from '../utils/pushNotification';
 
 const MPH_TO_DEG_PER_SEC = 1 / (69 * 3600);
-const BOT_SPEED_MPH = 5;
+const BOT_SPEED_MPH = 10;
 const TICK_INTERVAL_MS = 3000;
 const BOT_ATTACK_RADIUS = 0.5;
 const MAX_BOT_HITS_PER_PLAYER_PER_WEEK = 2;
@@ -251,62 +251,66 @@ async function botAttack(
       if (tRes.rows.length === 0) return;
       const defender = tRes.rows[0];
 
-      const botHitsLeft = parseInt(bot.shields_remaining || '0', 10);
-      if (botHitsLeft <= 0) return;
+      // Bot attacks player: check if player has an active shield
+      const playerShieldActive = defender.shield_active_until
+        ? new Date(defender.shield_active_until) > new Date()
+        : false;
 
-      const playerShieldsPurchased = parseInt(defender.shields_purchased || '0', 10);
-      const shieldTaken = playerShieldsPurchased < 3;
-      if (shieldTaken) {
+      if (playerShieldActive) {
+        // Shield blocks the bot attack — clear the shield timer
         await q(
-          `UPDATE game_sessions SET shields_purchased = shields_purchased + 1, shield_active_until = NULL WHERE id = $1`,
+          `UPDATE game_sessions SET shield_active_until = NULL WHERE id = $1`,
           [target.session_id],
         );
       }
 
-      const newBotHits = botHitsLeft - 1;
-      if (newBotHits <= 0) {
+      if (!playerShieldActive) {
+        // No shield — bot eliminates the player
+        const playerCoins = parseInt(defender.map_coins || '0', 10);
         await q(
-          `UPDATE game_sessions SET shields_remaining = 0, is_active = false WHERE id = $1`,
-          [bot.session_id],
+          `UPDATE game_sessions SET map_coins = 0, is_active = false WHERE id = $1`,
+          [target.session_id],
         );
+        await q(
+          `INSERT INTO attacks (attacker_id, defender_id, attacker_coins, defender_coins, coins_stolen, defender_had_shield, success, latitude, longitude)
+           VALUES ($1, $2, $3, $4, $5, false, true, $6, $7)`,
+          [bot.user_id, defender.user_id, bot.map_coins, defender.map_coins, playerCoins, bot.latitude, bot.longitude],
+        );
+
+        io.to(`user:${defender.user_id}`).emit('eliminated', {
+          attackerName: bot.username,
+          coinsLost: playerCoins,
+        });
+
+        sendPushNotification(
+          defender.user_id,
+          'You were eliminated!',
+          `${bot.username} attacked you and took all ${playerCoins} coins!`,
+        ).catch(() => {});
+
+        console.log(`[BotAI] ${bot.username} ELIMINATED ${defender.username} (${playerCoins} coins taken)`);
       } else {
+        // Shield absorbed the hit
         await q(
-          `UPDATE game_sessions SET shields_remaining = $1 WHERE id = $2`,
-          [newBotHits, bot.session_id],
+          `INSERT INTO attacks (attacker_id, defender_id, attacker_coins, defender_coins, coins_stolen, defender_had_shield, success, latitude, longitude)
+           VALUES ($1, $2, $3, $4, 0, true, false, $5, $6)`,
+          [bot.user_id, defender.user_id, bot.map_coins, defender.map_coins, bot.latitude, bot.longitude],
         );
+
+        io.to(`user:${defender.user_id}`).emit('bot:hit-you', {
+          botName: bot.username,
+          shieldTaken: true,
+          message: `${bot.username} attacked you! Your shield blocked the attack.`,
+        });
+
+        sendPushNotification(
+          defender.user_id,
+          'Attack Blocked!',
+          `${bot.username} attacked you but your shield blocked it!`,
+        ).catch(() => {});
+
+        console.log(`[BotAI] ${bot.username} hit ${defender.username} — SHIELD BLOCKED`);
       }
-
-      await q(
-        `INSERT INTO attacks (attacker_id, defender_id, attacker_coins, defender_coins, coins_stolen, defender_had_shield, success, latitude, longitude)
-         VALUES ($1, $2, $3, $4, 0, false, true, $5, $6)`,
-        [bot.user_id, defender.user_id, bot.map_coins, defender.map_coins, bot.latitude, bot.longitude],
-      );
-
-      io.to('game').emit('bot:attacked', {
-        botUserId: bot.user_id,
-        botName: bot.username,
-        targetUserId: defender.user_id,
-        shieldTaken,
-        botHitsLeft: newBotHits,
-      });
-
-      const botMsg = shieldTaken
-        ? `${bot.username} attacked you! A shield was consumed.`
-        : `${bot.username} attacked you!`;
-
-      io.to(`user:${defender.user_id}`).emit('bot:hit-you', {
-        botName: bot.username,
-        shieldTaken,
-        message: botMsg,
-      });
-
-      sendPushNotification(
-        defender.user_id,
-        'Bot Attack!',
-        botMsg,
-      ).catch(() => {});
-
-      console.log(`[BotAI] ${bot.username} hit ${defender.username} (shield taken: ${shieldTaken}, bot hits left: ${newBotHits})`);
     });
   } catch (err) {
     console.error('[BotAI] attack error:', err);

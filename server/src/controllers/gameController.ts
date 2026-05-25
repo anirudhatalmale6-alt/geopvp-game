@@ -212,11 +212,7 @@ export async function getNearbyPlayers(req: AuthRequest, res: Response): Promise
     const players = result.rows
       .map((row) => {
         const dist = distanceMiles(myLat, myLng, row.latitude, row.longitude);
-        const isBot = row.email?.endsWith('@bot.local');
-        const hitsRemaining = isBot ? parseInt(row.shields_remaining || '0', 10) : undefined;
-        const shieldActive = isBot
-          ? false
-          : (row.shield_active_until ? new Date(row.shield_active_until) > new Date() : false);
+        const shieldActive = row.shield_active_until ? new Date(row.shield_active_until) > new Date() : false;
         return {
           sessionId: row.session_id,
           id: row.user_id,
@@ -225,8 +221,6 @@ export async function getNearbyPlayers(req: AuthRequest, res: Response): Promise
           longitude: row.longitude,
           mapCoins: row.map_coins,
           shieldActive,
-          isBot,
-          hitsRemaining,
           distanceMiles: Math.round(dist * 1000) / 1000,
         };
       })
@@ -287,11 +281,7 @@ export async function getAllPlayers(req: AuthRequest, res: Response): Promise<vo
     const totalOnMap = parseInt(countResult.rows[0]?.total || '0', 10);
 
     const players = result.rows.map((row) => {
-      const isBot = row.email?.endsWith('@bot.local');
-      const hitsRemaining = isBot ? parseInt(row.shields_remaining || '0', 10) : undefined;
-      const shieldActive = isBot
-        ? false
-        : (row.shield_active_until ? new Date(row.shield_active_until) > new Date() : false);
+      const shieldActive = row.shield_active_until ? new Date(row.shield_active_until) > new Date() : false;
       return {
         sessionId: row.session_id,
         id: row.user_id,
@@ -301,8 +291,6 @@ export async function getAllPlayers(req: AuthRequest, res: Response): Promise<vo
         mapCoins: parseInt(row.map_coins, 10),
         coinTier: row.coin_tier,
         shieldActive,
-        isBot,
-        hitsRemaining,
       };
     });
 
@@ -395,68 +383,44 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
       const isBot = defenderEmail?.endsWith('@bot.local');
 
       if (isBot) {
-        // Player attacks bot: costs 1 shield from their 3-shield pool
-        const shieldsPurchased = parseInt(attacker.shields_purchased || '0', 10);
+        // Player attacks bot: must have an active shield (bot will counter-attack instantly)
+        const playerShieldActive = attacker.shield_active_until
+          ? new Date(attacker.shield_active_until) > new Date()
+          : false;
 
-        if (shieldsPurchased >= 3) {
-          throw new Error('No shields left! You have used all 3 shields this session.');
+        if (!playerShieldActive) {
+          throw new Error('You need an active shield to attack! Bots counter-attack instantly.');
         }
 
-        // Consume 1 shield: increment shields_purchased (UI shows 3 - shields_purchased)
-        // Also clear any active shield timer
-        await q(
-          `UPDATE game_sessions SET shields_purchased = shields_purchased + 1, shield_active_until = NULL WHERE id = $1`,
-          [attacker.id],
-        );
-        const playerShieldsLeft = 3 - (shieldsPurchased + 1);
-
-        const hitsRemaining = parseInt(defender.shields_remaining || '0', 10);
-
-        if (hitsRemaining > 1) {
-          await q(
-            `UPDATE game_sessions SET shields_remaining = shields_remaining - 1 WHERE id = $1`,
-            [defender.id],
-          );
-          await q(
-            `INSERT INTO attacks (attacker_id, defender_id, attacker_coins, defender_coins, coins_stolen, defender_had_shield, success, latitude, longitude)
-             VALUES ($1, $2, $3, $4, 0, true, false, $5, $6)`,
-            [attacker.user_id, defender.user_id, attacker.map_coins, defender.map_coins, attacker.latitude, attacker.longitude],
-          );
-          const left = hitsRemaining - 1;
-          return {
-            success: false,
-            coinsStolen: 0,
-            defenderHadShield: true,
-            shieldsLeft: left,
-            shieldConsumed: true,
-            playerShieldsLeft,
-            message: `Hit! ${left} hit(s) remaining on this bot. Shield used - buy another to attack again.`,
-          };
-        }
-
-        // Final hit - bot is defeated, coins go straight to wallet
+        // Steal the bot's coins
         const botCoins = parseInt(defender.map_coins || '0', 10);
+
+        // Respawn bot with fresh coins at a new random location nearby
+        const newLat = parseFloat(defender.latitude) + (Math.random() - 0.5) * 0.5;
+        const newLng = parseFloat(defender.longitude) + (Math.random() - 0.5) * 0.5;
         await q(
-          `UPDATE game_sessions SET map_coins = 0, shields_remaining = 0, is_active = false WHERE id = $1`,
-          [defender.id],
+          `UPDATE game_sessions SET map_coins = 50, latitude = $1, longitude = $2 WHERE id = $3`,
+          [newLat, newLng, defender.id],
         );
+
         await q(
           `INSERT INTO attacks (attacker_id, defender_id, attacker_coins, defender_coins, coins_stolen, defender_had_shield, success, latitude, longitude)
            VALUES ($1, $2, $3, $4, $5, false, true, $6, $7)`,
           [attacker.user_id, defender.user_id, attacker.map_coins, defender.map_coins, botCoins, attacker.latitude, attacker.longitude],
         );
+
+        // Add coins to player's session
         await q(
-          `INSERT INTO transactions (user_id, type, amount, description, related_user_id)
-           VALUES ($1, 'attack_win', $2, $3, $4)`,
-          [attacker.user_id, botCoins * 10, `Defeated bot ${defender.defender_name} and took ${botCoins} coins!`, defender.user_id],
+          `UPDATE game_sessions SET map_coins = map_coins + $1 WHERE id = $2`,
+          [botCoins, attacker.id],
         );
+
         return {
           success: true,
           coinsStolen: botCoins,
           defenderHadShield: false,
-          shieldConsumed: true,
-          playerShieldsLeft,
-          message: `Bot defeated! You took all ${botCoins} coins!`,
+          shieldConsumed: false,
+          message: `You took ${botCoins} coins! Your shield protected you from the counter-attack.`,
         };
       }
 
