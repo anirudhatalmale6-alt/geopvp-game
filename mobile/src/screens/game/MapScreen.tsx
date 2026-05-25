@@ -119,20 +119,15 @@ function LeafletMap({ lat, lng, nearbyPlayers, session, coinDrops, commandRef }:
     box-shadow:0 0 16px #7c4dff;
   }
   .enemy-marker.bot{
+    width:12px;height:12px;
     background:#ff6d00;border-color:#ff6d00;
-    box-shadow:0 0 8px #ff6d00;
+    box-shadow:0 0 6px #ff6d00;
+    display:flex;align-items:center;justify-content:center;
+    font-size:7px;font-weight:900;color:#fff;
+    line-height:1;
   }
   .enemy-marker.bot:hover{
-    box-shadow:0 0 16px #ff6d00;
-  }
-  .bot-hits{
-    position:absolute;top:-8px;right:-8px;
-    background:#ff6d00;color:#fff;
-    font-size:9px;font-weight:900;
-    width:16px;height:16px;border-radius:50%;
-    display:flex;align-items:center;justify-content:center;
-    border:1px solid #0a0e1a;
-    box-shadow:0 0 4px #ff6d00;
+    box-shadow:0 0 12px #ff6d00;
   }
   .enemy-info{
     display:flex;flex-direction:column;align-items:center;
@@ -196,11 +191,14 @@ var enemyMarkers = {};
 var coinMarkers = {};
 
 function makeEnemyIcon(en){
-  var cls = en.isBot ? 'enemy-marker bot' : (en.shielded ? 'enemy-marker shielded' : 'enemy-marker');
-  var hitsBadge = en.isBot ? '<div class="bot-hits">'+en.hits+'</div>' : '';
-  var nameCls = en.isBot ? 'enemy-name bot-name' : 'enemy-name';
+  if(en.isBot){
+    var html = '<div class="enemy-marker bot" data-sid="'+en.sid+'">B</div>';
+    return L.divIcon({className:'',html:html,iconSize:[12,12],iconAnchor:[6,6]});
+  }
+  var cls = en.shielded ? 'enemy-marker shielded' : 'enemy-marker';
+  var nameCls = 'enemy-name';
   var tierDot = '<span class="enemy-tier" style="background:'+en.tierColor+';box-shadow:0 0 6px '+en.tierColor+'"></span>';
-  var html = '<div class="'+cls+'" data-sid="'+en.sid+'" style="position:relative">'+hitsBadge+'</div>'
+  var html = '<div class="'+cls+'" data-sid="'+en.sid+'"></div>'
     +'<div class="enemy-info">'
     +'<span class="'+nameCls+'">'+en.name+'</span>'
     +tierDot
