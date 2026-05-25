@@ -490,6 +490,7 @@ export default function MapScreen() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const coinPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const socketUnsubRef = useRef<(() => void) | null>(null);
+  const sessionEndedRef = useRef(false);
 
   useEffect(() => {
     if (Platform.OS === 'web' && MAP_CSS) {
@@ -648,10 +649,11 @@ export default function MapScreen() {
 
       // Listen for elimination (PvP attack killed your session)
       const unsubElim = onEliminated((data) => {
+        sessionEndedRef.current = true;
         Alert.alert(
           'YOU WERE ELIMINATED!',
           `${data.attackerName} attacked you and took all ${data.coinsLost} coins! Buy in again to keep playing.`,
-          [{ text: 'OK', onPress: () => { setSession(null); setShowBuyIn(true); } }],
+          [{ text: 'OK', onPress: () => { setSession(null); setShowBuyIn(true); sessionEndedRef.current = false; } }],
         );
       });
 
@@ -706,10 +708,12 @@ export default function MapScreen() {
         // Check if session is still active (detect elimination)
         const currentSession = await getActiveSession();
         if (!currentSession && session) {
+          if (sessionEndedRef.current) return;
+          sessionEndedRef.current = true;
           Alert.alert(
             'SESSION ENDED',
             'Your session has been terminated. You may have been attacked! Buy in again to keep playing.',
-            [{ text: 'OK', onPress: () => { setSession(null); setShowBuyIn(true); } }],
+            [{ text: 'OK', onPress: () => { setSession(null); setShowBuyIn(true); sessionEndedRef.current = false; } }],
           );
           return;
         }
