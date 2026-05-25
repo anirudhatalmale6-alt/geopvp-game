@@ -172,6 +172,96 @@ h1{
 .how-card h3{font-size:20px;font-weight:700;margin-bottom:8px;color:var(--text)}
 .how-card p{color:var(--text2);font-size:15px;line-height:1.6}
 
+/* ===== GAMEPLAY SECTION ===== */
+.gameplay-section{padding:80px 32px;background:var(--bg2);text-align:center}
+.gameplay-section h2{
+  font-family:var(--font-display);font-size:clamp(24px,4vw,36px);font-weight:700;
+  color:var(--text);letter-spacing:2px;margin-bottom:48px;
+}
+.gameplay-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+  gap:24px;max-width:1100px;margin:0 auto;text-align:left;
+}
+.gameplay-block{
+  background:var(--surface);border:1px solid rgba(255,255,255,.05);
+  border-radius:12px;padding:28px 24px;
+  transition:border-color .3s;
+}
+.gameplay-block:hover{border-color:rgba(240,185,11,.2)}
+.gameplay-block-icon{
+  width:40px;height:40px;border-radius:10px;display:flex;
+  align-items:center;justify-content:center;margin-bottom:14px;
+  font-size:20px;
+}
+.gameplay-block h3{
+  font-family:var(--font-display);font-size:16px;font-weight:700;
+  color:var(--gold);letter-spacing:1px;margin-bottom:10px;
+}
+.gameplay-block p{color:var(--text2);font-size:15px;line-height:1.7}
+.gameplay-block ul{list-style:none;padding:0;margin:0}
+.gameplay-block li{
+  color:var(--text2);font-size:14px;line-height:1.8;
+  padding-left:18px;position:relative;
+}
+.gameplay-block li::before{
+  content:'';position:absolute;left:0;top:10px;
+  width:6px;height:6px;border-radius:50%;background:var(--gold);
+}
+
+/* ===== TIERS SECTION ===== */
+.tiers-section{padding:60px 32px;background:var(--bg);text-align:center}
+.tiers-section h2{
+  font-family:var(--font-display);font-size:clamp(24px,4vw,36px);font-weight:700;
+  color:var(--text);letter-spacing:2px;margin-bottom:12px;
+}
+.tiers-section .tiers-sub{color:var(--text2);font-size:16px;margin-bottom:36px}
+.tiers-grid{
+  display:flex;flex-wrap:wrap;gap:10px;max-width:900px;
+  margin:0 auto;justify-content:center;
+}
+.tier-chip{
+  display:flex;align-items:center;gap:8px;
+  background:var(--surface);border:1px solid rgba(255,255,255,.06);
+  border-radius:8px;padding:8px 14px;
+  transition:border-color .3s,transform .2s;
+}
+.tier-chip:hover{border-color:rgba(240,185,11,.2);transform:translateY(-2px)}
+.tier-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.tier-name{font-size:13px;font-weight:600;color:var(--text);text-transform:uppercase;letter-spacing:.5px}
+.tier-price{font-size:13px;font-weight:700;color:var(--gold);font-family:var(--font-display)}
+
+/* ===== FAQ SECTION ===== */
+.faq-section{padding:80px 32px;background:var(--bg2);text-align:center}
+.faq-section h2{
+  font-family:var(--font-display);font-size:clamp(24px,4vw,36px);font-weight:700;
+  color:var(--text);letter-spacing:2px;margin-bottom:48px;
+}
+.faq-list{max-width:800px;margin:0 auto;text-align:left}
+.faq-item{
+  border-bottom:1px solid rgba(255,255,255,.06);
+}
+.faq-q{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:20px 0;cursor:pointer;gap:16px;
+  transition:color .2s;
+}
+.faq-q:hover{color:var(--gold)}
+.faq-q h3{
+  font-size:16px;font-weight:600;color:var(--text);margin:0;
+  flex:1;
+}
+.faq-q:hover h3{color:var(--gold)}
+.faq-arrow{
+  font-size:20px;color:var(--gold);transition:transform .3s;
+  flex-shrink:0;font-family:var(--font-display);
+}
+.faq-item.open .faq-arrow{transform:rotate(180deg)}
+.faq-a{
+  max-height:0;overflow:hidden;transition:max-height .3s ease,padding .3s;
+}
+.faq-item.open .faq-a{max-height:300px;padding-bottom:20px}
+.faq-a p{color:var(--text2);font-size:15px;line-height:1.7}
+
 /* ===== FOOTER ===== */
 footer{
   border-top:1px solid rgba(255,255,255,.06);padding:40px 32px;
@@ -230,6 +320,8 @@ footer p{color:var(--text2);font-size:13px}
   <nav>
     <a href="#livemap-section">Live Map</a>
     <a href="#how">How It Works</a>
+    <a href="#gameplay">Gameplay</a>
+    <a href="#faq">FAQ</a>
     <a href="#livemap-section" class="nav-cta">Watch Live</a>
   </nav>
 </header>
@@ -317,6 +409,183 @@ footer p{color:var(--text2);font-size:13px}
       <div class="how-num">04</div>
       <h3>Cash Out</h3>
       <p>When you're ready, cash out your coins for real money. The more you prowl and steal, the bigger your payout.</p>
+    </div>
+  </div>
+</section>
+
+<!-- GAMEPLAY BREAKDOWN -->
+<section class="gameplay-section" id="gameplay">
+  <h2>GAMEPLAY BREAKDOWN</h2>
+  <div class="gameplay-grid">
+    <div class="gameplay-block">
+      <div class="gameplay-block-icon" style="background:var(--gold-dim)">&#9889;</div>
+      <h3>BUYING IN</h3>
+      <ul>
+        <li>Tap "Start Hunting" on the map screen</li>
+        <li>Choose from 25 tiers ($1 to $25)</li>
+        <li>Each dollar equals 10 coins</li>
+        <li>Your tier color is visible to other players</li>
+        <li>Once you buy in, the hunt begins</li>
+      </ul>
+    </div>
+    <div class="gameplay-block">
+      <div class="gameplay-block-icon" style="background:var(--cyan-dim)">&#127919;</div>
+      <h3>ATTACKING</h3>
+      <ul>
+        <li>Get within 0.25 miles of an enemy player</li>
+        <li>Attack panel appears automatically</li>
+        <li>Cycle between multiple targets in range</li>
+        <li>Steal all their coins on a successful hit</li>
+        <li>Shielded players block your attack</li>
+      </ul>
+    </div>
+    <div class="gameplay-block">
+      <div class="gameplay-block-icon" style="background:linear-gradient(135deg,rgba(0,229,255,.12),rgba(240,185,11,.12))">&#128737;</div>
+      <h3>SHIELDS</h3>
+      <ul>
+        <li>Shields cost $1 each and last 10 minutes</li>
+        <li>Maximum 3 shields per 24 hours</li>
+        <li>Blocks all incoming attacks while active</li>
+        <li>Attacking bots costs one shield charge</li>
+        <li>Use them strategically at key moments</li>
+      </ul>
+    </div>
+    <div class="gameplay-block">
+      <div class="gameplay-block-icon" style="background:rgba(255,59,92,.12)">&#128176;</div>
+      <h3>COIN DROPS</h3>
+      <ul>
+        <li>Bonus coins appear across the map</li>
+        <li>Walk near a drop and tap to collect</li>
+        <li>Drops refresh periodically</li>
+        <li>Earn extra coins without attacking</li>
+        <li>First come, first served</li>
+      </ul>
+    </div>
+    <div class="gameplay-block">
+      <div class="gameplay-block-icon" style="background:rgba(255,138,0,.12)">&#128128;</div>
+      <h3>GETTING ELIMINATED</h3>
+      <ul>
+        <li>Attacked without a shield? You're eliminated</li>
+        <li>You lose all coins from that session</li>
+        <li>The attacker takes everything</li>
+        <li>Buy in again at any tier to keep playing</li>
+        <li>New players get brief spawn protection</li>
+      </ul>
+    </div>
+    <div class="gameplay-block">
+      <div class="gameplay-block-icon" style="background:rgba(240,185,11,.12)">&#128179;</div>
+      <h3>CASHING OUT</h3>
+      <ul>
+        <li>Your wallet tracks all transactions</li>
+        <li>Buy-ins, shield purchases, winnings, drops</li>
+        <li>Cash out your earnings for real money</li>
+        <li>The more you prowl, the bigger the payout</li>
+        <li>View stats on your profile</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- TIERS -->
+<section class="tiers-section" id="tiers">
+  <h2>25 BATTLE TIERS</h2>
+  <p class="tiers-sub">Choose your stake. Higher tiers mean more coins in play and bigger rewards.</p>
+  <div class="tiers-grid">
+    <div class="tier-chip"><div class="tier-dot" style="background:#b87333"></div><span class="tier-name">Copper</span><span class="tier-price">$1</span></div>
+    <div class="tier-chip"><div class="tier-dot" style="background:#cd7f32"></div><span class="tier-name">Bronze</span><span class="tier-price">$2</span></div>
+    <div class="tier-chip"><div class="tier-dot" style="background:#a8a8a8"></div><span class="tier-name">Iron</span><span class="tier-price">$3</span></div>
+    <div class="tier-chip"><div class="tier-dot" style="background:#71797e"></div><span class="tier-name">Steel</span><span class="tier-price">$4</span></div>
+    <div class="tier-chip"><div class="tier-dot" style="background:#c0c0c0"></div><span class="tier-name">Silver</span><span class="tier-price">$5</span></div>
+    <div class="tier-chip"><div class="tier-dot" style="background:#ffd700"></div><span class="tier-name">Gold</span><span class="tier-price">$6</span></div>
+    <div class="tier-chip"><div class="tier-dot" style="background:#e5e4e2"></div><span class="tier-name">Platinum</span><span class="tier-price">$7</span></div>
+    <div class="tier-chip"><div class="tier-dot" style="background:#878681"></div><span class="tier-name">Titanium</span><span class="tier-price">$8</span></div>
+    <div class="tier-chip"><div class="tier-dot" style="background:#ced0ce"></div><span class="tier-name">Palladium</span><span class="tier-price">$9</span></div>
+    <div class="tier-chip"><div class="tier-dot" style="background:#d4d4d4"></div><span class="tier-name">Rhodium</span><span class="tier-price">$10</span></div>
+    <div class="tier-chip"><div class="tier-dot" style="background:#ffcc00"></div><span class="tier-name">Topaz</span><span class="tier-price">$11</span></div>
+    <div class="tier-chip"><div class="tier-dot" style="background:#c41e3a"></div><span class="tier-name">Garnet</span><span class="tier-price">$12</span></div>
+    <div class="tier-chip"><div class="tier-dot" style="background:#9966cc"></div><span class="tier-name">Amethyst</span><span class="tier-price">$13</span></div>
+    <div class="tier-chip"><div class="tier-dot" style="background:#e4d00a"></div><span class="tier-name">Citrine</span><span class="tier-price">$14</span></div>
+    <div class="tier-chip"><div class="tier-dot" style="background:#b4c424"></div><span class="tier-name">Peridot</span><span class="tier-price">$15</span></div>
+    <div class="tier-chip"><div class="tier-dot" style="background:#7fffd4"></div><span class="tier-name">Aquamarine</span><span class="tier-price">$16</span></div>
+    <div class="tier-chip"><div class="tier-dot" style="background:#50c878"></div><span class="tier-name">Emerald</span><span class="tier-price">$17</span></div>
+    <div class="tier-chip"><div class="tier-dot" style="background:#fdeef4"></div><span class="tier-name">Pearl</span><span class="tier-price">$18</span></div>
+    <div class="tier-chip"><div class="tier-dot" style="background:#0f52ba"></div><span class="tier-name">Sapphire</span><span class="tier-price">$19</span></div>
+    <div class="tier-chip"><div class="tier-dot" style="background:#0db4a7"></div><span class="tier-name">Alexandrite</span><span class="tier-price">$20</span></div>
+    <div class="tier-chip"><div class="tier-dot" style="background:#e0115f"></div><span class="tier-name">Ruby</span><span class="tier-price">$21</span></div>
+    <div class="tier-chip"><div class="tier-dot" style="background:#3d0c02"></div><span class="tier-name">Black Opal</span><span class="tier-price">$22</span></div>
+    <div class="tier-chip"><div class="tier-dot" style="background:#4169e1"></div><span class="tier-name">Tanzanite</span><span class="tier-price">$23</span></div>
+    <div class="tier-chip"><div class="tier-dot" style="background:#e30022"></div><span class="tier-name">Red Beryl</span><span class="tier-price">$24</span></div>
+    <div class="tier-chip"><div class="tier-dot" style="background:#b9f2ff;box-shadow:0 0 8px rgba(185,242,255,.5)"></div><span class="tier-name">Diamond</span><span class="tier-price">$25</span></div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="faq-section" id="faq">
+  <h2>FREQUENTLY ASKED QUESTIONS</h2>
+  <div class="faq-list">
+    <div class="faq-item">
+      <div class="faq-q"><h3>Is CoinProwl free to download?</h3><span class="faq-arrow">&#9660;</span></div>
+      <div class="faq-a"><p>Yes. The app is free to download. You only spend money when you choose to buy in to a game session.</p></div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q"><h3>How old do I have to be to play?</h3><span class="faq-arrow">&#9660;</span></div>
+      <div class="faq-a"><p>You must be at least 18 years old to play CoinProwl.</p></div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q"><h3>Can I play from any country?</h3><span class="faq-arrow">&#9660;</span></div>
+      <div class="faq-a"><p>Yes! CoinProwl works worldwide. You are responsible for following the laws of whatever country, state, or city you are in while playing.</p></div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q"><h3>How do I make money?</h3><span class="faq-arrow">&#9660;</span></div>
+      <div class="faq-a"><p>Attack other players to steal their coins, collect coin drops scattered across the map, and cash out your balance for real money.</p></div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q"><h3>Can I lose money?</h3><span class="faq-arrow">&#9660;</span></div>
+      <div class="faq-a"><p>Yes. If another player attacks you and you don't have a shield, you lose all your coins from that session. Only buy in with what you're comfortable losing.</p></div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q"><h3>How do shields work?</h3><span class="faq-arrow">&#9660;</span></div>
+      <div class="faq-a"><p>Shields cost $1 each and protect you from attacks for 10 minutes. You can buy up to 3 shields per 24-hour period. When active, any incoming attack is blocked.</p></div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q"><h3>What happens if I get attacked?</h3><span class="faq-arrow">&#9660;</span></div>
+      <div class="faq-a"><p>If you have an active shield, the attack is blocked. If you don't, you're eliminated and the attacker takes all your coins. You can buy in again to keep playing.</p></div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q"><h3>How close do I need to be to attack someone?</h3><span class="faq-arrow">&#9660;</span></div>
+      <div class="faq-a"><p>You need to be within 0.25 miles (about 400 meters) of another player to attack them.</p></div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q"><h3>What are bots / AI Prowlers?</h3><span class="faq-arrow">&#9660;</span></div>
+      <div class="faq-a"><p>Bots are AI-controlled players that roam the map. They move around and can be attacked. Attacking a bot costs one of your shield charges.</p></div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q"><h3>Can I play while driving?</h3><span class="faq-arrow">&#9660;</span></div>
+      <div class="faq-a"><p>Absolutely not. The player agreement explicitly prohibits using CoinProwl while operating any vehicle. Always play safely on foot and be aware of your surroundings.</p></div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q"><h3>What are the different tiers?</h3><span class="faq-arrow">&#9660;</span></div>
+      <div class="faq-a"><p>There are 25 tiers from $1 (Copper) to $25 (Diamond). Higher tiers mean more coins in play. Each tier has a unique name and color visible to other players on the map.</p></div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q"><h3>Is my location shared with other players?</h3><span class="faq-arrow">&#9660;</span></div>
+      <div class="faq-a"><p>Other players can see your approximate position on the map while you have an active session. Your exact address is never shared. When you don't have an active session, you're not visible on the map.</p></div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q"><h3>Can I play indoors?</h3><span class="faq-arrow">&#9660;</span></div>
+      <div class="faq-a"><p>Yes, as long as your phone has GPS signal. The game works anywhere your phone can get a location fix.</p></div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q"><h3>What if the app crashes or my phone dies during a session?</h3><span class="faq-arrow">&#9660;</span></div>
+      <div class="faq-a"><p>Your session stays active on the server. When you reopen the app, you'll reconnect to your existing session. However, you're still visible on the map and can be attacked while disconnected.</p></div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q"><h3>How do I cash out?</h3><span class="faq-arrow">&#9660;</span></div>
+      <div class="faq-a"><p>The cash-out feature processes your earnings directly to your wallet. Your balance is tracked in real time within the app.</p></div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q"><h3>How do I report a problem or another player?</h3><span class="faq-arrow">&#9660;</span></div>
+      <div class="faq-a"><p>Contact us through the app or reach out to our support team. We take all reports seriously to keep the game fair and safe.</p></div>
     </div>
   </div>
 </section>
@@ -466,6 +735,18 @@ footer p{color:var(--text2);font-size:13px}
   `;
   document.head.appendChild(style);
 })();
+</script>
+
+<!-- FAQ ACCORDION -->
+<script>
+document.querySelectorAll('.faq-q').forEach(function(q){
+  q.addEventListener('click',function(){
+    var item = q.parentElement;
+    var wasOpen = item.classList.contains('open');
+    document.querySelectorAll('.faq-item.open').forEach(function(i){i.classList.remove('open')});
+    if(!wasOpen) item.classList.add('open');
+  });
+});
 </script>
 </body>
 </html>
