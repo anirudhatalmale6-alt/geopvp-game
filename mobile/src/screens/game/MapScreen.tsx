@@ -344,7 +344,7 @@ window.addEventListener('message',function(e){
       return { ...p, _dist: dLat * dLat + dLng * dLng };
     });
     withDist.sort((a, b) => a._dist - b._dist);
-    const closest = withDist.slice(0, 100);
+    const closest = withDist.slice(0, 500);
     const enemies = closest.map(p => ({
       name: p.username.substring(0, 8),
       lat: p.latitude,
