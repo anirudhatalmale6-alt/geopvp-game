@@ -13,11 +13,11 @@ const MIN_BOT_SPACING_DEGS = MIN_BOT_SPACING_MILES / 69;
 const LEASH_RADIUS_DEGS = 1.5; // ~100 miles - bots stay within this radius of home
 const MAX_CHASE_RADIUS_MILES = 30;
 
-// Continental US bounds
-const US_LAT_MIN = 25;
-const US_LAT_MAX = 48;
-const US_LNG_MIN = -125;
-const US_LNG_MAX = -67;
+// Continental US bounds (with padding so bots don't pile up on borders)
+const US_LAT_MIN = 26;
+const US_LAT_MAX = 47;
+const US_LNG_MIN = -123;
+const US_LNG_MAX = -69;
 
 let tickHandle: ReturnType<typeof setInterval> | null = null;
 
@@ -39,16 +39,23 @@ function getWanderAngle(botId: string): number {
     botWanderAngles.set(botId, Math.random() * 2 * Math.PI);
   }
   let angle = botWanderAngles.get(botId)!;
-  angle += (Math.random() - 0.5) * 0.2;
+  // Larger random turns for more organic movement
+  angle += (Math.random() - 0.5) * 0.6;
+  // Occasional big direction change
+  if (Math.random() < 0.05) angle += (Math.random() - 0.5) * Math.PI;
   botWanderAngles.set(botId, angle);
   return angle;
 }
 
 function clampToUS(lat: number, lng: number): { lat: number; lng: number } {
-  return {
-    lat: Math.max(US_LAT_MIN, Math.min(US_LAT_MAX, lat)),
-    lng: Math.max(US_LNG_MIN, Math.min(US_LNG_MAX, lng)),
-  };
+  // Add small random offset when hitting boundary to prevent alignment
+  let newLat = lat;
+  let newLng = lng;
+  if (newLat <= US_LAT_MIN) newLat = US_LAT_MIN + Math.random() * 0.5;
+  if (newLat >= US_LAT_MAX) newLat = US_LAT_MAX - Math.random() * 0.5;
+  if (newLng <= US_LNG_MIN) newLng = US_LNG_MIN + Math.random() * 0.5;
+  if (newLng >= US_LNG_MAX) newLng = US_LNG_MAX - Math.random() * 0.5;
+  return { lat: newLat, lng: newLng };
 }
 
 async function botTick(io: SocketIOServer) {
