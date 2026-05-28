@@ -28,7 +28,7 @@ import {
   NearbyPlayer,
   CoinDrop,
 } from '../../api/game';
-import { connectSocket, disconnectSocket, emitLocation, onPlayersUpdate, onEliminated, onBotHit } from '../../api/socket';
+import { connectSocket, disconnectSocket, emitLocation, onPlayersUpdate, onBatchUpdate, onEliminated, onBotHit } from '../../api/socket';
 import BuyInModal from './BuyInModal';
 import { startBackgroundLocation, stopBackgroundLocation } from '../../services/backgroundLocation';
 import { registerForPushNotifications } from '../../services/notifications';
@@ -640,6 +640,16 @@ export default function MapScreen() {
       });
       socketUnsubRef.current = unsub;
 
+      // Subscribe to batch updates from bot AI (one event with all bot positions)
+      const unsubBatch = onBatchUpdate((bots) => {
+        if (mapRef.current) {
+          for (const b of bots) {
+            const sid = b.sessionId || b.userId;
+            mapRef.current({ type: 'movePlayer', sid, lat: b.lat, lng: b.lng });
+          }
+        }
+      });
+
       // Listen for elimination (PvP attack killed your session)
       const unsubElim = onEliminated((data) => {
         sessionEndedRef.current = true;
@@ -660,6 +670,7 @@ export default function MapScreen() {
       return () => {
         unsubElim();
         unsubBot();
+        unsubBatch();
       };
     })();
 

@@ -6,7 +6,7 @@ import { sendPushNotification } from '../utils/pushNotification';
 const MPH_TO_DEG_PER_SEC = 1 / (69 * 3600);
 const BOT_SPEED_MPH = 10;
 const BOT_CHASE_SPEED_MPH = 18;
-const TICK_INTERVAL_MS = 3000;
+const TICK_INTERVAL_MS = 5000;
 const BOT_ATTACK_RADIUS = 0.5;
 const MAX_BOT_HITS_PER_PLAYER_PER_WEEK = 5;
 const MIN_BOT_SPACING_MILES = 10;
@@ -21,6 +21,15 @@ const US_LNG_MIN = -123;
 const US_LNG_MAX = -69;
 
 let tickHandle: ReturnType<typeof setInterval> | null = null;
+
+const BOT_VISUAL_TIERS = ['copper','silver','gold','emerald','ruby','sapphire','amethyst','topaz','aquamarine','pearl'];
+const botVisualTiers = new Map<string, string>();
+function getBotVisualTier(botId: string): string {
+  if (!botVisualTiers.has(botId)) {
+    botVisualTiers.set(botId, BOT_VISUAL_TIERS[Math.floor(Math.random() * BOT_VISUAL_TIERS.length)]);
+  }
+  return botVisualTiers.get(botId)!;
+}
 
 const botWanderAngles = new Map<string, number>();
 const botHomePositions = new Map<string, { lat: number; lng: number }>();
@@ -70,7 +79,7 @@ async function botTick(io: SocketIOServer) {
          AND gs.latitude IS NOT NULL
          AND u.email NOT LIKE '%@bot.local'
          AND gs.last_location_update > now() - interval '24 hours'
-         AND (gs.spawned_at IS NULL OR gs.spawned_at < now() - interval '2 minutes')`,
+         AND (gs.spawned_at IS NULL OR gs.spawned_at < now() - interval '5 minutes')`,
     );
     const realPlayers = realPlayersRes.rows;
 
@@ -174,50 +183,18 @@ async function botTick(io: SocketIOServer) {
         }
       }
 
-      // Bot-to-bot repulsion
-      let repelLat = 0;
-      let repelLng = 0;
-      for (const other of allBots) {
-        if (other.user_id === bot.user_id) continue;
-        const oPos = updatedPositions.get(other.user_id) || { lat: other.latitude, lng: other.longitude };
-        const dLat = bot.latitude - oPos.lat;
-        const dLng = bot.longitude - oPos.lng;
-        const degDist = Math.sqrt(dLat * dLat + dLng * dLng);
-        if (degDist < MIN_BOT_SPACING_DEGS && degDist > 0.0001) {
-          const strength = (MIN_BOT_SPACING_DEGS - degDist) / MIN_BOT_SPACING_DEGS;
-          repelLat += (dLat / degDist) * moveDegs * strength * 2;
-          repelLng += (dLng / degDist) * moveDegs * strength * 2;
-        }
-      }
-
       const clamped = clampToUS(
-        bot.latitude + moveLat + repelLat,
-        bot.longitude + moveLng + repelLng,
+        bot.latitude + moveLat,
+        bot.longitude + moveLng,
       );
 
       // If hitting US boundary, flip wander angle
-      if (clamped.lat !== bot.latitude + moveLat + repelLat ||
-          clamped.lng !== bot.longitude + moveLng + repelLng) {
+      if (clamped.lat !== bot.latitude + moveLat ||
+          clamped.lng !== bot.longitude + moveLng) {
         botWanderAngles.set(bot.user_id, Math.random() * 2 * Math.PI);
       }
 
       updatedPositions.set(bot.user_id, clamped);
-
-      await query(
-        `UPDATE game_sessions SET latitude = $1, longitude = $2, last_location_update = now() WHERE id = $3`,
-        [clamped.lat, clamped.lng, bot.session_id],
-      );
-
-      const botUpdate = {
-        userId: bot.user_id,
-        sessionId: bot.session_id,
-        username: bot.username,
-        lat: clamped.lat,
-        lng: clamped.lng,
-        ts: Date.now(),
-      };
-      io.to('game').emit('players:update', botUpdate);
-      io.of('/spectator').emit('players:update', botUpdate);
 
       if (nearest) {
         const currentDist = distanceMiles(clamped.lat, clamped.lng, nearest.latitude, nearest.longitude);
@@ -234,6 +211,50 @@ async function botTick(io: SocketIOServer) {
           }
         }
       }
+    }
+
+    // Batch DB update: one query for all bot positions
+    if (updatedPositions.size > 0) {
+      const values: string[] = [];
+      const params: any[] = [];
+      let idx = 1;
+      for (const bot of allBots) {
+        const pos = updatedPositions.get(bot.user_id);
+        if (!pos) continue;
+        values.push(`($${idx}::text, $${idx + 1}::float, $${idx + 2}::float)`);
+        params.push(bot.session_id, pos.lat, pos.lng);
+        idx += 3;
+      }
+      if (values.length > 0) {
+        await query(
+          `UPDATE game_sessions AS gs SET
+            latitude = v.lat, longitude = v.lng, last_location_update = now()
+          FROM (VALUES ${values.join(', ')}) AS v(id, lat, lng)
+          WHERE gs.id = v.id`,
+          params,
+        );
+      }
+    }
+
+    // Batch socket emission: one event with all bot positions
+    const botUpdates: Array<{userId: string; sessionId: string; username: string; lat: number; lng: number; ts: number; coinTier: string}> = [];
+    const now = Date.now();
+    for (const bot of allBots) {
+      const pos = updatedPositions.get(bot.user_id);
+      if (!pos) continue;
+      botUpdates.push({
+        userId: bot.user_id,
+        sessionId: bot.session_id,
+        username: bot.username,
+        lat: pos.lat,
+        lng: pos.lng,
+        ts: now,
+        coinTier: getBotVisualTier(bot.user_id),
+      });
+    }
+    if (botUpdates.length > 0) {
+      io.to('game').emit('players:batch-update', botUpdates);
+      io.of('/spectator').emit('players:batch-update', botUpdates);
     }
   } catch (err) {
     console.error('[BotAI] tick error:', err);
@@ -281,7 +302,7 @@ async function botAttack(
           [bot.user_id, defender.user_id, bot.map_coins, defender.map_coins, playerCoins, bot.latitude, bot.longitude],
         );
 
-        io.to(`user:${defender.user_id}`).emit('eliminated', {
+        io.to(`user:${defender.user_id}`).emit('session:eliminated', {
           attackerName: bot.username,
           coinsLost: playerCoins,
         });

@@ -45,8 +45,9 @@ export async function connectSocket(): Promise<void> {
     auth: { token },
     transports: ['websocket', 'polling'],
     reconnection: true,
-    reconnectionAttempts: 5,
+    reconnectionAttempts: Infinity,
     reconnectionDelay: 2000,
+    reconnectionDelayMax: 10000,
   });
 
   _socket.on('connect', () => {
@@ -87,9 +88,16 @@ export type PlayersUpdatePayload = {
 export function onPlayersUpdate(callback: (data: PlayersUpdatePayload) => void): () => void {
   if (!_socket) return () => {};
   _socket.on('players:update', callback);
-  // Return an unsubscribe function
   return () => {
     _socket?.off('players:update', callback);
+  };
+}
+
+export function onBatchUpdate(callback: (data: PlayersUpdatePayload[]) => void): () => void {
+  if (!_socket) return () => {};
+  _socket.on('players:batch-update', callback);
+  return () => {
+    _socket?.off('players:batch-update', callback);
   };
 }
 

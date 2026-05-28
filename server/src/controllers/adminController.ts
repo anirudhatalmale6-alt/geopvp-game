@@ -268,8 +268,10 @@ export async function spawnBots(req: AuthRequest, res: Response): Promise<void> 
       const lat = Math.max(-90, Math.min(90, centerLat + latOffset));
       const lng = ((centerLng + lngOffset + 540) % 360) - 180;
 
-      // $1 (copper) bots only - minimal money on map
+      // $1 bots with random visual tier colors for variety
       const tier = COIN_TIERS[0];
+      const visualTiers = ['copper','silver','gold','emerald','ruby','sapphire','amethyst','topaz','aquamarine','pearl'];
+      const randomVisualTier = visualTiers[Math.floor(Math.random() * visualTiers.length)];
       const mapCoins = tier.dollar * 10;
       const botId = crypto.randomUUID();
       // Human-like usernames
@@ -294,7 +296,7 @@ export async function spawnBots(req: AuthRequest, res: Response): Promise<void> 
       await query(
         `INSERT INTO game_sessions (user_id, buyin_amount, coin_tier, map_coins, latitude, longitude, last_location_update, is_active, shields_purchased, shields_remaining)
          VALUES ($1, $2, $3, $4, $5, $6, now(), true, 0, 3)`,
-        [userResult.rows[0].id, tier.dollar * 100, tier.name, mapCoins, lat, lng],
+        [userResult.rows[0].id, tier.dollar * 100, randomVisualTier, mapCoins, lat, lng],
       );
 
       created++;

@@ -423,9 +423,11 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
         // Respawn bot with 10 coins ($1) and 3 shields at a new random location nearby
         const newLat = parseFloat(defender.latitude) + (Math.random() - 0.5) * 0.5;
         const newLng = parseFloat(defender.longitude) + (Math.random() - 0.5) * 0.5;
+        const visualTiers = ['copper','silver','gold','emerald','ruby','sapphire','amethyst','topaz','aquamarine','pearl'];
+        const randomTier = visualTiers[Math.floor(Math.random() * visualTiers.length)];
         await q(
-          `UPDATE game_sessions SET map_coins = 10, shields_remaining = 3, latitude = $1, longitude = $2 WHERE id = $3`,
-          [newLat, newLng, defender.id],
+          `UPDATE game_sessions SET map_coins = 10, shields_remaining = 3, coin_tier = $1, latitude = $2, longitude = $3 WHERE id = $4`,
+          [randomTier, newLat, newLng, defender.id],
         );
 
         await q(
