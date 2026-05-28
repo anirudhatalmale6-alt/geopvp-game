@@ -221,7 +221,7 @@ async function botTick(io: SocketIOServer) {
       for (const bot of allBots) {
         const pos = updatedPositions.get(bot.user_id);
         if (!pos) continue;
-        values.push(`($${idx}::text, $${idx + 1}::float, $${idx + 2}::float)`);
+        values.push(`($${idx}::uuid, $${idx + 1}::float, $${idx + 2}::float)`);
         params.push(bot.session_id, pos.lat, pos.lng);
         idx += 3;
       }
