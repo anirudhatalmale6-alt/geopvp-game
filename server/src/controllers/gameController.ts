@@ -7,7 +7,7 @@ import { distanceMiles } from '../utils/geo';
 import { getCoinTier } from '../utils/coins';
 import { getIO } from '../socket/ioInstance';
 import { sendPushNotification } from '../utils/pushNotification';
-import { checkLocationBlocked, getBlockedStates } from '../utils/geofence';
+import { checkLocationBlocked, isBlockedState, getBlockedStates } from '../utils/geofence';
 
 // ---------------------------------------------------------------------------
 // Schemas
