@@ -64,33 +64,16 @@ jobs:
       - name: Update build.gradle signing config
         working-directory: mobile/android/app
         run: |
-          python3 << 'PYEOF'
-          import re
-
+          python3 -c "
           with open('build.gradle', 'r') as f:
               content = f.read()
-
-          signing_config = '''
-    signingConfigs {
-        release {
-            storeFile file("coinprowl-release.keystore")
-            storePassword findProperty("COINPROWL_UPLOAD_STORE_PASSWORD") ?: ""
-            keyAlias findProperty("COINPROWL_UPLOAD_KEY_ALIAS") ?: ""
-            keyPassword findProperty("COINPROWL_UPLOAD_KEY_PASSWORD") ?: ""
-        }
-    }
-'''
-          # Insert signingConfigs right after "android {"
-          content = content.replace('android {', 'android {' + signing_config, 1)
-
-          # Replace signingConfig signingConfigs.debug with release in buildTypes
+          sc = '\n    signingConfigs {\n        release {\n            storeFile file(\"coinprowl-release.keystore\")\n            storePassword findProperty(\"COINPROWL_UPLOAD_STORE_PASSWORD\") ?: \"\"\n            keyAlias findProperty(\"COINPROWL_UPLOAD_KEY_ALIAS\") ?: \"\"\n            keyPassword findProperty(\"COINPROWL_UPLOAD_KEY_PASSWORD\") ?: \"\"\n        }\n    }\n'
+          content = content.replace('android {', 'android {' + sc, 1)
           content = content.replace('signingConfig signingConfigs.debug', 'signingConfig signingConfigs.release')
-
           with open('build.gradle', 'w') as f:
               f.write(content)
-
-          print("build.gradle updated with release signing config")
-          PYEOF
+          print('build.gradle updated')
+          "
 
       - name: Build release APK
         working-directory: mobile/android
