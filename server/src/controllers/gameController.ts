@@ -665,7 +665,7 @@ export async function getWallet(req: AuthRequest, res: Response): Promise<void> 
 
     const [sweepResult, prowlResult, dailyResult] = await Promise.all([
       query(
-        `SELECT COALESCE(SUM(amount), 0) AS balance FROM transactions WHERE user_id = $1 AND (currency = 'sweep' OR currency IS NULL)`,
+        `SELECT COALESCE(SUM(amount), 0) AS balance FROM transactions WHERE user_id = $1 AND currency = 'sweep'`,
         [userId],
       ),
       query(

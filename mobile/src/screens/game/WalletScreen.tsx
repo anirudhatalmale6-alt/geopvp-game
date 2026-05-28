@@ -138,7 +138,7 @@ export default function WalletScreen() {
 
   const sweepBalance = wallet?.sweepBalance ?? wallet?.balance ?? 0;
   const prowlBalance = wallet?.prowlBalance ?? 0;
-  const sweepDollars = (sweepBalance / 100).toFixed(2);
+  const sweepDollars = (Math.max(0, sweepBalance) / 100).toFixed(2);
   const canClaimDaily = wallet?.canClaimDaily ?? false;
 
   const listHeader = (
