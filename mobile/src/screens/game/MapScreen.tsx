@@ -147,6 +147,9 @@ function LeafletMap({ lat, lng, nearbyPlayers, session, coinDrops, commandRef }:
     pointer-events:none;
   }
   .leaflet-marker-icon{
+    transition:transform 0.3s linear !important;
+  }
+  .leaflet-marker-icon.enemy-icon{
     transition:transform 2.5s linear !important;
   }
   .leaflet-control-attribution{display:none!important}
@@ -179,7 +182,7 @@ function makeEnemyIcon(en){
     +'<div class="enemy-info">'
     +'<span class="enemy-name" style="color:'+en.tierColor+'">'+en.name+'</span>'
     +'</div>';
-  return L.divIcon({className:'',html:html,iconSize:[16,32],iconAnchor:[8,8]});
+  return L.divIcon({className:'enemy-icon',html:html,iconSize:[16,32],iconAnchor:[8,8]});
 }
 
 function makeCoinIcon(amount){
