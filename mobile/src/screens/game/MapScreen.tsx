@@ -674,24 +674,15 @@ export default function MapScreen() {
       if (!alive) return;
 
       // Subscribe to players:update events — pipe directly to WebView for smooth animation
+      // NOTE: We intentionally do NOT update React state here. The direct WebView
+      // command handles the visual update. React state is refreshed by the REST poll
+      // every 30s. This avoids a full state rebuild + payload resubmission on every
+      // single player movement, which was the main source of lag.
       const unsub = onPlayersUpdate((data) => {
-        // Move the marker directly in the WebView (lightweight, no full state rebuild)
         const sid = data.sessionId || data.userId;
         if (mapRef.current) {
           mapRef.current({ type: 'movePlayer', sid, lat: data.lat, lng: data.lng });
         }
-        // Also update state for consistency (batched, won't trigger per-event re-render)
-        setNearbyPlayers((prev) => {
-          const existing = prev.find(p => p.id === data.userId);
-          if (existing) {
-            return prev.map(p =>
-              p.id === data.userId
-                ? { ...p, latitude: data.lat, longitude: data.lng }
-                : p,
-            );
-          }
-          return prev;
-        });
       });
       socketUnsubRef.current = unsub;
 
