@@ -152,6 +152,14 @@ function LeafletMap({ lat, lng, nearbyPlayers, session, coinDrops, commandRef }:
   .leaflet-marker-icon.enemy-icon{
     transition:transform 1s linear !important;
   }
+  .zoomed-out .leaflet-marker-icon.enemy-icon{
+    transition:none !important;
+  }
+  .enemy-marker-simple{
+    width:8px;height:8px;border-radius:50%;
+    border:1px solid;
+    opacity:0.8;
+  }
   .leaflet-control-attribution{display:none!important}
   .leaflet-control-zoom{display:none!important}
   .radius-circle{
@@ -173,9 +181,34 @@ var playerIcon = L.divIcon({className:'',html:'<div class="player-pulse"></div><
 var playerMarker = L.marker([0,0],{icon:playerIcon}).addTo(map);
 var radiusCircle = null;
 var enemyMarkers = {};
+var enemyData = {};
 var coinMarkers = {};
+var currentZoom = 16;
+var isZoomedOut = false;
+
+map.on('zoomend',function(){
+  currentZoom = map.getZoom();
+  var wasZoomedOut = isZoomedOut;
+  isZoomedOut = currentZoom < 13;
+  var el = document.getElementById('map');
+  if(isZoomedOut) el.classList.add('zoomed-out');
+  else el.classList.remove('zoomed-out');
+  if(wasZoomedOut !== isZoomedOut) refreshEnemyIcons();
+});
+
+function refreshEnemyIcons(){
+  Object.keys(enemyMarkers).forEach(function(k){
+    var ed = enemyData[k];
+    if(ed) enemyMarkers[k].setIcon(makeEnemyIcon(ed));
+  });
+}
 
 function makeEnemyIcon(en){
+  if(isZoomedOut){
+    var c = en.tierColor || '#ff1744';
+    var html = '<div class="enemy-marker-simple" style="background:'+c+';border-color:'+c+';"></div>';
+    return L.divIcon({className:'enemy-icon',html:html,iconSize:[8,8],iconAnchor:[4,4]});
+  }
   var cls = en.shielded ? 'enemy-marker shielded' : 'enemy-marker';
   var markerStyle = en.shielded ? '' : 'background:'+en.tierColor+';border-color:'+en.tierColor+';box-shadow:0 0 8px '+en.tierColor+';';
   var html = '<div class="'+cls+'" data-sid="'+en.sid+'" style="'+markerStyle+'"></div>'
@@ -196,10 +229,20 @@ window.addEventListener('message',function(e){
     var d = JSON.parse(e.data);
 
     if(d.type==='movePlayer'){
-      // Lightweight direct marker move — no full rebuild needed
       var sid = d.sid;
       if(enemyMarkers[sid]){
-        enemyMarkers[sid].setLatLng([d.lat,d.lng]);
+        if(isZoomedOut){
+          var b = map.getBounds();
+          if(!b.contains([d.lat,d.lng])){
+            enemyMarkers[sid].setLatLng([d.lat,d.lng]);
+            if(map.hasLayer(enemyMarkers[sid])) map.removeLayer(enemyMarkers[sid]);
+          } else {
+            if(!map.hasLayer(enemyMarkers[sid])) map.addLayer(enemyMarkers[sid]);
+            enemyMarkers[sid].setLatLng([d.lat,d.lng]);
+          }
+        } else {
+          enemyMarkers[sid].setLatLng([d.lat,d.lng]);
+        }
       }
       return;
     }
@@ -236,16 +279,24 @@ window.addEventListener('message',function(e){
 
       // Update enemy markers — reuse existing for smooth transitions
       var currentEnemyIds = {};
+      var viewBounds = map.getBounds();
       if(d.enemies){
         d.enemies.forEach(function(en){
           currentEnemyIds[en.sid] = true;
+          enemyData[en.sid] = en;
           if(enemyMarkers[en.sid]){
-            // Update position — CSS transition makes it smooth
             enemyMarkers[en.sid].setLatLng([en.lat,en.lng]);
-            enemyMarkers[en.sid].setIcon(makeEnemyIcon(en));
+            if(!isZoomedOut) enemyMarkers[en.sid].setIcon(makeEnemyIcon(en));
+            if(isZoomedOut && !viewBounds.contains([en.lat,en.lng])){
+              if(map.hasLayer(enemyMarkers[en.sid])) map.removeLayer(enemyMarkers[en.sid]);
+            } else if(!map.hasLayer(enemyMarkers[en.sid])){
+              map.addLayer(enemyMarkers[en.sid]);
+            }
           } else {
             var icon = makeEnemyIcon(en);
-            var m = L.marker([en.lat,en.lng],{icon:icon}).addTo(map);
+            var shouldAdd = !isZoomedOut || viewBounds.contains([en.lat,en.lng]);
+            var m = L.marker([en.lat,en.lng],{icon:icon});
+            if(shouldAdd) m.addTo(map);
             (function(enemy){
               m.on('click',function(){
                 (window.ReactNativeWebView||window.parent).postMessage(JSON.stringify({
@@ -266,6 +317,7 @@ window.addEventListener('message',function(e){
         if(!currentEnemyIds[sid]){
           map.removeLayer(enemyMarkers[sid]);
           delete enemyMarkers[sid];
+          delete enemyData[sid];
         }
       });
 
