@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, fontSize } from '../../theme';
-import { getWallet, getTransactions, WalletData, Transaction } from '../../api/game';
+import { getWallet, getTransactions, claimDailyBonus, WalletData, Transaction } from '../../api/game';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -37,6 +37,8 @@ function txIcon(type: string): { name: string; color: string } {
     case 'shield':       return { name: 'shield',            color: colors.primary };
     case 'coin_collect': return { name: 'cash-outline',       color: colors.gold };
     case 'salvage':      return { name: 'wallet-outline',    color: colors.success };
+    case 'bonus_sweep':  return { name: 'gift-outline',      color: colors.success };
+    case 'daily_bonus':  return { name: 'sunny-outline',     color: '#ffd700' };
     default:             return { name: 'swap-horizontal',   color: colors.textSecondary };
   }
 }
@@ -80,6 +82,7 @@ export default function WalletScreen() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [claimingBonus, setClaimingBonus] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -105,9 +108,24 @@ export default function WalletScreen() {
   };
 
   const handleCashOut = () => {
-    Alert.alert('Cash Out', 'Withdrawal feature coming soon! You will be able to withdraw via PayPal or crypto.', [
+    Alert.alert('Redeem Sweep Coins', 'Redemption feature coming soon! You will be able to redeem Sweep Coins for prizes via PayPal.', [
       { text: 'OK' },
     ]);
+  };
+
+  const handleDailyBonus = async () => {
+    setClaimingBonus(true);
+    try {
+      const result = await claimDailyBonus();
+      if (result.claimed) {
+        Alert.alert('Daily Bonus!', `You received ${result.amount / 10} free Sweep Coins!`);
+        await load();
+      }
+    } catch (err: any) {
+      Alert.alert('Daily Bonus', err?.response?.data?.error || err.message || 'Could not claim bonus.');
+    } finally {
+      setClaimingBonus(false);
+    }
   };
 
   if (loading) {
@@ -118,19 +136,55 @@ export default function WalletScreen() {
     );
   }
 
-  const balance = wallet?.balance ?? 0;
-  const balanceDollars = (balance / 100).toFixed(2);
+  const sweepBalance = wallet?.sweepBalance ?? wallet?.balance ?? 0;
+  const prowlBalance = wallet?.prowlBalance ?? 0;
+  const sweepDollars = (sweepBalance / 100).toFixed(2);
+  const canClaimDaily = wallet?.canClaimDaily ?? false;
 
   const listHeader = (
     <>
-      <View style={styles.balanceCard}>
-        <Text style={styles.balanceLabel}>TOTAL BALANCE</Text>
-        <Text style={styles.balanceAmount}>${balanceDollars}</Text>
-        <Text style={styles.balanceSub}>{Math.floor(balance / 10)} coins</Text>
+      {/* Dual Currency Cards */}
+      <View style={styles.dualBalanceRow}>
+        <View style={[styles.currencyCard, { borderColor: '#ffd700' + '40' }]}>
+          <View style={styles.currencyHeader}>
+            <Ionicons name="trophy" size={16} color="#ffd700" />
+            <Text style={[styles.currencyLabel, { color: '#ffd700' }]}>PROWL COINS</Text>
+          </View>
+          <Text style={styles.currencyAmount}>{prowlBalance}</Text>
+          <Text style={styles.currencySub}>Rank Score</Text>
+        </View>
+        <View style={[styles.currencyCard, { borderColor: colors.success + '40' }]}>
+          <View style={styles.currencyHeader}>
+            <Ionicons name="cash" size={16} color={colors.success} />
+            <Text style={[styles.currencyLabel, { color: colors.success }]}>SWEEP COINS</Text>
+          </View>
+          <Text style={styles.currencyAmount}>${sweepDollars}</Text>
+          <Text style={styles.currencySub}>Redeemable</Text>
+        </View>
+      </View>
 
+      {/* Action Buttons */}
+      <View style={styles.actionRow}>
+        <TouchableOpacity
+          style={[styles.dailyBonusBtn, !canClaimDaily && styles.dailyBonusClaimed]}
+          onPress={handleDailyBonus}
+          disabled={!canClaimDaily || claimingBonus}
+          activeOpacity={0.85}
+        >
+          {claimingBonus ? (
+            <ActivityIndicator size="small" color={colors.background} />
+          ) : (
+            <>
+              <Ionicons name="sunny" size={18} color={canClaimDaily ? colors.background : colors.textMuted} />
+              <Text style={[styles.dailyBonusText, !canClaimDaily && { color: colors.textMuted }]}>
+                {canClaimDaily ? 'CLAIM DAILY BONUS' : 'CLAIMED TODAY'}
+              </Text>
+            </>
+          )}
+        </TouchableOpacity>
         <TouchableOpacity style={styles.cashOutBtn} onPress={handleCashOut} activeOpacity={0.85}>
           <Ionicons name="arrow-up-circle" size={18} color={colors.background} />
-          <Text style={styles.cashOutText}>CASH OUT</Text>
+          <Text style={styles.cashOutText}>REDEEM</Text>
         </TouchableOpacity>
       </View>
 
@@ -216,47 +270,83 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  balanceCard: {
-    backgroundColor: colors.surface,
+  dualBalanceRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
     margin: spacing.md,
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
+  },
+  currencyCard: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: colors.primary + '30',
   },
-  balanceLabel: {
-    fontSize: fontSize.xs,
-    color: colors.textMuted,
-    letterSpacing: 3,
-    fontWeight: '700',
+  currencyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     marginBottom: spacing.xs,
   },
-  balanceAmount: {
-    fontSize: 48,
+  currencyLabel: {
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+  },
+  currencyAmount: {
+    fontSize: 32,
     fontWeight: '900',
     color: colors.text,
     letterSpacing: -1,
   },
-  balanceSub: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginBottom: spacing.lg,
+  currencySub: {
+    fontSize: 10,
+    color: colors.textMuted,
+    fontWeight: '600',
   },
-  cashOutBtn: {
+  actionRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
+  dailyBonusBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: '#ffd700',
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  dailyBonusClaimed: {
+    backgroundColor: colors.surfaceLight,
+  },
+  dailyBonusText: {
+    color: colors.background,
+    fontWeight: '900',
+    fontSize: 11,
+    letterSpacing: 1,
+  },
+  cashOutBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing.sm,
     backgroundColor: colors.primary,
     borderRadius: borderRadius.md,
     paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.md,
   },
   cashOutText: {
     color: colors.background,
     fontWeight: '900',
-    fontSize: fontSize.md,
-    letterSpacing: 2,
+    fontSize: 11,
+    letterSpacing: 1,
   },
   statsRow: {
     flexDirection: 'row',

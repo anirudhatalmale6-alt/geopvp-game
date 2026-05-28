@@ -23,6 +23,7 @@ const signupSchema = z.object({
     .min(8, 'Password must be at least 8 characters')
     .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
     .regex(/[0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/, 'Password must contain at least one number or symbol'),
+  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date of birth must be YYYY-MM-DD'),
   deviceId: z.string().min(1, 'Device ID is required').optional(),
 });
 
@@ -118,7 +119,20 @@ export async function signup(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const { username, email, password, deviceId } = parsed.data;
+    const { username, email, password, dateOfBirth, deviceId } = parsed.data;
+
+    // Age verification: must be 18+
+    const dob = new Date(dateOfBirth);
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const monthDiff = today.getMonth() - dob.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+      age--;
+    }
+    if (age < 18) {
+      res.status(403).json({ error: 'You must be at least 18 years old to play CoinProwl.' });
+      return;
+    }
 
     // Check email uniqueness
     const emailCheck = await query('SELECT id FROM users WHERE email = $1', [email.toLowerCase()]);
@@ -140,10 +154,10 @@ export async function signup(req: Request, res: Response): Promise<void> {
 
     // Insert user with device lock
     const result = await query(
-      `INSERT INTO users (username, email, password_hash, verification_code, verification_expires, device_id)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO users (username, email, password_hash, date_of_birth, verification_code, verification_expires, device_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id`,
-      [username.toLowerCase(), email.toLowerCase(), hashedPassword, verificationCode, codeExpiry, deviceId || null],
+      [username.toLowerCase(), email.toLowerCase(), hashedPassword, dateOfBirth, verificationCode, codeExpiry, deviceId || null],
     );
 
     const userId = result.rows[0].id;

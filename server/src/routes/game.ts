@@ -14,6 +14,8 @@ import {
   getActiveCoinDrops,
   collectCoinDrop,
   checkGeoFence,
+  claimDailyBonus,
+  getLeaderboard,
 } from '../controllers/gameController';
 
 const router = Router();
@@ -41,5 +43,9 @@ router.get('/stats', getCombatStats);
 // Coin drop routes
 router.get('/coins', getActiveCoinDrops);
 router.post('/coins/:id/collect', collectCoinDrop);
+
+// Daily bonus & leaderboard
+router.post('/daily-bonus', claimDailyBonus);
+router.get('/leaderboard', getLeaderboard);
 
 export default router;

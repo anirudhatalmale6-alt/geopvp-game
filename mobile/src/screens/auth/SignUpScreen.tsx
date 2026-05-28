@@ -31,6 +31,9 @@ export default function SignUpScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [dobMonth, setDobMonth] = useState('');
+  const [dobDay, setDobDay] = useState('');
+  const [dobYear, setDobYear] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -71,6 +74,24 @@ export default function SignUpScreen({ navigation }: Props) {
       return;
     }
 
+    const m = parseInt(dobMonth, 10);
+    const d = parseInt(dobDay, 10);
+    const y = parseInt(dobYear, 10);
+    if (!m || !d || !y || m < 1 || m > 12 || d < 1 || d > 31 || y < 1900 || y > new Date().getFullYear()) {
+      setError('Please enter a valid date of birth');
+      return;
+    }
+    const dob = new Date(y, m - 1, d);
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const monthDiff = today.getMonth() - dob.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) age--;
+    if (age < 18) {
+      setError('You must be at least 18 years old to play CoinProwl');
+      return;
+    }
+    const dateOfBirth = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE}/auth/signup`, {
@@ -80,6 +101,7 @@ export default function SignUpScreen({ navigation }: Props) {
           username: username.trim(),
           email: email.trim().toLowerCase(),
           password,
+          dateOfBirth,
         }),
       });
 
@@ -152,6 +174,49 @@ export default function SignUpScreen({ navigation }: Props) {
               autoCorrect={false}
               editable={!loading}
             />
+          </View>
+
+          {/* Date of Birth */}
+          <Text style={styles.dobLabel}>DATE OF BIRTH (must be 18+)</Text>
+          <View style={styles.dobRow}>
+            <View style={[styles.inputWrapper, styles.dobInput]}>
+              <TextInput
+                style={styles.input}
+                placeholder="MM"
+                placeholderTextColor={colors.textMuted}
+                value={dobMonth}
+                onChangeText={(t) => setDobMonth(t.replace(/[^0-9]/g, '').slice(0, 2))}
+                keyboardType="number-pad"
+                maxLength={2}
+                editable={!loading}
+              />
+            </View>
+            <Text style={styles.dobSlash}>/</Text>
+            <View style={[styles.inputWrapper, styles.dobInput]}>
+              <TextInput
+                style={styles.input}
+                placeholder="DD"
+                placeholderTextColor={colors.textMuted}
+                value={dobDay}
+                onChangeText={(t) => setDobDay(t.replace(/[^0-9]/g, '').slice(0, 2))}
+                keyboardType="number-pad"
+                maxLength={2}
+                editable={!loading}
+              />
+            </View>
+            <Text style={styles.dobSlash}>/</Text>
+            <View style={[styles.inputWrapper, styles.dobInputYear]}>
+              <TextInput
+                style={styles.input}
+                placeholder="YYYY"
+                placeholderTextColor={colors.textMuted}
+                value={dobYear}
+                onChangeText={(t) => setDobYear(t.replace(/[^0-9]/g, '').slice(0, 4))}
+                keyboardType="number-pad"
+                maxLength={4}
+                editable={!loading}
+              />
+            </View>
           </View>
 
           {/* Password Input */}
@@ -328,6 +393,34 @@ const styles = StyleSheet.create({
   },
   eyeButton: {
     padding: spacing.xs,
+  },
+  dobLabel: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    letterSpacing: 1,
+    marginBottom: spacing.xs,
+    fontWeight: '700',
+  },
+  dobRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    gap: 6,
+  },
+  dobInput: {
+    flex: 1,
+    marginBottom: 0,
+    justifyContent: 'center',
+  },
+  dobInputYear: {
+    flex: 1.5,
+    marginBottom: 0,
+    justifyContent: 'center',
+  },
+  dobSlash: {
+    fontSize: fontSize.lg,
+    color: colors.textMuted,
+    fontWeight: '700',
   },
   requirementsBox: {
     backgroundColor: colors.accentDim,

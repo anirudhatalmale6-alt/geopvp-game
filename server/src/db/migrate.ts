@@ -100,6 +100,27 @@ CREATE TABLE IF NOT EXISTS payout_methods (
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT false;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS waiver_accepted_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS date_of_birth DATE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS push_token TEXT;
+
+-- Dual currency: track currency type on transactions
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS currency VARCHAR(10) DEFAULT 'sweep';
+
+-- Prowl Coins ledger (permanent rank coins from purchases)
+CREATE TABLE IF NOT EXISTS prowl_balances (
+  user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  balance INTEGER DEFAULT 0,
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Daily bonus tracking
+CREATE TABLE IF NOT EXISTS daily_bonuses (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  amount INTEGER NOT NULL,
+  claimed_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_daily_bonuses_user ON daily_bonuses(user_id, claimed_at);
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON game_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_active ON game_sessions(is_active) WHERE is_active = true;

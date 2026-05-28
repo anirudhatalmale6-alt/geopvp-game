@@ -61,7 +61,24 @@ export interface CollectResult {
 
 export interface WalletData {
   balance: number;
+  sweepBalance: number;
+  prowlBalance: number;
+  canClaimDaily: boolean;
   userId: string;
+}
+
+export interface LeaderboardEntry {
+  rank: number;
+  userId: string;
+  username: string;
+  prowlCoins: number;
+  isYou: boolean;
+}
+
+export interface LeaderboardData {
+  leaderboard: LeaderboardEntry[];
+  myRank: number;
+  myProwlCoins: number;
 }
 
 export interface CombatStats {
@@ -102,12 +119,9 @@ export async function checkGeoFence(lat: number, lng: number): Promise<GeoFenceR
   }
 }
 
-export async function createSession(tierDollars: number, lat?: number, lng?: number, stateCode?: string): Promise<GameSession> {
+export async function createSession(tierDollars: number): Promise<GameSession> {
   const { data } = await api.post<{ session: GameSession }>('/game/sessions', {
     tierDollars,
-    latitude: lat,
-    longitude: lng,
-    stateCode,
   });
   return data.session;
 }
@@ -197,5 +211,27 @@ export async function getTransactions(): Promise<Transaction[]> {
     return data.transactions;
   } catch {
     return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Daily Bonus API
+// ---------------------------------------------------------------------------
+
+export async function claimDailyBonus(): Promise<{ claimed: boolean; amount: number }> {
+  const { data } = await api.post<{ claimed: boolean; amount: number }>('/game/daily-bonus');
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// Leaderboard API
+// ---------------------------------------------------------------------------
+
+export async function getLeaderboard(): Promise<LeaderboardData> {
+  try {
+    const { data } = await api.get<LeaderboardData>('/game/leaderboard');
+    return data;
+  } catch {
+    return { leaderboard: [], myRank: 0, myProwlCoins: 0 };
   }
 }

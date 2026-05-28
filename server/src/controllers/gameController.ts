@@ -58,16 +58,10 @@ export async function createGameSession(req: AuthRequest, res: Response): Promis
     const tierCents = tierDollars * 100;
     const tier = getCoinTier(tierCents);
     const mapCoins = tierDollars * 10; // 10 coins per dollar
+    const bonusSweepCoins = tierDollars; // 1 free sweep coin per dollar
 
-    // Deduct from wallet (or allow negative balance for now — game mechanics TBD)
-    const walletResult = await query(
-      `SELECT balance FROM wallets WHERE user_id = $1`,
-      [userId],
-    );
-
-    if (walletResult.rows.length === 0) {
-      await query(`INSERT INTO wallets (user_id, balance) VALUES ($1, 0) ON CONFLICT DO NOTHING`, [userId]);
-    }
+    // Ensure wallet row exists
+    await query(`INSERT INTO wallets (user_id, balance) VALUES ($1, 0) ON CONFLICT DO NOTHING`, [userId]);
 
     // Create session — shields start at 0, purchased separately
     const sessionResult = await query(
@@ -81,11 +75,26 @@ export async function createGameSession(req: AuthRequest, res: Response): Promis
 
     const session = sessionResult.rows[0];
 
-    // Record transaction
+    // Record purchase transaction
     await query(
-      `INSERT INTO transactions (user_id, type, amount, description)
-       VALUES ($1, 'buyin', $2, $3)`,
-      [userId, -tierCents, `Buy-in: $${tierDollars} ${tier.name} tier`],
+      `INSERT INTO transactions (user_id, type, amount, currency, description)
+       VALUES ($1, 'buyin', $2, 'prowl', $3)`,
+      [userId, -tierCents, `Purchased ${mapCoins} Prowl Coins ($${tierDollars} ${tier.name} tier)`],
+    );
+
+    // Credit Prowl Coins (permanent rank)
+    await query(
+      `INSERT INTO prowl_balances (user_id, balance, updated_at)
+       VALUES ($1, $2, now())
+       ON CONFLICT (user_id) DO UPDATE SET balance = prowl_balances.balance + $2, updated_at = now()`,
+      [userId, mapCoins],
+    );
+
+    // Give bonus Sweep Coins (free with purchase)
+    await query(
+      `INSERT INTO transactions (user_id, type, amount, currency, description)
+       VALUES ($1, 'bonus_sweep', $2, 'sweep', $3)`,
+      [userId, bonusSweepCoins * 10, `Free ${bonusSweepCoins} Sweep Coins with purchase`],
     );
 
     res.status(201).json({ session: formatSession(session) });
@@ -647,14 +656,34 @@ export async function getWallet(req: AuthRequest, res: Response): Promise<void> 
   try {
     const userId = req.user!.id;
 
-    const result = await query(
-      `SELECT COALESCE(SUM(amount), 0) AS balance FROM transactions WHERE user_id = $1`,
-      [userId],
-    );
+    const [sweepResult, prowlResult, dailyResult] = await Promise.all([
+      query(
+        `SELECT COALESCE(SUM(amount), 0) AS balance FROM transactions WHERE user_id = $1 AND (currency = 'sweep' OR currency IS NULL)`,
+        [userId],
+      ),
+      query(
+        `SELECT COALESCE(balance, 0) AS balance FROM prowl_balances WHERE user_id = $1`,
+        [userId],
+      ),
+      query(
+        `SELECT claimed_at FROM daily_bonuses WHERE user_id = $1 ORDER BY claimed_at DESC LIMIT 1`,
+        [userId],
+      ),
+    ]);
 
-    const balance = parseInt(result.rows[0].balance, 10);
+    const sweepBalance = parseInt(sweepResult.rows[0].balance, 10);
+    const prowlBalance = prowlResult.rows.length > 0 ? parseInt(prowlResult.rows[0].balance, 10) : 0;
 
-    res.json({ userId, balance });
+    const lastClaim = dailyResult.rows[0]?.claimed_at;
+    const canClaimDaily = !lastClaim || (Date.now() - new Date(lastClaim).getTime()) >= 24 * 60 * 60 * 1000;
+
+    res.json({
+      userId,
+      balance: sweepBalance,
+      sweepBalance,
+      prowlBalance,
+      canClaimDaily,
+    });
   } catch (err) {
     console.error('getWallet error:', err);
     res.status(500).json({ error: 'Internal server error.' });
@@ -899,6 +928,97 @@ export async function collectCoinDrop(req: AuthRequest, res: Response): Promise<
     });
   } catch (err) {
     console.error('collectCoinDrop error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/game/daily-bonus  — claim free daily Sweep Coins
+// ---------------------------------------------------------------------------
+
+const DAILY_BONUS_AMOUNT = 50; // 5 sweep coins (50 cents value)
+
+export async function claimDailyBonus(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const userId = req.user!.id;
+
+    const lastClaim = await query(
+      `SELECT claimed_at FROM daily_bonuses WHERE user_id = $1 ORDER BY claimed_at DESC LIMIT 1`,
+      [userId],
+    );
+
+    if (lastClaim.rows.length > 0) {
+      const elapsed = Date.now() - new Date(lastClaim.rows[0].claimed_at).getTime();
+      if (elapsed < 24 * 60 * 60 * 1000) {
+        const hoursLeft = Math.ceil((24 * 60 * 60 * 1000 - elapsed) / (60 * 60 * 1000));
+        res.status(400).json({ error: `Daily bonus already claimed. Come back in ${hoursLeft} hours.` });
+        return;
+      }
+    }
+
+    await Promise.all([
+      query(
+        `INSERT INTO daily_bonuses (user_id, amount) VALUES ($1, $2)`,
+        [userId, DAILY_BONUS_AMOUNT],
+      ),
+      query(
+        `INSERT INTO transactions (user_id, type, amount, currency, description)
+         VALUES ($1, 'daily_bonus', $2, 'sweep', 'Free daily Sweep Coins bonus')`,
+        [userId, DAILY_BONUS_AMOUNT],
+      ),
+    ]);
+
+    res.json({ claimed: true, amount: DAILY_BONUS_AMOUNT });
+  } catch (err) {
+    console.error('claimDailyBonus error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/game/leaderboard  — top players by Prowl Coins
+// ---------------------------------------------------------------------------
+
+export async function getLeaderboard(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const userId = req.user!.id;
+
+    const result = await query(
+      `SELECT pb.user_id, pb.balance AS prowl_coins, u.username
+       FROM prowl_balances pb
+       JOIN users u ON u.id = pb.user_id
+       WHERE pb.balance > 0
+       ORDER BY pb.balance DESC
+       LIMIT 100`,
+    );
+
+    const myRank = await query(
+      `SELECT COUNT(*) + 1 AS rank FROM prowl_balances WHERE balance > (
+         SELECT COALESCE(balance, 0) FROM prowl_balances WHERE user_id = $1
+       )`,
+      [userId],
+    );
+
+    const myProwl = await query(
+      `SELECT COALESCE(balance, 0) AS balance FROM prowl_balances WHERE user_id = $1`,
+      [userId],
+    );
+
+    const players = result.rows.map((row, idx) => ({
+      rank: idx + 1,
+      userId: row.user_id,
+      username: row.username,
+      prowlCoins: parseInt(row.prowl_coins, 10),
+      isYou: row.user_id === userId,
+    }));
+
+    res.json({
+      leaderboard: players,
+      myRank: parseInt(myRank.rows[0]?.rank || '0', 10),
+      myProwlCoins: parseInt(myProwl.rows[0]?.balance || '0', 10),
+    });
+  } catch (err) {
+    console.error('getLeaderboard error:', err);
     res.status(500).json({ error: 'Internal server error.' });
   }
 }
