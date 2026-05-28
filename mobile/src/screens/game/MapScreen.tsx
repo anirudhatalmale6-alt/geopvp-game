@@ -1178,8 +1178,6 @@ export default function MapScreen() {
         visible={showBuyIn}
         onClose={() => setShowBuyIn(false)}
         onSessionCreated={refreshSession}
-        lat={location?.lat}
-        lng={location?.lng}
       />
     </View>
   );

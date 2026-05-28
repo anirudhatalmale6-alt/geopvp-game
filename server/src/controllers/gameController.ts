@@ -7,7 +7,7 @@ import { distanceMiles } from '../utils/geo';
 import { getCoinTier } from '../utils/coins';
 import { getIO } from '../socket/ioInstance';
 import { sendPushNotification } from '../utils/pushNotification';
-import { checkLocationBlocked, isBlockedState, getBlockedStates } from '../utils/geofence';
+import { checkLocationBlocked, getBlockedStates } from '../utils/geofence';
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -15,9 +15,6 @@ import { checkLocationBlocked, isBlockedState, getBlockedStates } from '../utils
 
 const createSessionSchema = z.object({
   tierDollars: z.number().int().min(1).max(25),
-  latitude: z.number().min(-90).max(90).optional(),
-  longitude: z.number().min(-180).max(180).optional(),
-  stateCode: z.string().length(2).optional(),
 });
 
 const updateLocationSchema = z.object({
@@ -49,21 +46,8 @@ export async function createGameSession(req: AuthRequest, res: Response): Promis
       return;
     }
 
-    const { tierDollars, latitude, longitude, stateCode } = parsed.data;
+    const { tierDollars } = parsed.data;
     const userId = req.user!.id;
-
-    // Geo-fence check: block restricted states
-    if (stateCode && isBlockedState(stateCode)) {
-      res.status(403).json({ error: `Real-money play is not available in your state due to local regulations.`, geoBlocked: true });
-      return;
-    }
-    if (latitude != null && longitude != null) {
-      const geoCheck = checkLocationBlocked(latitude, longitude);
-      if (geoCheck.blocked) {
-        res.status(403).json({ error: `Real-money play is not available in ${geoCheck.state} due to local regulations.`, geoBlocked: true });
-        return;
-      }
-    }
 
     // Deactivate any existing active session first
     await query(
