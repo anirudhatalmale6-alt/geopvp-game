@@ -522,6 +522,12 @@ export default function MapScreen() {
     shielded: boolean;
   } | null>(null);
   const [attackResult, setAttackResult] = useState<string | null>(null);
+  const [activityFeed, setActivityFeed] = useState<{ id: string; text: string; color: string; time: number }[]>([]);
+
+  const addFeedItem = useCallback((text: string, color: string) => {
+    const item = { id: Date.now().toString(), text, color, time: Date.now() };
+    setActivityFeed((prev) => [item, ...prev].slice(0, 20));
+  }, []);
 
   const [statusMessage, setStatusMessage] = useState<string>('LIVE MAP');
   const [spawnSecsLeft, setSpawnSecsLeft] = useState(0);
@@ -699,9 +705,10 @@ export default function MapScreen() {
       // Listen for elimination (PvP attack killed your session)
       const unsubElim = onEliminated((data) => {
         sessionEndedRef.current = true;
+        addFeedItem(`${data.attackerName} attacked you and took ${data.coinsLost} coins!`, '#ff4444');
         Alert.alert(
           'YOU WERE ELIMINATED!',
-          `${data.attackerName} attacked you and took all ${data.coinsLost} coins! Buy in again to keep playing.`,
+          `${data.attackerName} attacked you and took ${data.coinsLost} coins!${data.coinsSaved > 0 ? ` ${data.coinsSaved} coins saved to wallet.` : ''} Buy in again to keep playing.`,
           [{ text: 'OK', onPress: () => { setSession(null); setShowBuyIn(true); sessionEndedRef.current = false; } }],
         );
       });
@@ -709,6 +716,7 @@ export default function MapScreen() {
       // Listen for bot attacks
       const unsubBot = onBotHit((data) => {
         setAttackResult(data.message);
+        addFeedItem(data.message, '#ff8800');
         refreshSession();
         setTimeout(() => setAttackResult(null), 4000);
       });
@@ -860,9 +868,16 @@ export default function MapScreen() {
 
     try {
       const result = await attackPlayer(target.sessionId);
-      setAttackResult(result.success
+      const msg = result.success
         ? `ATTACK SUCCESS! Stole ${result.coinsStolen} coins from ${target.username}!`
-        : `ATTACK BLOCKED! ${target.username} had a shield.`);
+        : `ATTACK BLOCKED! ${target.username} had a shield.`;
+      setAttackResult(msg);
+      addFeedItem(
+        result.success
+          ? `You attacked ${target.username} and took ${result.coinsStolen} coins!`
+          : `You attacked ${target.username} but their shield blocked it.`,
+        result.success ? '#00e676' : '#ffaa00',
+      );
       await refreshSession();
       setTimeout(() => setAttackResult(null), 4000);
     } catch (err: any) {
@@ -1082,6 +1097,23 @@ export default function MapScreen() {
               }
             />
             <Text style={styles.toastText}>{attackResult}</Text>
+          </View>
+        )}
+
+        {/* Activity feed */}
+        {activityFeed.length > 0 && (
+          <View style={styles.feedContainer} pointerEvents="none">
+            {activityFeed.slice(0, 5).map((item, idx) => (
+              <View key={item.id} style={[styles.feedItem, { opacity: 1 - idx * 0.15 }]}>
+                <View style={[styles.feedDot, { backgroundColor: item.color }]} />
+                <Text style={styles.feedText} numberOfLines={1}>{item.text}</Text>
+                <Text style={styles.feedTime}>
+                  {Math.floor((Date.now() - item.time) / 60000) > 0
+                    ? `${Math.floor((Date.now() - item.time) / 60000)}m`
+                    : 'now'}
+                </Text>
+              </View>
+            ))}
           </View>
         )}
 
@@ -1342,6 +1374,36 @@ const styles = StyleSheet.create({
     fontWeight: '700' as const,
     color: '#00e5ff',
     letterSpacing: 1,
+  },
+  feedContainer: {
+    marginHorizontal: spacing.md,
+    marginTop: spacing.xs,
+    gap: 3,
+  },
+  feedItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(17, 24, 39, 0.85)',
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  feedDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  feedText: {
+    flex: 1,
+    fontSize: 11,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  feedTime: {
+    fontSize: 9,
+    color: colors.textMuted,
+    fontWeight: '600',
   },
   toastBanner: {
     flexDirection: 'row',
