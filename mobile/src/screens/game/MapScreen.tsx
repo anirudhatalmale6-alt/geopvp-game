@@ -529,6 +529,14 @@ export default function MapScreen() {
     setActivityFeed((prev) => [item, ...prev].slice(0, 20));
   }, []);
 
+  useEffect(() => {
+    if (activityFeed.length === 0) return;
+    const iv = setInterval(() => {
+      setActivityFeed((prev) => prev.filter((item) => Date.now() - item.time < 60_000));
+    }, 10_000);
+    return () => clearInterval(iv);
+  }, [activityFeed.length > 0]);
+
   const [statusMessage, setStatusMessage] = useState<string>('LIVE MAP');
   const [spawnSecsLeft, setSpawnSecsLeft] = useState(0);
   const [shieldSecsLeft, setShieldSecsLeft] = useState(0);
