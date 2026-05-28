@@ -64,19 +64,33 @@ jobs:
       - name: Update build.gradle signing config
         working-directory: mobile/android/app
         run: |
-          # Add signing config to build.gradle
-          sed -i '/signingConfigs {/,/}/d' build.gradle || true
-          sed -i '/android {/a\
-              signingConfigs {\
-                  release {\
-                      storeFile file("coinprowl-release.keystore")\
-                      storePassword System.getenv("KEYSTORE_PASSWORD") ?: findProperty("COINPROWL_UPLOAD_STORE_PASSWORD") ?: ""\
-                      keyAlias System.getenv("KEY_ALIAS") ?: findProperty("COINPROWL_UPLOAD_KEY_ALIAS") ?: ""\
-                      keyPassword System.getenv("KEY_PASSWORD") ?: findProperty("COINPROWL_UPLOAD_KEY_PASSWORD") ?: ""\
-                  }\
-              }' build.gradle
-          # Update release build type to use our signing config
-          sed -i 's/signingConfig signingConfigs.debug/signingConfig signingConfigs.release/g' build.gradle
+          python3 << 'PYEOF'
+          import re
+
+          with open('build.gradle', 'r') as f:
+              content = f.read()
+
+          signing_config = '''
+    signingConfigs {
+        release {
+            storeFile file("coinprowl-release.keystore")
+            storePassword findProperty("COINPROWL_UPLOAD_STORE_PASSWORD") ?: ""
+            keyAlias findProperty("COINPROWL_UPLOAD_KEY_ALIAS") ?: ""
+            keyPassword findProperty("COINPROWL_UPLOAD_KEY_PASSWORD") ?: ""
+        }
+    }
+'''
+          # Insert signingConfigs right after "android {"
+          content = content.replace('android {', 'android {' + signing_config, 1)
+
+          # Replace signingConfig signingConfigs.debug with release in buildTypes
+          content = content.replace('signingConfig signingConfigs.debug', 'signingConfig signingConfigs.release')
+
+          with open('build.gradle', 'w') as f:
+              f.write(content)
+
+          print("build.gradle updated with release signing config")
+          PYEOF
 
       - name: Build release APK
         working-directory: mobile/android
