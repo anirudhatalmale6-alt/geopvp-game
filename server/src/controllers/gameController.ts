@@ -425,15 +425,13 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
           throw new Error('You need an active shield to attack! Bots counter-attack instantly.');
         }
 
-        // Check bot's shields
-        const botShields = parseInt(defender.shields_remaining || '0', 10);
+        // Check bot's time-based shield (30 min from spawn/renewal)
+        const botShieldActive = defender.shield_active_until
+          ? new Date(defender.shield_active_until) > new Date()
+          : false;
 
-        if (botShields > 0) {
-          // Bot uses a shield to survive
-          await q(
-            `UPDATE game_sessions SET shields_remaining = shields_remaining - 1 WHERE id = $1`,
-            [defender.id],
-          );
+        if (botShieldActive) {
+          const shieldMinsLeft = Math.ceil((new Date(defender.shield_active_until).getTime() - Date.now()) / 60000);
 
           await q(
             `INSERT INTO attacks (attacker_id, defender_id, attacker_coins, defender_coins, coins_stolen, defender_had_shield, success, latitude, longitude)
@@ -446,21 +444,22 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
             coinsStolen: 0,
             defenderHadShield: true,
             shieldConsumed: false,
-            message: `Attack blocked! They used a shield (${botShields - 1} shields left). Keep attacking!`,
+            message: `Attack blocked! Shield active for ${shieldMinsLeft} more minutes. Try another target!`,
           };
         }
 
-        // Bot has no shields left - player defeats it and takes all coins
+        // Bot shields are down - player defeats it and takes all coins
         const botCoins = parseInt(defender.map_coins || '0', 10);
 
-        // Respawn bot with 10 coins ($1) and 3 shields at a new random location nearby
+        // Respawn bot with 10 coins and 30-min shield at a new random location nearby
         const newLat = parseFloat(defender.latitude) + (Math.random() - 0.5) * 0.5;
         const newLng = parseFloat(defender.longitude) + (Math.random() - 0.5) * 0.5;
         const visualTiers = ['copper','silver','gold','emerald','ruby','sapphire','amethyst','topaz','aquamarine','pearl'];
         const randomTier = visualTiers[Math.floor(Math.random() * visualTiers.length)];
+        const botShieldExpiry = new Date(Date.now() + 30 * 60 * 1000); // 30 min shield
         await q(
-          `UPDATE game_sessions SET map_coins = 10, shields_remaining = 3, coin_tier = $1, latitude = $2, longitude = $3 WHERE id = $4`,
-          [randomTier, newLat, newLng, defender.id],
+          `UPDATE game_sessions SET map_coins = 10, shields_remaining = 3, coin_tier = $1, latitude = $2, longitude = $3, shield_active_until = $4 WHERE id = $5`,
+          [randomTier, newLat, newLng, botShieldExpiry, defender.id],
         );
 
         await q(
@@ -473,6 +472,14 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
         await q(
           `UPDATE game_sessions SET map_coins = map_coins + $1 WHERE id = $2`,
           [botCoins, attacker.id],
+        );
+
+        // Record transaction so it shows in wallet history
+        const stolenCents = botCoins * 10;
+        await q(
+          `INSERT INTO transactions (user_id, type, amount, currency, description, related_user_id)
+           VALUES ($1, 'attack_win', $2, 'sweep', $3, $4)`,
+          [attacker.user_id, stolenCents, `Took ${botCoins} coins from ${defender.defender_name}!`, defender.user_id],
         );
 
         return {
@@ -525,13 +532,13 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
       const stolenCents = coinsStolen * 10;
       const txPromises = [
         q(
-          `INSERT INTO transactions (user_id, type, amount, description, related_user_id)
-           VALUES ($1, 'attack_win', $2, $3, $4)`,
+          `INSERT INTO transactions (user_id, type, amount, currency, description, related_user_id)
+           VALUES ($1, 'attack_win', $2, 'sweep', $3, $4)`,
           [attacker.user_id, stolenCents, `Took ${coinsStolen} coins from ${defender.defender_name}!`, defender.user_id],
         ),
         q(
-          `INSERT INTO transactions (user_id, type, amount, description, related_user_id)
-           VALUES ($1, 'attack_loss', $2, $3, $4)`,
+          `INSERT INTO transactions (user_id, type, amount, currency, description, related_user_id)
+           VALUES ($1, 'attack_loss', $2, 'sweep', $3, $4)`,
           [defender.user_id, -stolenCents, `Lost ${coinsStolen} coins to ${attacker.attacker_name}`, attacker.user_id],
         ),
       ];
@@ -540,8 +547,8 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
         const excessCents = excessCoins * 10;
         txPromises.push(
           q(
-            `INSERT INTO transactions (user_id, type, amount, description)
-             VALUES ($1, 'salvage', $2, $3)`,
+            `INSERT INTO transactions (user_id, type, amount, currency, description)
+             VALUES ($1, 'salvage', $2, 'sweep', $3)`,
             [defender.user_id, excessCents, `Saved ${excessCoins} coins to wallet after elimination`],
           ),
         );
@@ -636,8 +643,8 @@ export async function buyShield(req: AuthRequest, res: Response): Promise<void> 
     );
 
     await query(
-      `INSERT INTO transactions (user_id, type, amount, description)
-       VALUES ($1, 'shield', $2, $3)`,
+      `INSERT INTO transactions (user_id, type, amount, currency, description)
+       VALUES ($1, 'shield', $2, 'sweep', $3)`,
       [userId, -SHIELD_COST_CENTS, `Shield purchased ($1.00) — active for ${config.shieldDurationMinutes} minutes`],
     );
 
@@ -909,8 +916,8 @@ export async function collectCoinDrop(req: AuthRequest, res: Response): Promise<
         [userId, dropId],
       ),
       query(
-        `INSERT INTO transactions (user_id, type, amount, description)
-         VALUES ($1, 'coin_collect', $2, $3)`,
+        `INSERT INTO transactions (user_id, type, amount, currency, description)
+         VALUES ($1, 'coin_collect', $2, 'sweep', $3)`,
         [userId, drop.amount * 10, `Collected ${drop.amount} coin${drop.amount !== 1 ? 's' : ''} from map`],
       ),
     ]);

@@ -293,10 +293,11 @@ export async function spawnBots(req: AuthRequest, res: Response): Promise<void> 
         [userResult.rows[0].id],
       );
 
+      const botShieldExpiry = new Date(Date.now() + 30 * 60 * 1000); // 30 min shield
       await query(
-        `INSERT INTO game_sessions (user_id, buyin_amount, coin_tier, map_coins, latitude, longitude, last_location_update, is_active, shields_purchased, shields_remaining)
-         VALUES ($1, $2, $3, $4, $5, $6, now(), true, 0, 3)`,
-        [userResult.rows[0].id, tier.dollar * 100, randomVisualTier, mapCoins, lat, lng],
+        `INSERT INTO game_sessions (user_id, buyin_amount, coin_tier, map_coins, latitude, longitude, last_location_update, is_active, shields_purchased, shields_remaining, shield_active_until)
+         VALUES ($1, $2, $3, $4, $5, $6, now(), true, 0, 3, $7)`,
+        [userResult.rows[0].id, tier.dollar * 100, randomVisualTier, mapCoins, lat, lng, botShieldExpiry],
       );
 
       created++;

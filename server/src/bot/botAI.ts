@@ -342,16 +342,47 @@ async function botAttack(
   }
 }
 
+let shieldRenewalHandle: ReturnType<typeof setInterval> | null = null;
+
+async function renewBotShields(): Promise<void> {
+  try {
+    const shieldExpiry = new Date(Date.now() + 30 * 60 * 1000); // 30 min shield
+    const result = await query(
+      `UPDATE game_sessions gs
+       SET shield_active_until = $1, shields_remaining = 3
+       FROM users u
+       WHERE gs.user_id = u.id
+         AND u.email LIKE '%@bot.local'
+         AND gs.is_active = true
+         AND (gs.shield_active_until IS NULL OR gs.shield_active_until < now())`,
+      [shieldExpiry],
+    );
+    if (result.rowCount && result.rowCount > 0) {
+      console.log(`[BotAI] Renewed shields for ${result.rowCount} bots (30 min)`);
+    }
+  } catch (err) {
+    console.error('[BotAI] Shield renewal error:', err);
+  }
+}
+
 export function startBotAI(io: SocketIOServer): void {
   if (tickHandle) return;
   console.log(`[BotAI] Starting bot AI loop (${TICK_INTERVAL_MS}ms tick, ${BOT_SPEED_MPH}mph, leash ${Math.round(LEASH_RADIUS_DEGS * 69)}mi)`);
   tickHandle = setInterval(() => botTick(io), TICK_INTERVAL_MS);
+
+  // Renew bot shields every 24 hours + do an initial renewal on startup
+  renewBotShields();
+  shieldRenewalHandle = setInterval(renewBotShields, 24 * 60 * 60 * 1000);
 }
 
 export function stopBotAI(): void {
   if (tickHandle) {
     clearInterval(tickHandle);
     tickHandle = null;
-    console.log('[BotAI] Stopped');
   }
+  if (shieldRenewalHandle) {
+    clearInterval(shieldRenewalHandle);
+    shieldRenewalHandle = null;
+  }
+  console.log('[BotAI] Stopped');
 }
