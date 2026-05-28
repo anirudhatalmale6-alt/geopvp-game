@@ -911,9 +911,7 @@ export default function MapScreen() {
     );
   };
 
-  const shieldIsActive = session?.shieldActiveUntil
-    ? new Date(session.shieldActiveUntil) > new Date()
-    : false;
+  const shieldIsActive = shieldSecsLeft > 0 && !!session?.shieldActiveUntil;
 
   const ATTACK_RADIUS_MILES = 0.25;
   const [targetIndex, setTargetIndex] = useState(0);
