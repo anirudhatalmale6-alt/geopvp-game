@@ -538,7 +538,7 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
         ),
         q(
           `INSERT INTO transactions (user_id, type, amount, currency, description, related_user_id)
-           VALUES ($1, 'attack_loss', $2, 'sweep', $3, $4)`,
+           VALUES ($1, 'attack_loss', $2, 'prowl', $3, $4)`,
           [defender.user_id, -stolenCents, `Lost ${coinsStolen} coins to ${attacker.attacker_name}`, attacker.user_id],
         ),
       ];
@@ -644,7 +644,7 @@ export async function buyShield(req: AuthRequest, res: Response): Promise<void> 
 
     await query(
       `INSERT INTO transactions (user_id, type, amount, currency, description)
-       VALUES ($1, 'shield', $2, 'sweep', $3)`,
+       VALUES ($1, 'shield', $2, 'prowl', $3)`,
       [userId, -SHIELD_COST_CENTS, `Shield purchased ($1.00) — active for ${config.shieldDurationMinutes} minutes`],
     );
 
