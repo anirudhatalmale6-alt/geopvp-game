@@ -86,9 +86,28 @@ export interface Transaction {
 // Game Session API
 // ---------------------------------------------------------------------------
 
-export async function createSession(tierDollars: number): Promise<GameSession> {
+export interface GeoFenceResult {
+  blocked: boolean;
+  state?: string;
+  stateCode?: string;
+  blockedStates?: Record<string, string>;
+}
+
+export async function checkGeoFence(lat: number, lng: number): Promise<GeoFenceResult> {
+  try {
+    const { data } = await api.get<GeoFenceResult>(`/game/geofence?lat=${lat}&lng=${lng}`);
+    return data;
+  } catch {
+    return { blocked: false };
+  }
+}
+
+export async function createSession(tierDollars: number, lat?: number, lng?: number, stateCode?: string): Promise<GameSession> {
   const { data } = await api.post<{ session: GameSession }>('/game/sessions', {
     tierDollars,
+    latitude: lat,
+    longitude: lng,
+    stateCode,
   });
   return data.session;
 }

@@ -13,12 +13,16 @@ import {
   getCombatStats,
   getActiveCoinDrops,
   collectCoinDrop,
+  checkGeoFence,
 } from '../controllers/gameController';
 
 const router = Router();
 
 // All game routes require authentication
 router.use(authenticate);
+
+// Geo-fence check
+router.get('/geofence', checkGeoFence);
 
 // Session routes
 router.post('/sessions', createGameSession);

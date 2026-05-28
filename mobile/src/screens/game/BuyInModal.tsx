@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, fontSize } from '../../theme';
-import { createSession } from '../../api/game';
+import { createSession, checkGeoFence, GeoFenceResult } from '../../api/game';
 
 interface TierOption {
   dollars: number;
@@ -53,19 +53,44 @@ interface BuyInModalProps {
   visible: boolean;
   onClose: () => void;
   onSessionCreated: () => void;
+  lat?: number | null;
+  lng?: number | null;
 }
 
-export default function BuyInModal({ visible, onClose, onSessionCreated }: BuyInModalProps) {
+export default function BuyInModal({ visible, onClose, onSessionCreated, lat, lng }: BuyInModalProps) {
   const [selectedTier, setSelectedTier] = useState<TierOption>(TIERS[4]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [geoBlock, setGeoBlock] = useState<GeoFenceResult | null>(null);
+  const [checkingGeo, setCheckingGeo] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    if (visible && lat != null && lng != null) {
+      setCheckingGeo(true);
+      setGeoBlock(null);
+      checkGeoFence(lat, lng)
+        .then((result) => {
+          if (result.blocked) setGeoBlock(result);
+        })
+        .finally(() => setCheckingGeo(false));
+    }
+    if (!visible) {
+      setGeoBlock(null);
+      setError(null);
+    }
+  }, [visible, lat, lng]);
 
   const handleBuyIn = async () => {
     setLoading(true);
     setError(null);
     try {
-      await createSession(selectedTier.dollars);
+      await createSession(
+        selectedTier.dollars,
+        lat ?? undefined,
+        lng ?? undefined,
+        geoBlock?.stateCode ?? undefined,
+      );
       onSessionCreated();
       onClose();
     } catch (err: any) {
@@ -91,14 +116,52 @@ export default function BuyInModal({ visible, onClose, onSessionCreated }: BuyIn
           <View style={styles.header}>
             <View style={styles.headerLeft}>
               <View style={[styles.headerIcon, { backgroundColor: tierColor + '30' }]}>
-                <Ionicons name="flash" size={20} color={tierColor} />
+                <Ionicons name={geoBlock ? 'location-outline' : 'flash'} size={20} color={geoBlock ? colors.error : tierColor} />
               </View>
-              <Text style={styles.title}>START HUNTING</Text>
+              <Text style={styles.title}>{geoBlock ? 'RESTRICTED AREA' : 'START HUNTING'}</Text>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
               <Ionicons name="close" size={22} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
+
+          {checkingGeo ? (
+            <View style={styles.geoCheckContainer}>
+              <ActivityIndicator color={colors.primary} size="large" />
+              <Text style={styles.geoCheckText}>Checking your location...</Text>
+            </View>
+          ) : geoBlock ? (
+            <View style={styles.geoBlockContainer}>
+              <Ionicons name="ban" size={48} color={colors.error} />
+              <Text style={styles.geoBlockTitle}>
+                Not Available in {geoBlock.state || 'Your State'}
+              </Text>
+              <Text style={styles.geoBlockMessage}>
+                Real-money gameplay is not available in {geoBlock.state || 'your state'} due to state regulations. CoinProwl is currently restricted in the following states:
+              </Text>
+              <View style={styles.blockedStatesList}>
+                {geoBlock.blockedStates && Object.entries(geoBlock.blockedStates).map(([code, name]) => (
+                  <Text key={code} style={[
+                    styles.blockedStateItem,
+                    code === geoBlock.stateCode && styles.blockedStateCurrent,
+                  ]}>
+                    {name} ({code})
+                  </Text>
+                ))}
+              </View>
+              <Text style={styles.geoBlockFooter}>
+                Travel to a non-restricted state to play. We are working to expand availability.
+              </Text>
+              <TouchableOpacity
+                style={styles.geoBlockCloseBtn}
+                onPress={onClose}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.geoBlockCloseBtnText}>GOT IT</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
 
           <Text style={styles.subtitle}>Select your buy-in tier to enter the battlefield</Text>
 
@@ -198,6 +261,8 @@ export default function BuyInModal({ visible, onClose, onSessionCreated }: BuyIn
           <Text style={styles.disclaimer}>
             Coins earned can be withdrawn. By proceeding you agree to the game rules.
           </Text>
+            </>
+          )}
         </View>
       </View>
     </Modal>
@@ -381,5 +446,76 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: colors.textMuted,
     textAlign: 'center',
+  },
+  geoCheckContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    gap: spacing.md,
+  },
+  geoCheckText: {
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+  },
+  geoBlockContainer: {
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
+    gap: spacing.sm,
+  },
+  geoBlockTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: '900',
+    color: colors.error,
+    textAlign: 'center',
+    letterSpacing: 1,
+    marginTop: spacing.sm,
+  },
+  geoBlockMessage: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  blockedStatesList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 6,
+    marginVertical: spacing.sm,
+  },
+  blockedStateItem: {
+    fontSize: 11,
+    color: colors.textMuted,
+    backgroundColor: colors.surfaceLight,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: borderRadius.sm,
+    overflow: 'hidden',
+  },
+  blockedStateCurrent: {
+    color: colors.error,
+    backgroundColor: colors.error + '20',
+    fontWeight: '700',
+  },
+  geoBlockFooter: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: spacing.xs,
+  },
+  geoBlockCloseBtn: {
+    backgroundColor: colors.surfaceLight,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    marginTop: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  geoBlockCloseBtnText: {
+    color: colors.text,
+    fontWeight: '800',
+    fontSize: fontSize.md,
+    letterSpacing: 1,
   },
 });
