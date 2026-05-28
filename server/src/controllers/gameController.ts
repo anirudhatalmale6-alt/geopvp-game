@@ -936,7 +936,7 @@ export async function collectCoinDrop(req: AuthRequest, res: Response): Promise<
 // POST /api/game/daily-bonus  — claim free daily Sweep Coins
 // ---------------------------------------------------------------------------
 
-const DAILY_BONUS_AMOUNT = 50; // 5 sweep coins (50 cents value)
+const DAILY_BONUS_AMOUNT = 10; // $0.10 worth of sweep coins
 
 export async function claimDailyBonus(req: AuthRequest, res: Response): Promise<void> {
   try {
