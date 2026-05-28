@@ -150,7 +150,7 @@ function LeafletMap({ lat, lng, nearbyPlayers, session, coinDrops, commandRef }:
     transition:transform 0.3s linear !important;
   }
   .leaflet-marker-icon.enemy-icon{
-    transition:transform 2.5s linear !important;
+    transition:transform 1s linear !important;
   }
   .leaflet-control-attribution{display:none!important}
   .leaflet-control-zoom{display:none!important}
