@@ -380,8 +380,9 @@ export async function refreshToken(req: Request, res: Response): Promise<void> {
 
     const user = result.rows[0];
     const newToken = generateAccessToken({ id: user.id, email: user.email, username: user.username });
+    const newRefresh = generateRefreshToken({ id: user.id });
 
-    res.json({ token: newToken });
+    res.json({ token: newToken, refreshToken: newRefresh });
   } catch (err) {
     console.error('Refresh token error:', err);
     res.status(500).json({ error: 'Internal server error.' });

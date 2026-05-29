@@ -76,8 +76,9 @@ async function attemptTokenRefresh(): Promise<boolean> {
       if (!res.ok) return false;
 
       const data = await res.json();
-      if (data.token && data.refreshToken) {
-        await setTokens(data.token, data.refreshToken);
+      if (data.token) {
+        const newRefresh = data.refreshToken || refreshToken;
+        await setTokens(data.token, newRefresh);
         return true;
       }
       return false;
