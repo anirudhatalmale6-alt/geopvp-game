@@ -147,7 +147,7 @@ export default function BuyInModal({ visible, onClose, onSessionCreated }: BuyIn
                     styles.coinsText,
                     isSelected && { color: tier.color },
                   ]}>
-                    {tier.coins} coins
+                    {tier.coins} prowl coins
                   </Text>
                 </TouchableOpacity>
               );
@@ -164,7 +164,7 @@ export default function BuyInModal({ visible, onClose, onSessionCreated }: BuyIn
             <View style={styles.summaryDivider} />
             <View style={styles.summaryItem}>
               <Ionicons name="cash-outline" size={16} color={colors.gold} />
-              <Text style={styles.summaryLabel}>Coins</Text>
+              <Text style={styles.summaryLabel}>Prowl Coins</Text>
               <Text style={[styles.summaryValue, { color: colors.gold }]}>{selectedTier.coins}</Text>
             </View>
           </View>
