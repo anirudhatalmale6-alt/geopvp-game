@@ -45,7 +45,7 @@ const RANK_TIERS = [
   { min: 500,   title: 'TRACKER',         icon: 'compass-outline',   color: '#4caf50' },
   { min: 1500,  title: 'STALKER',         icon: 'navigate-outline',  color: '#2196f3' },
   { min: 3000,  title: 'PROWLER',         icon: 'flash-outline',     color: '#7c4dff' },
-  { min: 5000,  title: 'PREDATOR',        icon: 'flame-outline',     color: '#ff9100' },
+  { min: 5000,  title: 'ENFORCER',         icon: 'flame-outline',     color: '#ff9100' },
   { min: 10000, title: 'APEX HUNTER',     icon: 'diamond-outline',   color: '#f50057' },
   { min: 25000, title: 'LEGEND',          icon: 'star',              color: '#ffd700' },
   { min: 50000, title: 'MYTHIC PROWLER',  icon: 'trophy',            color: '#ff1744' },
