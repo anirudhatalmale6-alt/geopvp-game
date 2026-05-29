@@ -302,9 +302,18 @@ async function botAttack(
           [bot.user_id, defender.user_id, bot.map_coins, defender.map_coins, playerCoins, bot.latitude, bot.longitude],
         );
 
+        const lostCents = playerCoins * 10;
+        await q(
+          `INSERT INTO transactions (user_id, type, amount, currency, description, related_user_id)
+           VALUES ($1, 'attack_loss', $2, 'prowl', $3, $4)`,
+          [defender.user_id, -lostCents, `Lost ${playerCoins} coins to ${bot.username}`, bot.user_id],
+        );
+
         io.to(`user:${defender.user_id}`).emit('session:eliminated', {
           attackerName: bot.username,
           coinsLost: playerCoins,
+          coinsSaved: 0,
+          message: `${bot.username} attacked you and took ${playerCoins} coins! You've been eliminated.`,
         });
 
         sendPushNotification(

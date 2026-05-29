@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  RefreshControl,
   Alert,
   TextInput,
   ActivityIndicator,
@@ -194,6 +195,7 @@ export default function ProfileScreen() {
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [stats, setStats] = useState<CombatStats | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const loadStats = useCallback(async () => {
     const s = await getCombatStats();
@@ -208,6 +210,12 @@ export default function ProfileScreen() {
   useEffect(() => {
     loadStats();
     checkNotificationStatus();
+  }, [loadStats, checkNotificationStatus]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([loadStats(), checkNotificationStatus()]);
+    setRefreshing(false);
   }, [loadStats, checkNotificationStatus]);
 
   const handleNotificationToggle = async () => {
@@ -257,6 +265,9 @@ export default function ProfileScreen() {
       style={styles.container}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+      }
     >
       {/* Avatar + name */}
       <View style={styles.heroCard}>
