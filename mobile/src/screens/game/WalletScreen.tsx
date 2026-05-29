@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, fontSize } from '../../theme';
-import { getWallet, getTransactions, claimDailyBonus, WalletData, Transaction } from '../../api/game';
+import { getWallet, getTransactions, WalletData, Transaction } from '../../api/game';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -82,7 +82,6 @@ export default function WalletScreen() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [claimingBonus, setClaimingBonus] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -113,21 +112,6 @@ export default function WalletScreen() {
     ]);
   };
 
-  const handleDailyBonus = async () => {
-    setClaimingBonus(true);
-    try {
-      const result = await claimDailyBonus();
-      if (result.claimed) {
-        Alert.alert('Daily Bonus!', `You received ${result.amount / 10} free Sweep Coins!`);
-        await load();
-      }
-    } catch (err: any) {
-      Alert.alert('Daily Bonus', err?.response?.data?.error || err.message || 'Could not claim bonus.');
-    } finally {
-      setClaimingBonus(false);
-    }
-  };
-
   if (loading) {
     return (
       <View style={styles.centered}>
@@ -139,7 +123,6 @@ export default function WalletScreen() {
   const sweepBalance = wallet?.sweepBalance ?? wallet?.balance ?? 0;
   const prowlBalance = wallet?.prowlBalance ?? 0;
   const sweepDollars = (Math.max(0, sweepBalance) / 100).toFixed(2);
-  const canClaimDaily = wallet?.canClaimDaily ?? false;
 
   const listHeader = (
     <>
@@ -163,28 +146,11 @@ export default function WalletScreen() {
         </View>
       </View>
 
-      {/* Action Buttons */}
+      {/* Action Button */}
       <View style={styles.actionRow}>
-        <TouchableOpacity
-          style={[styles.dailyBonusBtn, !canClaimDaily && styles.dailyBonusClaimed]}
-          onPress={handleDailyBonus}
-          disabled={!canClaimDaily || claimingBonus}
-          activeOpacity={0.85}
-        >
-          {claimingBonus ? (
-            <ActivityIndicator size="small" color={colors.background} />
-          ) : (
-            <>
-              <Ionicons name="sunny" size={18} color={canClaimDaily ? colors.background : colors.textMuted} />
-              <Text style={[styles.dailyBonusText, !canClaimDaily && { color: colors.textMuted }]}>
-                {canClaimDaily ? 'CLAIM DAILY BONUS' : 'CLAIMED TODAY'}
-              </Text>
-            </>
-          )}
-        </TouchableOpacity>
         <TouchableOpacity style={styles.cashOutBtn} onPress={handleCashOut} activeOpacity={0.85}>
           <Ionicons name="arrow-up-circle" size={18} color={colors.background} />
-          <Text style={styles.cashOutText}>REDEEM</Text>
+          <Text style={styles.cashOutText}>REDEEM SWEEP COINS</Text>
         </TouchableOpacity>
       </View>
 

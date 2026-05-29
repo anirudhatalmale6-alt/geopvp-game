@@ -58,7 +58,6 @@ export async function createGameSession(req: AuthRequest, res: Response): Promis
     const tierCents = tierDollars * 100;
     const tier = getCoinTier(tierCents);
     const mapCoins = tierDollars * 10; // 10 coins per dollar
-    const bonusSweepCoins = tierDollars; // 1 free sweep coin per dollar
 
     // Ensure wallet row exists
     await query(`INSERT INTO wallets (user_id, balance) VALUES ($1, 0) ON CONFLICT DO NOTHING`, [userId]);
@@ -88,13 +87,6 @@ export async function createGameSession(req: AuthRequest, res: Response): Promis
        VALUES ($1, $2, now())
        ON CONFLICT (user_id) DO UPDATE SET balance = prowl_balances.balance + $2, updated_at = now()`,
       [userId, mapCoins],
-    );
-
-    // Give bonus Sweep Coins (free with purchase)
-    await query(
-      `INSERT INTO transactions (user_id, type, amount, currency, description)
-       VALUES ($1, 'bonus_sweep', $2, 'sweep', $3)`,
-      [userId, bonusSweepCoins * 10, `Free ${bonusSweepCoins} Sweep Coins with purchase`],
     );
 
     res.status(201).json({ session: formatSession(session) });
@@ -663,7 +655,7 @@ export async function getWallet(req: AuthRequest, res: Response): Promise<void> 
   try {
     const userId = req.user!.id;
 
-    const [sweepResult, prowlResult, dailyResult] = await Promise.all([
+    const [sweepResult, prowlResult] = await Promise.all([
       query(
         `SELECT COALESCE(SUM(amount), 0) AS balance FROM transactions WHERE user_id = $1 AND currency = 'sweep'`,
         [userId],
@@ -672,24 +664,17 @@ export async function getWallet(req: AuthRequest, res: Response): Promise<void> 
         `SELECT COALESCE(balance, 0) AS balance FROM prowl_balances WHERE user_id = $1`,
         [userId],
       ),
-      query(
-        `SELECT claimed_at FROM daily_bonuses WHERE user_id = $1 ORDER BY claimed_at DESC LIMIT 1`,
-        [userId],
-      ),
     ]);
 
     const sweepBalance = parseInt(sweepResult.rows[0].balance, 10);
     const prowlBalance = prowlResult.rows.length > 0 ? parseInt(prowlResult.rows[0].balance, 10) : 0;
-
-    const lastClaim = dailyResult.rows[0]?.claimed_at;
-    const canClaimDaily = !lastClaim || (Date.now() - new Date(lastClaim).getTime()) >= 24 * 60 * 60 * 1000;
 
     res.json({
       userId,
       balance: sweepBalance,
       sweepBalance,
       prowlBalance,
-      canClaimDaily,
+      canClaimDaily: false,
     });
   } catch (err) {
     console.error('getWallet error:', err);
@@ -935,49 +920,6 @@ export async function collectCoinDrop(req: AuthRequest, res: Response): Promise<
     });
   } catch (err) {
     console.error('collectCoinDrop error:', err);
-    res.status(500).json({ error: 'Internal server error.' });
-  }
-}
-
-// ---------------------------------------------------------------------------
-// POST /api/game/daily-bonus  — claim free daily Sweep Coins
-// ---------------------------------------------------------------------------
-
-const DAILY_BONUS_AMOUNT = 10; // $0.10 worth of sweep coins
-
-export async function claimDailyBonus(req: AuthRequest, res: Response): Promise<void> {
-  try {
-    const userId = req.user!.id;
-
-    const lastClaim = await query(
-      `SELECT claimed_at FROM daily_bonuses WHERE user_id = $1 ORDER BY claimed_at DESC LIMIT 1`,
-      [userId],
-    );
-
-    if (lastClaim.rows.length > 0) {
-      const elapsed = Date.now() - new Date(lastClaim.rows[0].claimed_at).getTime();
-      if (elapsed < 24 * 60 * 60 * 1000) {
-        const hoursLeft = Math.ceil((24 * 60 * 60 * 1000 - elapsed) / (60 * 60 * 1000));
-        res.status(400).json({ error: `Daily bonus already claimed. Come back in ${hoursLeft} hours.` });
-        return;
-      }
-    }
-
-    await Promise.all([
-      query(
-        `INSERT INTO daily_bonuses (user_id, amount) VALUES ($1, $2)`,
-        [userId, DAILY_BONUS_AMOUNT],
-      ),
-      query(
-        `INSERT INTO transactions (user_id, type, amount, currency, description)
-         VALUES ($1, 'daily_bonus', $2, 'sweep', 'Free daily Sweep Coins bonus')`,
-        [userId, DAILY_BONUS_AMOUNT],
-      ),
-    ]);
-
-    res.json({ claimed: true, amount: DAILY_BONUS_AMOUNT });
-  } catch (err) {
-    console.error('claimDailyBonus error:', err);
     res.status(500).json({ error: 'Internal server error.' });
   }
 }
