@@ -739,17 +739,17 @@ export async function getCombatStats(req: AuthRequest, res: Response): Promise<v
     const userId = req.user!.id;
 
     const [sessionsRes, winsRes, lossesRes, shieldsRes, playersHitRes, coinsEarnedRes] = await Promise.all([
-      query(`SELECT COUNT(*) AS count FROM transactions WHERE user_id = $1 AND type = 'buyin'`, [userId]),
-      query(`SELECT COUNT(*) AS count FROM transactions WHERE user_id = $1 AND type = 'attack_win'`, [userId]),
-      query(`SELECT COUNT(*) AS count FROM transactions WHERE user_id = $1 AND type = 'attack_loss'`, [userId]),
-      query(`SELECT COUNT(*) AS count FROM transactions WHERE user_id = $1 AND type = 'shield'`, [userId]),
+      query(`SELECT COUNT(*) AS count FROM game_sessions WHERE user_id = $1`, [userId]),
       query(`SELECT COUNT(*) AS count FROM attacks WHERE attacker_id = $1 AND success = true`, [userId]),
-      query(`SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE user_id = $1 AND type = 'attack_win'`, [userId]),
+      query(`SELECT COUNT(*) AS count FROM attacks WHERE defender_id = $1 AND success = true`, [userId]),
+      query(`SELECT COUNT(*) AS count FROM transactions WHERE user_id = $1 AND type = 'shield'`, [userId]),
+      query(`SELECT COUNT(DISTINCT defender_id) AS count FROM attacks WHERE attacker_id = $1 AND success = true`, [userId]),
+      query(`SELECT COALESCE(SUM(coins_stolen), 0) AS total FROM attacks WHERE attacker_id = $1 AND success = true`, [userId]),
     ]);
 
     res.json({
       sessions: parseInt(sessionsRes.rows[0].count, 10),
-      coinsEarned: Math.floor(parseInt(coinsEarnedRes.rows[0].total, 10) / 10),
+      coinsEarned: parseInt(coinsEarnedRes.rows[0].total, 10),
       attacksWon: parseInt(winsRes.rows[0].count, 10),
       attacksLost: parseInt(lossesRes.rows[0].count, 10),
       shieldsUsed: parseInt(shieldsRes.rows[0].count, 10),
