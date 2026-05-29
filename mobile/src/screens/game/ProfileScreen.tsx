@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, fontSize } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../api/client';
-import { getCombatStats, CombatStats } from '../../api/game';
+import { getCombatStats, CombatStats, getWallet } from '../../api/game';
 import { getNotificationPermissionStatus, registerForPushNotifications } from '../../services/notifications';
 
 // ---------------------------------------------------------------------------
@@ -34,6 +34,32 @@ function getAvatarColor(username: string): string {
     hash = username.charCodeAt(i) + ((hash << 5) - hash);
   }
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+// ---------------------------------------------------------------------------
+// Rank tiers — based on total Prowl Coins earned
+// ---------------------------------------------------------------------------
+const RANK_TIERS = [
+  { min: 0,     title: 'ROOKIE HUNTER',   icon: 'footsteps-outline', color: '#9e9e9e' },
+  { min: 100,   title: 'SCOUT',           icon: 'eye-outline',       color: '#78909c' },
+  { min: 500,   title: 'TRACKER',         icon: 'compass-outline',   color: '#4caf50' },
+  { min: 1500,  title: 'STALKER',         icon: 'navigate-outline',  color: '#2196f3' },
+  { min: 3000,  title: 'PROWLER',         icon: 'flash-outline',     color: '#7c4dff' },
+  { min: 5000,  title: 'PREDATOR',        icon: 'flame-outline',     color: '#ff9100' },
+  { min: 10000, title: 'APEX HUNTER',     icon: 'diamond-outline',   color: '#f50057' },
+  { min: 25000, title: 'LEGEND',          icon: 'star',              color: '#ffd700' },
+  { min: 50000, title: 'MYTHIC PROWLER',  icon: 'trophy',            color: '#ff1744' },
+];
+
+function getRank(prowlCoins: number) {
+  let rank = RANK_TIERS[0];
+  for (const tier of RANK_TIERS) {
+    if (prowlCoins >= tier.min) rank = tier;
+  }
+  const nextIdx = RANK_TIERS.indexOf(rank) + 1;
+  const next = nextIdx < RANK_TIERS.length ? RANK_TIERS[nextIdx] : null;
+  const progress = next ? (prowlCoins - rank.min) / (next.min - rank.min) : 1;
+  return { ...rank, next, progress: Math.min(1, Math.max(0, progress)), prowlCoins };
 }
 
 // ---------------------------------------------------------------------------
@@ -194,12 +220,14 @@ export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [stats, setStats] = useState<CombatStats | null>(null);
+  const [prowlCoins, setProwlCoins] = useState(0);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadStats = useCallback(async () => {
-    const s = await getCombatStats();
+    const [s, w] = await Promise.all([getCombatStats(), getWallet()]);
     setStats(s);
+    setProwlCoins(w.prowlBalance ?? 0);
   }, []);
 
   const checkNotificationStatus = useCallback(async () => {
@@ -248,6 +276,7 @@ export default function ProfileScreen() {
 
   const avatarColor = user?.username ? getAvatarColor(user.username) : colors.primary;
   const initials = user?.username?.substring(0, 2).toUpperCase() ?? '??';
+  const rank = getRank(prowlCoins);
 
   const handleLogout = () => {
     Alert.alert(
@@ -276,10 +305,20 @@ export default function ProfileScreen() {
         </View>
         <Text style={styles.username}>{user?.username?.toUpperCase() ?? 'HUNTER'}</Text>
         <Text style={styles.email}>{user?.email ?? ''}</Text>
-        <View style={styles.rankBadge}>
-          <Ionicons name="flash" size={12} color={colors.gold} />
-          <Text style={styles.rankText}>ROOKIE HUNTER</Text>
+        <View style={[styles.rankBadge, { backgroundColor: rank.color + '20' }]}>
+          <Ionicons name={rank.icon as any} size={12} color={rank.color} />
+          <Text style={[styles.rankText, { color: rank.color }]}>{rank.title}</Text>
         </View>
+        {rank.next && (
+          <View style={styles.progressWrap}>
+            <View style={styles.progressBar}>
+              <View style={[styles.progressFill, { width: `${rank.progress * 100}%`, backgroundColor: rank.color }]} />
+            </View>
+            <Text style={styles.progressText}>
+              {prowlCoins} / {rank.next.min} to {rank.next.title}
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* Stats grid */}
@@ -289,7 +328,7 @@ export default function ProfileScreen() {
           { label: 'SESSIONS',     value: String(stats?.sessions ?? 0),     icon: 'game-controller-outline', color: colors.primary },
           { label: 'COINS EARNED', value: String(stats?.coinsEarned ?? 0),  icon: 'cash-outline',             color: colors.gold },
           { label: 'ATTACKS WON',  value: String(stats?.attacksWon ?? 0),   icon: 'flash',                   color: colors.success },
-          { label: 'ATTACKS LOST', value: String(stats?.attacksLost ?? 0),  icon: 'skull-outline',           color: colors.secondary },
+          { label: 'DEFEATS',      value: String(stats?.attacksLost ?? 0),  icon: 'skull-outline',           color: colors.secondary },
           { label: 'SHIELDS USED', value: String(stats?.shieldsUsed ?? 0),  icon: 'shield',                  color: colors.primary },
           { label: 'PLAYERS HIT',  value: String(stats?.playersHit ?? 0),   icon: 'people',                  color: colors.warning },
         ].map((stat) => (
@@ -413,7 +452,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: colors.gold + '20',
     borderRadius: borderRadius.full,
     paddingHorizontal: spacing.md,
     paddingVertical: 4,
@@ -421,9 +459,31 @@ const styles = StyleSheet.create({
   },
   rankText: {
     fontSize: fontSize.xs,
-    color: colors.gold,
     fontWeight: '800',
     letterSpacing: 1,
+  },
+  progressWrap: {
+    width: '100%',
+    alignItems: 'center',
+    marginTop: spacing.sm,
+    gap: 4,
+  },
+  progressBar: {
+    width: '80%',
+    height: 6,
+    backgroundColor: colors.border,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  progressText: {
+    fontSize: 9,
+    color: colors.textMuted,
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
   sectionTitle: {
     fontSize: fontSize.xs,
