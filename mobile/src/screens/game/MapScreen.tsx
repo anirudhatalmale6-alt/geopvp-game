@@ -1111,8 +1111,8 @@ export default function MapScreen() {
         {/* Activity feed */}
         {activityFeed.length > 0 && (
           <View style={styles.feedContainer} pointerEvents="none">
-            {activityFeed.slice(0, 5).map((item, idx) => (
-              <View key={item.id} style={[styles.feedItem, { opacity: 1 - idx * 0.15 }]}>
+            {activityFeed.slice(0, 2).map((item, idx) => (
+              <View key={item.id} style={[styles.feedItem, { opacity: 1 - idx * 0.3 }]}>
                 <View style={[styles.feedDot, { backgroundColor: item.color }]} />
                 <Text style={styles.feedText} numberOfLines={1}>{item.text}</Text>
                 <Text style={styles.feedTime}>
