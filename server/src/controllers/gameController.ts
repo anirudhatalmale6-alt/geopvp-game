@@ -531,7 +531,7 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
         q(
           `INSERT INTO transactions (user_id, type, amount, currency, description, related_user_id)
            VALUES ($1, 'attack_loss', $2, 'prowl', $3, $4)`,
-          [defender.user_id, -stolenCents, `Lost ${coinsStolen} coins to ${attacker.attacker_name}`, attacker.user_id],
+          [defender.user_id, -stolenCents, `Defeated by ${attacker.attacker_name}`, attacker.user_id],
         ),
       ];
 

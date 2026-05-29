@@ -198,6 +198,7 @@ export default function WalletScreen() {
         renderItem={({ item }) => {
           const icon = txIcon(item.type);
           const isPositive = item.amount > 0;
+          const hideDollar = item.type === 'attack_loss' || item.type === 'shield';
           return (
             <View style={styles.txItem}>
               <View style={[styles.txIcon, { backgroundColor: icon.color + '20' }]}>
@@ -207,9 +208,11 @@ export default function WalletScreen() {
                 <Text style={styles.txDesc}>{item.description}</Text>
                 <Text style={styles.txDate}>{formatDate(item.createdAt)}</Text>
               </View>
-              <Text style={[styles.txAmount, { color: isPositive ? colors.success : colors.error }]}>
-                {formatAmount(item.amount)}
-              </Text>
+              {!hideDollar && (
+                <Text style={[styles.txAmount, { color: isPositive ? colors.success : colors.error }]}>
+                  {formatAmount(item.amount)}
+                </Text>
+              )}
             </View>
           );
         }}

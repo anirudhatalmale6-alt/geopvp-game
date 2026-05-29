@@ -306,7 +306,7 @@ async function botAttack(
         await q(
           `INSERT INTO transactions (user_id, type, amount, currency, description, related_user_id)
            VALUES ($1, 'attack_loss', $2, 'prowl', $3, $4)`,
-          [defender.user_id, -lostCents, `Lost ${playerCoins} coins to ${bot.username}`, bot.user_id],
+          [defender.user_id, -lostCents, `Defeated by ${bot.username}`, bot.user_id],
         );
 
         io.to(`user:${defender.user_id}`).emit('session:eliminated', {
