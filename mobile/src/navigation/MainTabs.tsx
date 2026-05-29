@@ -5,6 +5,7 @@ import { Platform, View, StyleSheet } from 'react-native';
 import { colors } from '../theme';
 import MapScreen from '../screens/game/MapScreen';
 import WalletScreen from '../screens/game/WalletScreen';
+import RanksScreen from '../screens/game/RanksScreen';
 import ProfileScreen from '../screens/game/ProfileScreen';
 
 const Tab = createBottomTabNavigator();
@@ -48,6 +49,8 @@ export default function MainTabs() {
             iconName = focused ? 'locate' : 'locate-outline';
           } else if (route.name === 'Wallet') {
             iconName = focused ? 'cash' : 'cash-outline';
+          } else if (route.name === 'Ranks') {
+            iconName = focused ? 'ribbon' : 'ribbon-outline';
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person' : 'person-outline';
           }
@@ -74,6 +77,14 @@ export default function MainTabs() {
         options={{
           title: 'WALLET',
           tabBarLabel: 'WALLET',
+        }}
+      />
+      <Tab.Screen
+        name="Ranks"
+        component={RanksScreen}
+        options={{
+          title: 'RANKS',
+          tabBarLabel: 'RANKS',
         }}
       />
       <Tab.Screen
