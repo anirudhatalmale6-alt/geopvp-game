@@ -8,10 +8,14 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, fontSize } from '../../theme';
-import { getWallet, getTransactions, WalletData, Transaction } from '../../api/game';
+import { getWallet, getTransactions, redeemSweepCoins, WalletData, Transaction } from '../../api/game';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -82,6 +86,11 @@ export default function WalletScreen() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showRedeem, setShowRedeem] = useState(false);
+  const [redeemEmail, setRedeemEmail] = useState('');
+  const [redeemAmount, setRedeemAmount] = useState('');
+  const [redeeming, setRedeeming] = useState(false);
+  const [redeemError, setRedeemError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -107,9 +116,47 @@ export default function WalletScreen() {
   };
 
   const handleCashOut = () => {
-    Alert.alert('Redeem Sweep Coins', 'Redemption feature coming soon! You will be able to redeem Sweep Coins for prizes via PayPal.', [
-      { text: 'OK' },
-    ]);
+    const balance = wallet?.sweepBalance ?? 0;
+    if (balance < 100) {
+      Alert.alert('Insufficient Balance', 'You need at least $1.00 in sweep coins to redeem. Keep winning attacks to earn more!');
+      return;
+    }
+    setRedeemEmail('');
+    setRedeemAmount('');
+    setRedeemError(null);
+    setShowRedeem(true);
+  };
+
+  const handleRedeemSubmit = async () => {
+    const email = redeemEmail.trim();
+    if (!email || !email.includes('@')) {
+      setRedeemError('Please enter a valid PayPal email address.');
+      return;
+    }
+    const dollars = parseFloat(redeemAmount);
+    if (isNaN(dollars) || dollars < 1) {
+      setRedeemError('Minimum redemption is $1.00.');
+      return;
+    }
+    const cents = Math.round(dollars * 100);
+    const balance = wallet?.sweepBalance ?? 0;
+    if (cents > balance) {
+      setRedeemError(`You only have $${(balance / 100).toFixed(2)} available.`);
+      return;
+    }
+
+    setRedeeming(true);
+    setRedeemError(null);
+    try {
+      const result = await redeemSweepCoins(email, cents);
+      setShowRedeem(false);
+      Alert.alert('Redemption Successful', result.message);
+      await load();
+    } catch (err: any) {
+      setRedeemError(err.message || 'Redemption failed. Please try again.');
+    } finally {
+      setRedeeming(false);
+    }
   };
 
   if (loading) {
@@ -224,6 +271,78 @@ export default function WalletScreen() {
           </View>
         }
       />
+
+      {/* Redemption Modal */}
+      <Modal visible={showRedeem} transparent animationType="fade" onRequestClose={() => setShowRedeem(false)}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderLeft}>
+                <View style={[styles.modalIcon, { backgroundColor: colors.success + '20' }]}>
+                  <Ionicons name="cash" size={20} color={colors.success} />
+                </View>
+                <Text style={styles.modalTitle}>REDEEM</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowRedeem(false)} style={{ padding: 4 }}>
+                <Ionicons name="close" size={22} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalSubtitle}>
+              Available: ${(Math.max(0, wallet?.sweepBalance ?? 0) / 100).toFixed(2)} sweep coins
+            </Text>
+
+            <Text style={styles.inputLabel}>PAYPAL EMAIL</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="your@email.com"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              value={redeemEmail}
+              onChangeText={setRedeemEmail}
+            />
+
+            <Text style={styles.inputLabel}>AMOUNT (USD)</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="10.00"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="decimal-pad"
+              value={redeemAmount}
+              onChangeText={setRedeemAmount}
+            />
+
+            {redeemError && (
+              <View style={styles.redeemErrorBox}>
+                <Ionicons name="warning" size={14} color={colors.error} />
+                <Text style={styles.redeemErrorText}>{redeemError}</Text>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={[styles.redeemBtn, redeeming && { opacity: 0.6 }]}
+              onPress={handleRedeemSubmit}
+              disabled={redeeming}
+              activeOpacity={0.85}
+            >
+              {redeeming ? (
+                <ActivityIndicator size="small" color={colors.background} />
+              ) : (
+                <>
+                  <Ionicons name="send" size={16} color={colors.background} />
+                  <Text style={styles.redeemBtnText}>SEND TO PAYPAL</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <Text style={styles.redeemDisclaimer}>
+              Funds will be sent to your PayPal email. Processing may take a few minutes. Minimum $1.00.
+            </Text>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -409,5 +528,104 @@ const styles = StyleSheet.create({
   emptySub: {
     fontSize: fontSize.sm,
     color: colors.textMuted,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.lg,
+  },
+  modalContainer: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    width: '100%',
+    maxWidth: 400,
+    borderWidth: 1,
+    borderColor: colors.success + '40',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  modalHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  modalIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: borderRadius.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: '900',
+    color: colors.text,
+    letterSpacing: 2,
+  },
+  modalSubtitle: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    marginBottom: spacing.md,
+  },
+  inputLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: colors.textMuted,
+    letterSpacing: 2,
+    marginBottom: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  modalInput: {
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    color: colors.text,
+    fontSize: fontSize.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  redeemErrorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.secondary + '15',
+    borderRadius: borderRadius.sm,
+    padding: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  redeemErrorText: {
+    flex: 1,
+    fontSize: fontSize.xs,
+    color: colors.error,
+  },
+  redeemBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.success,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    marginTop: spacing.md,
+  },
+  redeemBtnText: {
+    color: colors.background,
+    fontWeight: '900',
+    fontSize: fontSize.md,
+    letterSpacing: 1,
+  },
+  redeemDisclaimer: {
+    fontSize: 10,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: spacing.sm,
   },
 });

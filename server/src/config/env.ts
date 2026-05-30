@@ -35,6 +35,11 @@ export interface AppConfig {
     pass: string;
     from: string;
   };
+  paypal: {
+    clientId: string;
+    clientSecret: string;
+    mode: 'sandbox' | 'live';
+  };
   appName: string;
   attackRadiusMiles: number;
   shieldPriceCents: number;
@@ -54,6 +59,11 @@ export const config: AppConfig = {
     user: required('SMTP_USER'),
     pass: required('SMTP_PASS'),
     from: optional('SMTP_FROM', ''),
+  },
+  paypal: {
+    clientId: optional('PAYPAL_CLIENT_ID', ''),
+    clientSecret: optional('PAYPAL_CLIENT_SECRET', ''),
+    mode: (optional('PAYPAL_MODE', 'sandbox') as 'sandbox' | 'live'),
   },
   appName: optional('APP_NAME', 'CoinProwl'),
   attackRadiusMiles: parseFloat(optional('ATTACK_RADIUS_MILES', '0.25')),

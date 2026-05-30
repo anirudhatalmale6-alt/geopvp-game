@@ -216,12 +216,37 @@ export async function getTransactions(): Promise<Transaction[]> {
 }
 
 // ---------------------------------------------------------------------------
-// Daily Bonus API
+// Redemption API
 // ---------------------------------------------------------------------------
 
-export async function claimDailyBonus(): Promise<{ claimed: boolean; amount: number }> {
-  const { data } = await api.post<{ claimed: boolean; amount: number }>('/game/daily-bonus');
+export interface RedeemResult {
+  success: boolean;
+  message: string;
+  withdrawalId: string;
+  batchId: string;
+}
+
+export interface Redemption {
+  id: string;
+  amount: number;
+  method: string;
+  status: string;
+  paypalEmail: string | null;
+  createdAt: string;
+}
+
+export async function redeemSweepCoins(paypalEmail: string, amountCents: number): Promise<RedeemResult> {
+  const { data } = await api.post<RedeemResult>('/wallet/redeem', { paypalEmail, amountCents });
   return data;
+}
+
+export async function getRedemptions(): Promise<Redemption[]> {
+  try {
+    const { data } = await api.get<{ redemptions: Redemption[] }>('/wallet/redemptions');
+    return data.redemptions;
+  } catch {
+    return [];
+  }
 }
 
 // ---------------------------------------------------------------------------

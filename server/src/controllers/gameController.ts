@@ -8,6 +8,7 @@ import { getCoinTier } from '../utils/coins';
 import { getIO } from '../socket/ioInstance';
 import { sendPushNotification } from '../utils/pushNotification';
 import { checkLocationBlocked, isBlockedState, getBlockedStates } from '../utils/geofence';
+import { sendPayout } from '../services/paypal';
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -20,6 +21,11 @@ const createSessionSchema = z.object({
 const updateLocationSchema = z.object({
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
+});
+
+const redeemSchema = z.object({
+  paypalEmail: z.string().email('Valid PayPal email required'),
+  amountCents: z.number().int().min(100, 'Minimum redemption is $1.00'),
 });
 
 const attackSchema = z.object({
@@ -997,4 +1003,137 @@ function formatSession(row: Record<string, any>, shieldsBought24h?: number) {
     createdAt: row.created_at,
     spawnedAt: row.spawned_at || row.created_at,
   };
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/wallet/redeem  — redeem sweep coins via PayPal
+// ---------------------------------------------------------------------------
+
+export async function redeemSweepCoins(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const userId = req.user!.id;
+
+    const parsed = redeemSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0].message });
+      return;
+    }
+
+    const { paypalEmail, amountCents } = parsed.data;
+
+    // Check for pending withdrawals
+    const pendingCheck = await query(
+      `SELECT id FROM withdrawals WHERE user_id = $1 AND status = 'pending' LIMIT 1`,
+      [userId],
+    );
+    if (pendingCheck.rows.length > 0) {
+      res.status(400).json({ error: 'You already have a pending redemption. Please wait for it to complete.' });
+      return;
+    }
+
+    // Get sweep balance
+    const sweepResult = await query(
+      `SELECT COALESCE(SUM(amount), 0) AS balance FROM transactions WHERE user_id = $1 AND currency = 'sweep'`,
+      [userId],
+    );
+    const sweepBalance = parseInt(sweepResult.rows[0].balance, 10);
+
+    if (sweepBalance < amountCents) {
+      res.status(400).json({ error: `Insufficient sweep coins. You have $${(sweepBalance / 100).toFixed(2)} available.` });
+      return;
+    }
+
+    const amountDollars = (amountCents / 100).toFixed(2);
+    const senderItemId = `coinprowl-${userId.slice(0, 8)}-${Date.now()}`;
+
+    // Create withdrawal record
+    const withdrawalResult = await query(
+      `INSERT INTO withdrawals (user_id, amount, method, payout_details, status)
+       VALUES ($1, $2, 'paypal', $3, 'processing')
+       RETURNING id`,
+      [userId, amountCents, JSON.stringify({ email: paypalEmail, senderItemId })],
+    );
+    const withdrawalId = withdrawalResult.rows[0].id;
+
+    // Deduct sweep coins
+    await query(
+      `INSERT INTO transactions (user_id, type, amount, currency, description)
+       VALUES ($1, 'withdrawal', $2, 'sweep', $3)`,
+      [userId, -amountCents, `Redeemed $${amountDollars} via PayPal`],
+    );
+
+    // Send PayPal payout
+    try {
+      const result = await sendPayout(
+        paypalEmail,
+        amountDollars,
+        senderItemId,
+        `CoinProwl sweep coin redemption — $${amountDollars}`,
+      );
+
+      await query(
+        `UPDATE withdrawals SET status = 'completed', payout_details = payout_details || $1, updated_at = NOW()
+         WHERE id = $2`,
+        [JSON.stringify({ batchId: result.batchId, paypalStatus: result.status }), withdrawalId],
+      );
+
+      res.json({
+        success: true,
+        message: `$${amountDollars} has been sent to ${paypalEmail} via PayPal.`,
+        withdrawalId,
+        batchId: result.batchId,
+      });
+    } catch (paypalErr: any) {
+      // PayPal failed — refund the sweep coins
+      await query(
+        `INSERT INTO transactions (user_id, type, amount, currency, description)
+         VALUES ($1, 'deposit', $2, 'sweep', 'Refund: PayPal payout failed')`,
+        [userId, amountCents],
+      );
+      await query(
+        `UPDATE withdrawals SET status = 'failed', admin_notes = $1, updated_at = NOW()
+         WHERE id = $2`,
+        [paypalErr.message, withdrawalId],
+      );
+
+      console.error('PayPal payout error:', paypalErr);
+      res.status(500).json({ error: 'PayPal payout failed. Your sweep coins have been refunded.' });
+    }
+  } catch (err) {
+    console.error('redeemSweepCoins error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/wallet/redemptions  — get redemption history
+// ---------------------------------------------------------------------------
+
+export async function getRedemptions(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const userId = req.user!.id;
+
+    const result = await query(
+      `SELECT id, amount, method, status, payout_details, created_at, updated_at
+       FROM withdrawals
+       WHERE user_id = $1
+       ORDER BY created_at DESC
+       LIMIT 20`,
+      [userId],
+    );
+
+    const redemptions = result.rows.map((row) => ({
+      id: row.id,
+      amount: parseInt(row.amount, 10),
+      method: row.method,
+      status: row.status,
+      paypalEmail: row.payout_details?.email ?? null,
+      createdAt: row.created_at,
+    }));
+
+    res.json({ redemptions });
+  } catch (err) {
+    console.error('getRedemptions error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
 }
