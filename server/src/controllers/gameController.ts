@@ -235,6 +235,7 @@ export async function getNearbyPlayers(req: AuthRequest, res: Response): Promise
        WHERE gs.is_active = true
          AND gs.user_id != $1
          AND gs.latitude IS NOT NULL
+         AND gs.last_location_update > now() - interval '60 seconds'
          AND gs.latitude BETWEEN $2 AND $3
          AND gs.longitude BETWEEN $4 AND $5
 `,
@@ -301,6 +302,7 @@ export async function getAllPlayers(req: AuthRequest, res: Response): Promise<vo
          WHERE gs.is_active = true
            AND gs.user_id != $1
            AND gs.latitude IS NOT NULL
+           AND gs.last_location_update > now() - interval '60 seconds'
          ORDER BY (gs.latitude - $2)*(gs.latitude - $2) + (gs.longitude - $3)*(gs.longitude - $3) ASC
          LIMIT 1500`,
         [userId, myLat, myLng],
@@ -308,7 +310,8 @@ export async function getAllPlayers(req: AuthRequest, res: Response): Promise<vo
       query(
         `SELECT COUNT(*) AS total FROM game_sessions gs
          WHERE gs.is_active = true
-           AND gs.latitude IS NOT NULL`,
+           AND gs.latitude IS NOT NULL
+           AND gs.last_location_update > now() - interval '60 seconds'`,
       ),
     ]);
 
@@ -411,6 +414,15 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
       if (now - defenderSpawn < SPAWN_PROTECTION_MS) {
         const secsLeft = Math.ceil((SPAWN_PROTECTION_MS - (now - defenderSpawn)) / 1000);
         throw new Error(`That player just spawned and is protected for ${secsLeft} more seconds.`);
+      }
+
+      // Connectivity protection: can't attack players whose location is stale (>60s)
+      const STALE_THRESHOLD_MS = 60 * 1000;
+      const defenderLastUpdate = defender.last_location_update
+        ? new Date(defender.last_location_update).getTime()
+        : 0;
+      if (now - defenderLastUpdate > STALE_THRESHOLD_MS) {
+        throw new Error('That player appears to be offline. You can only attack active players.');
       }
 
       // Check if defender is a bot
