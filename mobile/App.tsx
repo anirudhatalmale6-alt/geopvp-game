@@ -14,8 +14,10 @@ import ForgotPasswordScreen from './src/screens/auth/ForgotPasswordScreen';
 import ResetPasswordScreen from './src/screens/auth/ResetPasswordScreen';
 import WaiverScreen from './src/screens/game/WaiverScreen';
 import MainTabs from './src/navigation/MainTabs';
+import HelpSupportScreen from './src/screens/game/HelpSupportScreen';
 
 const AuthStackNav = createNativeStackNavigator();
+const AppStackNav = createNativeStackNavigator();
 
 const DarkTheme = {
   ...DefaultTheme,
@@ -50,7 +52,36 @@ function AuthStack() {
 }
 
 function MainStack() {
-  return <MainTabs />;
+  return (
+    <AppStackNav.Navigator
+      screenOptions={{
+        headerStyle: {
+          backgroundColor: colors.surface,
+        },
+        headerTintColor: colors.text,
+        headerTitleStyle: {
+          fontWeight: '900',
+          letterSpacing: 2,
+          fontSize: 14,
+        },
+        animation: 'slide_from_right',
+      }}
+    >
+      <AppStackNav.Screen
+        name="MainTabs"
+        component={MainTabs}
+        options={{ headerShown: false }}
+      />
+      <AppStackNav.Screen
+        name="HelpSupport"
+        component={HelpSupportScreen}
+        options={{
+          title: 'HELP & SUPPORT',
+          headerBackTitle: 'Back',
+        }}
+      />
+    </AppStackNav.Navigator>
+  );
 }
 
 function LoadingScreen() {

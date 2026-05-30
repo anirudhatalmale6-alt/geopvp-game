@@ -13,6 +13,7 @@ import {
   Linking,
   Platform,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, fontSize } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
@@ -218,6 +219,7 @@ const cpStyles = StyleSheet.create({
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
+  const navigation = useNavigation<any>();
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [stats, setStats] = useState<CombatStats | null>(null);
   const [prowlCoins, setProwlCoins] = useState(0);
@@ -384,7 +386,7 @@ export default function ProfileScreen() {
 
         <View style={styles.divider} />
 
-        <TouchableOpacity style={styles.settingRow} onPress={() => {}}>
+        <TouchableOpacity style={styles.settingRow} onPress={() => navigation.navigate('HelpSupport')}>
           <View style={styles.settingLeft}>
             <View style={[styles.settingIcon, { backgroundColor: colors.accent + '20' }]}>
               <Ionicons name="help-circle-outline" size={18} color={colors.accent} />
