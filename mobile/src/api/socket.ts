@@ -120,6 +120,22 @@ export function onBotHit(callback: (data: { botName: string; shieldTaken: boolea
   return () => { _socket?.off('bot:hit-you', callback); };
 }
 
+export function isSocketConnected(): boolean {
+  return !!_socket?.connected;
+}
+
+export function onConnectionChange(callback: (connected: boolean) => void): () => void {
+  if (!_socket) return () => {};
+  const onConnect = () => callback(true);
+  const onDisconnect = () => callback(false);
+  _socket.on('connect', onConnect);
+  _socket.on('disconnect', onDisconnect);
+  return () => {
+    _socket?.off('connect', onConnect);
+    _socket?.off('disconnect', onDisconnect);
+  };
+}
+
 export function getSocket(): Socket | null {
   return _socket;
 }

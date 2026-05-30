@@ -28,7 +28,7 @@ import {
   NearbyPlayer,
   CoinDrop,
 } from '../../api/game';
-import { connectSocket, disconnectSocket, emitLocation, onPlayersUpdate, onBatchUpdate, onEliminated, onBotHit } from '../../api/socket';
+import { connectSocket, disconnectSocket, emitLocation, onPlayersUpdate, onBatchUpdate, onEliminated, onBotHit, onConnectionChange } from '../../api/socket';
 import BuyInModal from './BuyInModal';
 import { startBackgroundLocation, stopBackgroundLocation } from '../../services/backgroundLocation';
 import { registerForPushNotifications } from '../../services/notifications';
@@ -561,6 +561,7 @@ export default function MapScreen() {
   }, [activityFeed.length > 0]);
 
   const [statusMessage, setStatusMessage] = useState<string>('LIVE MAP');
+  const [connectionLost, setConnectionLost] = useState(false);
   const [spawnSecsLeft, setSpawnSecsLeft] = useState(0);
   const [shieldSecsLeft, setShieldSecsLeft] = useState(0);
   const [zoomedOut, setZoomedOut] = useState(false);
@@ -753,10 +754,15 @@ export default function MapScreen() {
         setTimeout(() => setAttackResult(null), 4000);
       });
 
+      const unsubConn = onConnectionChange((connected) => {
+        setConnectionLost(!connected);
+      });
+
       return () => {
         unsubElim();
         unsubBot();
         unsubBatch();
+        unsubConn();
       };
     })();
 
@@ -1053,6 +1059,13 @@ export default function MapScreen() {
           )}
         </View>
 
+        {connectionLost && session && (
+          <View style={styles.connectionBanner}>
+            <Ionicons name="cloud-offline-outline" size={14} color="#fff" />
+            <Text style={styles.connectionBannerText}>Connection lost — reconnecting...</Text>
+          </View>
+        )}
+
         {/* Session HUD cards */}
         {session && (
           <View style={styles.hudRow}>
@@ -1325,6 +1338,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+  },
+  connectionBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#d32f2f',
+    paddingVertical: 6,
+    paddingHorizontal: spacing.md,
+    marginHorizontal: spacing.md,
+    borderRadius: borderRadius.sm,
+    marginTop: 4,
+  },
+  connectionBannerText: {
+    color: '#fff',
+    fontSize: fontSize.xs,
+    fontWeight: '600',
   },
   statusDot: {
     width: 8,
