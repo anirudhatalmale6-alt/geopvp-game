@@ -54,8 +54,15 @@ export async function connectSocket(): Promise<void> {
     console.log('[Socket] Connected:', _socket?.id);
   });
 
-  _socket.on('connect_error', (err) => {
+  _socket.on('connect_error', async (err) => {
     console.warn('[Socket] Connection error:', err.message);
+    // If auth failed, refresh the token and update socket auth
+    if (err.message === 'Invalid or expired token' || err.message === 'No token provided') {
+      const freshToken = await getToken();
+      if (_socket && freshToken) {
+        _socket.auth = { token: freshToken };
+      }
+    }
   });
 
   _socket.on('disconnect', (reason) => {

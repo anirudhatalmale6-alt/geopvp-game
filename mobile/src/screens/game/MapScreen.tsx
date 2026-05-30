@@ -572,6 +572,7 @@ export default function MapScreen() {
   const coinPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const socketUnsubRef = useRef<(() => void) | null>(null);
   const sessionEndedRef = useRef(false);
+  const sessionNullCountRef = useRef(0);
 
   useEffect(() => {
     if (Platform.OS === 'web' && MAP_CSS) {
@@ -684,16 +685,16 @@ export default function MapScreen() {
   // -------------------------------------------------------------------------
   // Initial session fetch
   // -------------------------------------------------------------------------
-  const refreshSession = useCallback(async () => {
+  const refreshSession = useCallback(async (allowNull = false) => {
     try {
       const s = await getActiveSession();
-      setSession(s);
+      if (s || allowNull) setSession(s);
     } catch {}
   }, []);
 
   useEffect(() => {
     (async () => {
-      await refreshSession();
+      await refreshSession(true);
       setLoading(false);
     })();
   }, [refreshSession]);
@@ -794,25 +795,30 @@ export default function MapScreen() {
 
     const poll = async () => {
       try {
-        // Check if session is still active (detect elimination)
         const currentSession = await getActiveSession();
         if (!currentSession && session) {
+          sessionNullCountRef.current += 1;
+          // Require 3 consecutive null checks (30s) before declaring session ended
+          // — prevents false alerts during brief connectivity drops
+          if (sessionNullCountRef.current < 3) return;
           if (sessionEndedRef.current) return;
           sessionEndedRef.current = true;
           Alert.alert(
             'SESSION ENDED',
             'Your session has been terminated. You may have been attacked! Buy in again to keep playing.',
-            [{ text: 'OK', onPress: () => { setSession(null); setShowBuyIn(true); sessionEndedRef.current = false; } }],
+            [{ text: 'OK', onPress: () => { setSession(null); setShowBuyIn(true); sessionEndedRef.current = false; sessionNullCountRef.current = 0; } }],
           );
           return;
         }
+        sessionNullCountRef.current = 0;
         if (currentSession) setSession(currentSession);
-        // Still send REST location update as fallback
         await updateLocation(location.lat, location.lng);
         const { players, totalOnMap } = await getAllPlayers();
         setNearbyPlayers(players);
         setStatusMessage(`${totalOnMap} HUNTER${totalOnMap !== 1 ? 'S' : ''} ON MAP`);
-      } catch {}
+      } catch {
+        // Network error — don't count as session null, just skip this cycle
+      }
     };
 
     poll();
