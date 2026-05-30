@@ -44,12 +44,28 @@ export interface PayoutResult {
 }
 
 export async function sendPayout(
-  recipientEmail: string,
+  recipient: string,
   amountUsd: string,
   senderItemId: string,
   note: string,
+  method: 'paypal' | 'venmo' = 'paypal',
 ): Promise<PayoutResult> {
   const token = await getAccessToken();
+
+  const isVenmo = method === 'venmo';
+  const isPhone = /^\+?\d{10,15}$/.test(recipient.replace(/[\s()-]/g, ''));
+
+  const item: Record<string, unknown> = {
+    recipient_type: isPhone ? 'PHONE' : 'EMAIL',
+    amount: { value: amountUsd, currency: 'USD' },
+    receiver: recipient,
+    note,
+    sender_item_id: senderItemId,
+  };
+
+  if (isVenmo) {
+    item.recipient_wallet = 'VENMO';
+  }
 
   const res = await fetch(`${BASE_URL}/v1/payments/payouts`, {
     method: 'POST',
@@ -60,19 +76,13 @@ export async function sendPayout(
     body: JSON.stringify({
       sender_batch_header: {
         sender_batch_id: senderItemId,
-        email_subject: 'CoinProwl — Sweep Coin Redemption',
+        email_subject: isVenmo
+          ? 'CoinProwl — Venmo Redemption'
+          : 'CoinProwl — Sweep Coin Redemption',
         email_message:
           'You have received a payout from your CoinProwl sweep coin redemption.',
       },
-      items: [
-        {
-          recipient_type: 'EMAIL',
-          amount: { value: amountUsd, currency: 'USD' },
-          receiver: recipientEmail,
-          note,
-          sender_item_id: senderItemId,
-        },
-      ],
+      items: [item],
     }),
   });
 

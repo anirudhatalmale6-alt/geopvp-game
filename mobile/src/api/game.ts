@@ -235,8 +235,8 @@ export interface Redemption {
   createdAt: string;
 }
 
-export async function redeemSweepCoins(paypalEmail: string, amountCents: number): Promise<RedeemResult> {
-  const { data } = await api.post<RedeemResult>('/wallet/redeem', { paypalEmail, amountCents });
+export async function redeemSweepCoins(recipient: string, amountCents: number, method: 'paypal' | 'venmo' = 'paypal'): Promise<RedeemResult> {
+  const { data } = await api.post<RedeemResult>('/wallet/redeem', { recipient, amountCents, method });
   return data;
 }
 

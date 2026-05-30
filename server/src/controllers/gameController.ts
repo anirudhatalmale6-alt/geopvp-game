@@ -24,8 +24,9 @@ const updateLocationSchema = z.object({
 });
 
 const redeemSchema = z.object({
-  paypalEmail: z.string().email('Valid PayPal email required'),
+  recipient: z.string().min(1, 'Email or phone number required'),
   amountCents: z.number().int().min(100, 'Minimum redemption is $1.00'),
+  method: z.enum(['paypal', 'venmo']).default('paypal'),
 });
 
 const attackSchema = z.object({
@@ -1019,7 +1020,8 @@ export async function redeemSweepCoins(req: AuthRequest, res: Response): Promise
       return;
     }
 
-    const { paypalEmail, amountCents } = parsed.data;
+    const { recipient, amountCents, method } = parsed.data;
+    const methodLabel = method === 'venmo' ? 'Venmo' : 'PayPal';
 
     // Check for pending withdrawals
     const pendingCheck = await query(
@@ -1049,9 +1051,9 @@ export async function redeemSweepCoins(req: AuthRequest, res: Response): Promise
     // Create withdrawal record
     const withdrawalResult = await query(
       `INSERT INTO withdrawals (user_id, amount, method, payout_details, status)
-       VALUES ($1, $2, 'paypal', $3, 'processing')
+       VALUES ($1, $2, $3, $4, 'processing')
        RETURNING id`,
-      [userId, amountCents, JSON.stringify({ email: paypalEmail, senderItemId })],
+      [userId, amountCents, method, JSON.stringify({ recipient, senderItemId })],
     );
     const withdrawalId = withdrawalResult.rows[0].id;
 
@@ -1059,16 +1061,17 @@ export async function redeemSweepCoins(req: AuthRequest, res: Response): Promise
     await query(
       `INSERT INTO transactions (user_id, type, amount, currency, description)
        VALUES ($1, 'withdrawal', $2, 'sweep', $3)`,
-      [userId, -amountCents, `Redeemed $${amountDollars} via PayPal`],
+      [userId, -amountCents, `Redeemed $${amountDollars} via ${methodLabel}`],
     );
 
-    // Send PayPal payout
+    // Send payout
     try {
       const result = await sendPayout(
-        paypalEmail,
+        recipient,
         amountDollars,
         senderItemId,
         `CoinProwl sweep coin redemption — $${amountDollars}`,
+        method,
       );
 
       await query(
@@ -1079,25 +1082,25 @@ export async function redeemSweepCoins(req: AuthRequest, res: Response): Promise
 
       res.json({
         success: true,
-        message: `$${amountDollars} has been sent to ${paypalEmail} via PayPal.`,
+        message: `$${amountDollars} has been sent to ${recipient} via ${methodLabel}.`,
         withdrawalId,
         batchId: result.batchId,
       });
-    } catch (paypalErr: any) {
-      // PayPal failed — refund the sweep coins
+    } catch (payoutErr: any) {
+      // Payout failed — refund the sweep coins
       await query(
         `INSERT INTO transactions (user_id, type, amount, currency, description)
-         VALUES ($1, 'deposit', $2, 'sweep', 'Refund: PayPal payout failed')`,
-        [userId, amountCents],
+         VALUES ($1, 'deposit', $2, 'sweep', $3)`,
+        [userId, amountCents, `Refund: ${methodLabel} payout failed`],
       );
       await query(
         `UPDATE withdrawals SET status = 'failed', admin_notes = $1, updated_at = NOW()
          WHERE id = $2`,
-        [paypalErr.message, withdrawalId],
+        [payoutErr.message, withdrawalId],
       );
 
-      console.error('PayPal payout error:', paypalErr);
-      res.status(500).json({ error: 'PayPal payout failed. Your sweep coins have been refunded.' });
+      console.error(`${methodLabel} payout error:`, payoutErr);
+      res.status(500).json({ error: `${methodLabel} payout failed. Your sweep coins have been refunded.` });
     }
   } catch (err) {
     console.error('redeemSweepCoins error:', err);
