@@ -526,6 +526,11 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
       );
 
       await q(
+        `UPDATE game_sessions SET map_coins = map_coins + $1 WHERE id = $2`,
+        [coinsStolen, attacker.id],
+      );
+
+      await q(
         `INSERT INTO attacks (attacker_id, defender_id, attacker_coins, defender_coins, coins_stolen, defender_had_shield, success, latitude, longitude)
          VALUES ($1, $2, $3, $4, $5, false, true, $6, $7)`,
         [attacker.user_id, defender.user_id, attacker.map_coins, defender.map_coins, coinsStolen, attacker.latitude, attacker.longitude],
