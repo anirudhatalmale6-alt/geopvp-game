@@ -30,7 +30,7 @@ async function getAccessToken(): Promise<string> {
     throw new Error(`PayPal auth failed (${res.status}): ${body}`);
   }
 
-  const data = await res.json();
+  const data: any = await res.json();
   cachedToken = {
     token: data.access_token,
     expiresAt: Date.now() + (data.expires_in - 60) * 1000,
@@ -91,7 +91,7 @@ export async function sendPayout(
     throw new Error(`PayPal payout failed (${res.status}): ${body}`);
   }
 
-  const data = await res.json();
+  const data: any = await res.json();
   return {
     batchId: data.batch_header?.payout_batch_id ?? '',
     status: data.batch_header?.batch_status ?? 'UNKNOWN',
@@ -109,6 +109,6 @@ export async function getPayoutStatus(batchId: string): Promise<string> {
     throw new Error(`PayPal payout status check failed (${res.status})`);
   }
 
-  const data = await res.json();
+  const data: any = await res.json();
   return data.batch_header?.batch_status ?? 'UNKNOWN';
 }
