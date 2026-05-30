@@ -413,15 +413,6 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
         throw new Error(`That player just spawned and is protected for ${secsLeft} more seconds.`);
       }
 
-      // Connectivity protection: can't attack players whose location is stale (>60s)
-      const STALE_THRESHOLD_MS = 60 * 1000;
-      const defenderLastUpdate = defender.last_location_update
-        ? new Date(defender.last_location_update).getTime()
-        : 0;
-      if (now - defenderLastUpdate > STALE_THRESHOLD_MS) {
-        throw new Error('That player appears to be offline. You can only attack active players.');
-      }
-
       // Check if defender is a bot
       const defenderEmail = (await q(`SELECT email FROM users WHERE id = $1`, [defender.user_id])).rows[0]?.email;
       const isBot = defenderEmail?.endsWith('@bot.local');
