@@ -919,7 +919,20 @@ export default function MapScreen() {
       await refreshSession();
       setTimeout(() => setAttackResult(null), 4000);
     } catch (err: any) {
-      setAttackResult(`Attack failed: ${err.message}`);
+      const msg = err.message || '';
+      if (msg.toLowerCase().includes('no active session') || msg.toLowerCase().includes('session')) {
+        const currentSession = await getActiveSession().catch(() => null);
+        if (!currentSession) {
+          sessionEndedRef.current = true;
+          Alert.alert(
+            'SESSION ENDED',
+            'Your session has ended. You may have been attacked while your connection was unstable. Buy in again to keep playing.',
+            [{ text: 'OK', onPress: () => { setSession(null); setShowBuyIn(true); sessionEndedRef.current = false; sessionNullCountRef.current = 0; } }],
+          );
+          return;
+        }
+      }
+      setAttackResult(`Attack failed: ${msg}`);
       setTimeout(() => setAttackResult(null), 3000);
     }
   };
