@@ -286,9 +286,11 @@ export async function getAllPlayers(req: AuthRequest, res: Response): Promise<vo
            gs.shields_remaining,
            gs.coin_tier,
            u.username,
-           u.email
+           u.email,
+           COALESCE(pb.balance, 0) AS prowl_balance
          FROM game_sessions gs
          JOIN users u ON u.id = gs.user_id
+         LEFT JOIN prowl_balances pb ON pb.user_id = gs.user_id
          WHERE gs.is_active = true
            AND gs.user_id != $1
            AND gs.latitude IS NOT NULL
@@ -316,6 +318,7 @@ export async function getAllPlayers(req: AuthRequest, res: Response): Promise<vo
         mapCoins: parseInt(row.map_coins, 10),
         coinTier: row.coin_tier,
         shieldActive,
+        prowlBalance: parseInt(row.prowl_balance, 10),
       };
     });
 

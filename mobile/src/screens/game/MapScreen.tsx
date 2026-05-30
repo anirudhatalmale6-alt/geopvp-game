@@ -37,6 +37,26 @@ import { checkMockLocation } from '../../utils/anticheat';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
+const RANK_TIERS = [
+  { min: 0,     title: 'ROOKIE HUNTER',  icon: 'footsteps-outline', color: '#9e9e9e' },
+  { min: 100,   title: 'SCOUT',          icon: 'eye-outline',       color: '#78909c' },
+  { min: 500,   title: 'TRACKER',        icon: 'compass-outline',   color: '#4caf50' },
+  { min: 1500,  title: 'STALKER',        icon: 'navigate-outline',  color: '#2196f3' },
+  { min: 3000,  title: 'PROWLER',        icon: 'flash-outline',     color: '#7c4dff' },
+  { min: 5000,  title: 'ENFORCER',       icon: 'flame-outline',     color: '#ff9100' },
+  { min: 10000, title: 'APEX HUNTER',    icon: 'diamond-outline',   color: '#f50057' },
+  { min: 25000, title: 'LEGEND',         icon: 'star',              color: '#ffd700' },
+  { min: 50000, title: 'MYTHIC PROWLER', icon: 'trophy',            color: '#ff1744' },
+];
+
+function getRankForCoins(prowlCoins: number) {
+  let rank = RANK_TIERS[0];
+  for (const tier of RANK_TIERS) {
+    if (prowlCoins >= tier.min) rank = tier;
+  }
+  return rank;
+}
+
 const MAP_CSS = `
   @keyframes pulse {
     0%   { transform: scale(1);   opacity: 1; box-shadow: 0 0 0 0 rgba(0,229,255,0.6); }
@@ -304,7 +324,8 @@ window.addEventListener('message',function(e){
                   sessionId:enemy.sid,
                   username:enemy.name,
                   tierColor:enemy.tierColor,
-                  shielded:enemy.shielded
+                  shielded:enemy.shielded,
+                  prowl:enemy.prowl||0
                 }),'*');
               });
             })(en);
@@ -398,6 +419,7 @@ window.addEventListener('message',function(e){
       tierColor: p.coinTier ? getTierColor(p.coinTier) : '#ffd700',
       shielded: p.shieldActive,
       sid: p.sessionId,
+      prowl: p.prowlBalance ?? 0,
     }));
     const coins = coinDrops.map(c => ({
       id: c.id,
@@ -520,6 +542,7 @@ export default function MapScreen() {
     username: string;
     tierColor: string;
     shielded: boolean;
+    prowlBalance: number;
   } | null>(null);
   const [attackResult, setAttackResult] = useState<string | null>(null);
   const [activityFeed, setActivityFeed] = useState<{ id: string; text: string; color: string; time: number }[]>([]);
@@ -834,6 +857,7 @@ export default function MapScreen() {
           username: d.username,
           tierColor: d.tierColor || '#ffd700',
           shielded: !!d.shielded,
+          prowlBalance: d.prowl || 0,
         });
       }
       if (d.type === 'collectCoin') {
@@ -1126,27 +1150,34 @@ export default function MapScreen() {
         )}
 
         {/* Attack confirmation overlay — shown when enemy marker is tapped */}
-        {attackTarget && (
-          <View style={styles.attackPanel} pointerEvents="auto">
-            <Text style={styles.attackPanelTitle}>ATTACK TARGET</Text>
-            <Text style={[styles.attackPanelName, { color: attackTarget.tierColor }]}>{attackTarget.username.toUpperCase()}</Text>
-            {attackTarget.shielded && (
-              <View style={styles.shieldWarning}>
-                <Ionicons name="shield" size={14} color={colors.warning} />
-                <Text style={styles.shieldWarningText}>SHIELD ACTIVE — ATTACK BLOCKED</Text>
+        {attackTarget && (() => {
+          const targetRank = getRankForCoins(attackTarget.prowlBalance);
+          return (
+            <View style={styles.attackPanel} pointerEvents="auto">
+              <Text style={styles.attackPanelTitle}>ATTACK TARGET</Text>
+              <Text style={[styles.attackPanelName, { color: attackTarget.tierColor }]}>{attackTarget.username.toUpperCase()}</Text>
+              <View style={styles.attackRankBadge}>
+                <Ionicons name={targetRank.icon as any} size={14} color={targetRank.color} />
+                <Text style={[styles.attackRankText, { color: targetRank.color }]}>{targetRank.title}</Text>
               </View>
-            )}
-            <View style={styles.attackPanelBtns}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setAttackTarget(null)}>
-                <Text style={styles.cancelBtnText}>CANCEL</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.attackConfirmBtn} onPress={handleAttack}>
-                <Ionicons name="flash" size={16} color="#fff" />
-                <Text style={styles.attackConfirmText}>ATTACK</Text>
-              </TouchableOpacity>
+              {attackTarget.shielded && (
+                <View style={styles.shieldWarning}>
+                  <Ionicons name="shield" size={14} color={colors.warning} />
+                  <Text style={styles.shieldWarningText}>SHIELD ACTIVE — ATTACK BLOCKED</Text>
+                </View>
+              )}
+              <View style={styles.attackPanelBtns}>
+                <TouchableOpacity style={styles.cancelBtn} onPress={() => setAttackTarget(null)}>
+                  <Text style={styles.cancelBtnText}>CANCEL</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.attackConfirmBtn} onPress={handleAttack}>
+                  <Ionicons name="flash" size={16} color="#fff" />
+                  <Text style={styles.attackConfirmText}>ATTACK</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        )}
+          );
+        })()}
 
         {/* Spacer pushes action buttons to bottom */}
         <View style={{ flex: 1 }} />
@@ -1183,6 +1214,7 @@ export default function MapScreen() {
                       username: nearestInRange.username,
                       tierColor: nearestInRange.coinTier ? getTierColor(nearestInRange.coinTier) : '#ffd700',
                       shielded: nearestInRange.shieldActive,
+                      prowlBalance: nearestInRange.prowlBalance ?? 0,
                     });
                   }
                 }}
@@ -1453,6 +1485,20 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '900',
     letterSpacing: 2,
+  },
+  attackRankBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(26, 34, 53, 0.8)',
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+  },
+  attackRankText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1,
   },
   attackPanelTierDot: {
     width: 12,

@@ -36,6 +36,7 @@ export interface NearbyPlayer {
   sessionId: string;
   distanceMiles?: number;
   coinTier?: string;
+  prowlBalance?: number;
 }
 
 export interface AttackResult {
