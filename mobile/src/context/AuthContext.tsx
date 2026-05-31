@@ -13,7 +13,7 @@ import React, {
   useState,
 } from 'react';
 
-import { clearTokens, getToken } from '../api/client';
+import { ApiError, clearTokens, getToken } from '../api/client';
 import {
   getProfile,
   login as apiLogin,
@@ -71,9 +71,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!cancelled) {
           setUser(profile);
         }
-      } catch {
-        // Token invalid or expired; clear silently.
-        await clearTokens();
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 401) {
+          await clearTokens();
+        }
       } finally {
         if (!cancelled) {
           setIsLoading(false);
@@ -112,9 +113,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const profile = await getProfile();
       setUser(profile);
-    } catch {
-      await clearTokens();
-      setUser(null);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        await clearTokens();
+        setUser(null);
+      }
     }
   }, []);
 
