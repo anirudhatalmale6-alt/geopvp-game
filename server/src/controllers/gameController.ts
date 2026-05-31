@@ -140,6 +140,7 @@ export async function getActiveSession(req: AuthRequest, res: Response): Promise
     );
 
     if (result.rows.length === 0) {
+      console.log(`[getActiveSession] NULL for user ${userId} (${req.user!.email})`);
       res.json({ session: null });
       return;
     }

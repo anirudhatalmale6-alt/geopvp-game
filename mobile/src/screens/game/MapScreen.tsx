@@ -836,9 +836,9 @@ export default function MapScreen() {
         const currentSession = await getActiveSession();
         if (!currentSession && session) {
           sessionNullCountRef.current += 1;
-          // Require 3 consecutive null checks (30s) before declaring session ended
-          // — prevents false alerts during brief connectivity drops
-          if (sessionNullCountRef.current < 3) return;
+          // Require 5 consecutive null checks (50s) before declaring session ended
+          // — prevents false alerts during connectivity drops
+          if (sessionNullCountRef.current < 5) return;
           if (sessionEndedRef.current) return;
           sessionEndedRef.current = true;
           Alert.alert(
