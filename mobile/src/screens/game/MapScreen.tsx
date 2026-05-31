@@ -29,6 +29,7 @@ import {
   CoinDrop,
 } from '../../api/game';
 import { connectSocket, disconnectSocket, emitLocation, onPlayersUpdate, onBatchUpdate, onEliminated, onBotHit, onConnectionChange } from '../../api/socket';
+import NetInfo from '@react-native-community/netinfo';
 import BuyInModal from './BuyInModal';
 import { startBackgroundLocation, stopBackgroundLocation } from '../../services/backgroundLocation';
 import { registerForPushNotifications } from '../../services/notifications';
@@ -587,33 +588,43 @@ export default function MapScreen() {
   // -------------------------------------------------------------------------
   // Spawn protection countdown (2 minutes after buy-in)
   // -------------------------------------------------------------------------
-  useEffect(() => {
-    if (!session?.spawnedAt) { setSpawnSecsLeft(0); return; }
-    const calc = () => {
-      const elapsed = Date.now() - new Date(session.spawnedAt).getTime();
-      const remaining = Math.max(0, 120 - Math.floor(elapsed / 1000));
-      setSpawnSecsLeft(remaining);
-      return remaining;
-    };
-    if (calc() <= 0) return;
-    const iv = setInterval(() => { if (calc() <= 0) clearInterval(iv); }, 1000);
-    return () => clearInterval(iv);
+  const calcSpawn = useCallback(() => {
+    if (!session?.spawnedAt) { setSpawnSecsLeft(0); return 0; }
+    const elapsed = Date.now() - new Date(session.spawnedAt).getTime();
+    const remaining = Math.max(0, 120 - Math.floor(elapsed / 1000));
+    setSpawnSecsLeft(remaining);
+    return remaining;
   }, [session?.spawnedAt]);
+
+  const calcShield = useCallback(() => {
+    if (!session?.shieldActiveUntil) { setShieldSecsLeft(0); return 0; }
+    const remaining = Math.max(0, Math.floor((new Date(session.shieldActiveUntil).getTime() - Date.now()) / 1000));
+    setShieldSecsLeft(remaining);
+    return remaining;
+  }, [session?.shieldActiveUntil]);
+
+  useEffect(() => {
+    if (calcSpawn() <= 0) return;
+    const iv = setInterval(() => { if (calcSpawn() <= 0) clearInterval(iv); }, 1000);
+    return () => clearInterval(iv);
+  }, [calcSpawn]);
 
   // -------------------------------------------------------------------------
   // Shield countdown timer
   // -------------------------------------------------------------------------
   useEffect(() => {
-    if (!session?.shieldActiveUntil) { setShieldSecsLeft(0); return; }
-    const calc = () => {
-      const remaining = Math.max(0, Math.floor((new Date(session.shieldActiveUntil!).getTime() - Date.now()) / 1000));
-      setShieldSecsLeft(remaining);
-      return remaining;
-    };
-    if (calc() <= 0) return;
-    const iv = setInterval(() => { if (calc() <= 0) clearInterval(iv); }, 1000);
+    if (calcShield() <= 0) return;
+    const iv = setInterval(() => { if (calcShield() <= 0) clearInterval(iv); }, 1000);
     return () => clearInterval(iv);
-  }, [session?.shieldActiveUntil]);
+  }, [calcShield]);
+
+  // Recalculate timers when app returns to foreground
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') { calcSpawn(); calcShield(); }
+    });
+    return () => sub.remove();
+  }, [calcSpawn, calcShield]);
 
   // -------------------------------------------------------------------------
   // Location permission + GPS watch
@@ -784,6 +795,16 @@ export default function MapScreen() {
         socketUnsubRef.current = null;
       }
     };
+  }, [session?.id]);
+
+  // Instant network state detection via NetInfo
+  useEffect(() => {
+    if (!session) return;
+    const unsubNet = NetInfo.addEventListener((state) => {
+      const offline = !(state.isConnected && state.isInternetReachable !== false);
+      setConnectionLost(offline);
+    });
+    return () => unsubNet();
   }, [session?.id]);
 
   // Emit location via socket whenever GPS updates
