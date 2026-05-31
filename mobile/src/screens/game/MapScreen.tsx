@@ -768,14 +768,18 @@ export default function MapScreen() {
       const unsubConn = onConnectionChange(async (connected) => {
         setConnectionLost(!connected);
         if (connected && !sessionEndedRef.current) {
-          const currentSession = await getActiveSession().catch(() => null);
-          if (!currentSession) {
-            sessionEndedRef.current = true;
-            Alert.alert(
-              'SESSION ENDED',
-              'Your session ended while you were disconnected. You may have been attacked. Buy in again to keep playing.',
-              [{ text: 'OK', onPress: () => { setSession(null); setShowBuyIn(true); sessionEndedRef.current = false; sessionNullCountRef.current = 0; } }],
-            );
+          try {
+            const currentSession = await getActiveSession();
+            if (!currentSession) {
+              sessionEndedRef.current = true;
+              Alert.alert(
+                'SESSION ENDED',
+                'Your session ended while you were disconnected. You may have been attacked. Buy in again to keep playing.',
+                [{ text: 'OK', onPress: () => { setSession(null); setShowBuyIn(true); sessionEndedRef.current = false; sessionNullCountRef.current = 0; } }],
+              );
+            }
+          } catch {
+            // Network still unstable — don't falsely end session, let the REST poll handle it
           }
         }
       });
