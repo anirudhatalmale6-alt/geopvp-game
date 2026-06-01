@@ -135,6 +135,11 @@ async function request<T = unknown>(
     const refreshed = await attemptTokenRefresh();
     if (refreshed) {
       res = await makeRequest();
+    } else {
+      const hasRefresh = await getRefreshToken();
+      if (hasRefresh) {
+        throw new Error('Token refresh failed — network may be unavailable');
+      }
     }
   }
 
