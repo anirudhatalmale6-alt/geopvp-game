@@ -618,13 +618,31 @@ export default function MapScreen() {
     return () => clearInterval(iv);
   }, [calcShield]);
 
-  // Recalculate timers when app returns to foreground
+  // Recalculate timers + verify session when app returns to foreground
   useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') { calcSpawn(); calcShield(); }
+    const sub = AppState.addEventListener('change', async (state) => {
+      if (state === 'active') {
+        calcSpawn();
+        calcShield();
+        if (session && !sessionEndedRef.current) {
+          try {
+            const s = await getActiveSession();
+            if (!s) {
+              sessionEndedRef.current = true;
+              Alert.alert(
+                'SESSION ENDED',
+                'Your session ended while the app was in the background. You may have been attacked. Buy in again to keep playing.',
+                [{ text: 'OK', onPress: () => { setSession(null); setShowBuyIn(true); sessionEndedRef.current = false; sessionNullCountRef.current = 0; } }],
+              );
+            } else {
+              setSession(s);
+            }
+          } catch {}
+        }
+      }
     });
     return () => sub.remove();
-  }, [calcSpawn, calcShield]);
+  }, [calcSpawn, calcShield, session]);
 
   // -------------------------------------------------------------------------
   // Location permission + GPS watch
