@@ -419,15 +419,6 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
       const isBot = defenderEmail?.endsWith('@bot.local');
 
       if (isBot) {
-        // Player attacks bot: must have an active shield (bot will counter-attack instantly)
-        const playerShieldActive = attacker.shield_active_until
-          ? new Date(attacker.shield_active_until) > new Date()
-          : false;
-
-        if (!playerShieldActive) {
-          throw new Error('You need an active shield to attack! Bots counter-attack instantly.');
-        }
-
         // Check bot's time-based shield (30 min from spawn/renewal)
         const botShieldActive = defender.shield_active_until
           ? new Date(defender.shield_active_until) > new Date()
@@ -490,7 +481,7 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
           coinsStolen: botCoins,
           defenderHadShield: false,
           shieldConsumed: false,
-          message: `You took ${botCoins} coins! Your shield protected you from the counter-attack.`,
+          message: `You took ${botCoins} coins from ${defender.defender_name}!`,
         };
       }
 
