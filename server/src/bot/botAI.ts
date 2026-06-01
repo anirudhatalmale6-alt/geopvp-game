@@ -384,6 +384,101 @@ export function startBotAI(io: SocketIOServer): void {
   shieldRenewalHandle = setInterval(renewBotShields, 24 * 60 * 60 * 1000);
 }
 
+export function scheduleBotCounterAttack(
+  botUserId: string,
+  botUsername: string,
+  targetUserId: string,
+  io: SocketIOServer,
+) {
+  const delay = (Math.floor(Math.random() * 3) + 3) * 1000;
+  console.log(`[BotAI] ${botUsername} will counter-attack ${targetUserId} in ${delay / 1000}s`);
+
+  setTimeout(async () => {
+    try {
+      await transaction(async (q) => {
+        const sessionRes = await q(
+          `SELECT gs.*, u.username FROM game_sessions gs JOIN users u ON u.id = gs.user_id
+           WHERE gs.user_id = $1 AND gs.is_active = true LIMIT 1`,
+          [targetUserId],
+        );
+        if (sessionRes.rows.length === 0) {
+          console.log(`[BotAI] Counter-attack skipped — ${targetUserId} no longer active`);
+          return;
+        }
+
+        const player = sessionRes.rows[0];
+        const shieldActive = player.shield_active_until
+          ? new Date(player.shield_active_until) > new Date()
+          : false;
+
+        if (shieldActive) {
+          await q(
+            `UPDATE game_sessions SET shield_active_until = NULL WHERE id = $1`,
+            [player.id],
+          );
+
+          await q(
+            `INSERT INTO attacks (attacker_id, defender_id, attacker_coins, defender_coins, coins_stolen, defender_had_shield, success, latitude, longitude)
+             VALUES ($1, $2, 0, $3, 0, true, false, $4, $5)`,
+            [botUserId, targetUserId, player.map_coins, player.latitude || 0, player.longitude || 0],
+          );
+
+          io.to(`user:${targetUserId}`).emit('bot:hit-you', {
+            botName: botUsername,
+            shieldTaken: true,
+            message: `${botUsername} counter-attacked! Your shield blocked it.`,
+          });
+
+          sendPushNotification(
+            targetUserId,
+            'Counter-Attack Blocked!',
+            `${botUsername} counter-attacked but your shield saved you!`,
+          ).catch(() => {});
+
+          console.log(`[BotAI] ${botUsername} counter-attacked ${player.username} — SHIELD BLOCKED`);
+        } else {
+          const playerCoins = parseInt(player.map_coins || '0', 10);
+
+          await q(
+            `UPDATE game_sessions SET map_coins = 0, is_active = false WHERE id = $1`,
+            [player.id],
+          );
+
+          await q(
+            `INSERT INTO attacks (attacker_id, defender_id, attacker_coins, defender_coins, coins_stolen, defender_had_shield, success, latitude, longitude)
+             VALUES ($1, $2, 0, $3, $4, false, true, $5, $6)`,
+            [botUserId, targetUserId, player.map_coins, playerCoins, player.latitude || 0, player.longitude || 0],
+          );
+
+          const lostCents = playerCoins * 10;
+          await q(
+            `INSERT INTO transactions (user_id, type, amount, currency, description, related_user_id)
+             VALUES ($1, 'attack_loss', $2, 'prowl', $3, $4)`,
+            [targetUserId, -lostCents, `Counter-attacked by ${botUsername}`, botUserId],
+          );
+
+          io.to(`user:${targetUserId}`).emit('session:eliminated', {
+            attackerName: botUsername,
+            coinsLost: playerCoins,
+            coinsSaved: 0,
+            message: `${botUsername} counter-attacked and took ${playerCoins} coins! You've been eliminated.`,
+          });
+
+          sendPushNotification(
+            targetUserId,
+            'Counter-Attack!',
+            `${botUsername} counter-attacked and eliminated you! Lost ${playerCoins} coins.`,
+          ).catch(() => {});
+
+          console.log(`[BotAI] ${botUsername} COUNTER-ATTACKED ${player.username} (${playerCoins} coins taken)`);
+        }
+      });
+    } catch (err) {
+      console.error('[BotAI] Counter-attack error:', err);
+    }
+  }, delay);
+}
+
 export function stopBotAI(): void {
   if (tickHandle) {
     clearInterval(tickHandle);

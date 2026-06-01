@@ -9,6 +9,7 @@ import { getIO } from '../socket/ioInstance';
 import { sendPushNotification } from '../utils/pushNotification';
 import { checkLocationBlocked, isBlockedState, getBlockedStates } from '../utils/geofence';
 import { sendPayout } from '../services/paypal';
+import { scheduleBotCounterAttack } from '../bot/botAI';
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -476,12 +477,18 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
           [attacker.user_id, stolenCents, `Took ${botCoins} coins from ${defender.defender_name}!`, defender.user_id],
         );
 
+        // Schedule bot counter-attack after 3-5 seconds
+        const io = getIO();
+        if (io) {
+          scheduleBotCounterAttack(defender.user_id, defender.defender_name, attacker.user_id, io);
+        }
+
         return {
           success: true,
           coinsStolen: botCoins,
           defenderHadShield: false,
           shieldConsumed: false,
-          message: `You took ${botCoins} coins from ${defender.defender_name}!`,
+          message: `You took ${botCoins} coins from ${defender.defender_name}! Watch out — they may counter-attack!`,
         };
       }
 
