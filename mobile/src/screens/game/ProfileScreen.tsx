@@ -14,7 +14,7 @@ import {
   Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, fontSize } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../api/client';
@@ -49,7 +49,7 @@ const RANK_TIERS = [
   { min: 5000,  title: 'ENFORCER',         icon: 'flame-outline',     color: '#ff9100' },
   { min: 10000, title: 'APEX HUNTER',     icon: 'diamond-outline',   color: '#f50057' },
   { min: 25000, title: 'LEGEND',          icon: 'star',              color: '#ffd700' },
-  { min: 50000, title: 'MYTHIC PROWLER',  icon: 'trophy',            color: '#ff1744' },
+  { min: 50000, title: 'MYTHIC PROWLER',  icon: 'crown',             color: '#ffd700', iconLib: 'mci' as const },
 ];
 
 function getRank(prowlCoins: number) {
@@ -308,7 +308,9 @@ export default function ProfileScreen() {
         <Text style={styles.username}>{user?.username?.toUpperCase() ?? 'HUNTER'}</Text>
         <Text style={styles.email}>{user?.email ?? ''}</Text>
         <View style={[styles.rankBadge, { backgroundColor: rank.color + '20' }]}>
-          <Ionicons name={rank.icon as any} size={12} color={rank.color} />
+          {(rank as any).iconLib === 'mci'
+            ? <MaterialCommunityIcons name={rank.icon as any} size={12} color={rank.color} />
+            : <Ionicons name={rank.icon as any} size={12} color={rank.color} />}
           <Text style={[styles.rankText, { color: rank.color }]}>{rank.title}</Text>
         </View>
         {rank.next && (

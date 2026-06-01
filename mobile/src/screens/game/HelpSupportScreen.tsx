@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   Linking,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, fontSize } from '../../theme';
 
 const RANK_TIERS = [
@@ -19,7 +19,7 @@ const RANK_TIERS = [
   { min: 5000,  title: 'ENFORCER',       icon: 'flame-outline',     color: '#ff9100', desc: 'Enforcing dominance on the battlefield' },
   { min: 10000, title: 'APEX HUNTER',    icon: 'diamond-outline',   color: '#f50057', desc: 'Top of the food chain' },
   { min: 25000, title: 'LEGEND',         icon: 'star',              color: '#ffd700', desc: 'A legendary player known by all' },
-  { min: 50000, title: 'MYTHIC PROWLER', icon: 'trophy',            color: '#ff1744', desc: 'The ultimate rank — mythic status' },
+  { min: 50000, title: 'MYTHIC PROWLER', icon: 'crown',             color: '#ffd700', iconLib: 'mci' as const, desc: 'The ultimate rank — mythic status' },
 ];
 
 interface SectionProps {
@@ -141,7 +141,9 @@ export default function HelpSupportScreen() {
           {RANK_TIERS.map((tier) => (
             <View key={tier.title} style={styles.rankItem}>
               <View style={[styles.rankIcon, { backgroundColor: tier.color + '20' }]}>
-                <Ionicons name={tier.icon as any} size={18} color={tier.color} />
+                {(tier as any).iconLib === 'mci'
+                  ? <MaterialCommunityIcons name={tier.icon as any} size={18} color={tier.color} />
+                  : <Ionicons name={tier.icon as any} size={18} color={tier.color} />}
               </View>
               <View style={styles.rankInfo}>
                 <Text style={[styles.rankTitle, { color: tier.color }]}>{tier.title}</Text>

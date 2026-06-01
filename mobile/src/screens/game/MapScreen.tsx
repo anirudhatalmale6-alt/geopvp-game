@@ -10,7 +10,7 @@ import {
   AppState,
   Alert,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useIsFocused } from '@react-navigation/native';
 import * as Location from 'expo-location';
 // @ts-ignore — optional native dep
@@ -47,7 +47,7 @@ const RANK_TIERS = [
   { min: 5000,  title: 'ENFORCER',       icon: 'flame-outline',     color: '#ff9100' },
   { min: 10000, title: 'APEX HUNTER',    icon: 'diamond-outline',   color: '#f50057' },
   { min: 25000, title: 'LEGEND',         icon: 'star',              color: '#ffd700' },
-  { min: 50000, title: 'MYTHIC PROWLER', icon: 'trophy',            color: '#ff1744' },
+  { min: 50000, title: 'MYTHIC PROWLER', icon: 'crown',             color: '#ffd700', iconLib: 'mci' as const },
 ];
 
 function getRankForCoins(prowlCoins: number) {
@@ -1243,7 +1243,9 @@ export default function MapScreen() {
               <Text style={styles.attackPanelTitle}>ATTACK TARGET</Text>
               <Text style={[styles.attackPanelName, { color: attackTarget.tierColor }]}>{attackTarget.username.toUpperCase()}</Text>
               <View style={styles.attackRankBadge}>
-                <Ionicons name={targetRank.icon as any} size={14} color={targetRank.color} />
+                {(targetRank as any).iconLib === 'mci'
+                  ? <MaterialCommunityIcons name={targetRank.icon as any} size={14} color={targetRank.color} />
+                  : <Ionicons name={targetRank.icon as any} size={14} color={targetRank.color} />}
                 <Text style={[styles.attackRankText, { color: targetRank.color }]}>{targetRank.title}</Text>
               </View>
               {attackTarget.shielded && (

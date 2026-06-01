@@ -7,7 +7,7 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, fontSize } from '../../theme';
 import { getWallet } from '../../api/game';
 
@@ -23,7 +23,7 @@ const RANK_TIERS = [
   { min: 5000,  title: 'ENFORCER',        icon: 'flame-outline',     color: '#ff9100' },
   { min: 10000, title: 'APEX HUNTER',     icon: 'diamond-outline',   color: '#f50057' },
   { min: 25000, title: 'LEGEND',          icon: 'star',              color: '#ffd700' },
-  { min: 50000, title: 'MYTHIC PROWLER',  icon: 'trophy',            color: '#ff1744' },
+  { min: 50000, title: 'MYTHIC PROWLER',  icon: 'crown',             color: '#ffd700', iconLib: 'mci' as const },
 ];
 
 function getCurrentRankIndex(prowlCoins: number): number {
@@ -149,11 +149,9 @@ export default function RanksScreen() {
                     { backgroundColor: tier.color + (isLocked ? '10' : '20') },
                   ]}
                 >
-                  <Ionicons
-                    name={tier.icon as any}
-                    size={24}
-                    color={isLocked ? tier.color + '60' : tier.color}
-                  />
+                  {(tier as any).iconLib === 'mci'
+                    ? <MaterialCommunityIcons name={tier.icon as any} size={24} color={isLocked ? tier.color + '60' : tier.color} />
+                    : <Ionicons name={tier.icon as any} size={24} color={isLocked ? tier.color + '60' : tier.color} />}
                 </View>
                 <View style={styles.rankInfo}>
                   <Text
