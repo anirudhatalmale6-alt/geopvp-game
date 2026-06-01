@@ -363,7 +363,8 @@ export async function refreshToken(req: Request, res: Response): Promise<void> {
     let decoded: any;
     try {
       decoded = jwt.verify(token, config.jwtRefreshSecret);
-    } catch {
+    } catch (jwtErr: any) {
+      console.log(`[refreshToken] FAILED — ${jwtErr.name}: ${jwtErr.message}`);
       res.status(401).json({ error: 'Invalid or expired refresh token.' });
       return;
     }
@@ -382,6 +383,7 @@ export async function refreshToken(req: Request, res: Response): Promise<void> {
     const newToken = generateAccessToken({ id: user.id, email: user.email, username: user.username });
     const newRefresh = generateRefreshToken({ id: user.id });
 
+    console.log(`[refreshToken] OK for ${user.username} (${user.email})`);
     res.json({ token: newToken, refreshToken: newRefresh });
   } catch (err) {
     console.error('Refresh token error:', err);
