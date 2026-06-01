@@ -573,6 +573,7 @@ export default function MapScreen() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const coinPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const socketUnsubRef = useRef<(() => void) | null>(null);
+  const socketListenersRef = useRef<(() => void)[]>([]);
   const sessionEndedRef = useRef(false);
   const sessionNullCountRef = useRef(0);
 
@@ -741,11 +742,6 @@ export default function MapScreen() {
       await connectSocket();
       if (!alive) return;
 
-      // Subscribe to players:update events — pipe directly to WebView for smooth animation
-      // NOTE: We intentionally do NOT update React state here. The direct WebView
-      // command handles the visual update. React state is refreshed by the REST poll
-      // every 30s. This avoids a full state rebuild + payload resubmission on every
-      // single player movement, which was the main source of lag.
       const unsub = onPlayersUpdate((data) => {
         const sid = data.sessionId || data.userId;
         if (mapRef.current) {
@@ -754,7 +750,6 @@ export default function MapScreen() {
       });
       socketUnsubRef.current = unsub;
 
-      // Subscribe to batch updates from bot AI (one event with all bot positions)
       const unsubBatch = onBatchUpdate((bots) => {
         if (mapRef.current) {
           for (const b of bots) {
@@ -764,18 +759,19 @@ export default function MapScreen() {
         }
       });
 
-      // Listen for elimination (PvP attack killed your session)
       const unsubElim = onEliminated((data) => {
         sessionEndedRef.current = true;
         addFeedItem(`${data.attackerName} attacked you and took ${data.coinsLost} coins!`, '#ff4444');
+        setSession(null);
+        setShowBuyIn(true);
+        sessionNullCountRef.current = 0;
         Alert.alert(
           'YOU WERE ELIMINATED!',
           `${data.attackerName} attacked you and took ${data.coinsLost} coins!${data.coinsSaved > 0 ? ` ${data.coinsSaved} coins saved to wallet.` : ''} Buy in again to keep playing.`,
-          [{ text: 'OK', onPress: () => { setSession(null); setShowBuyIn(true); sessionEndedRef.current = false; } }],
+          [{ text: 'OK', onPress: () => { sessionEndedRef.current = false; } }],
         );
       });
 
-      // Listen for bot attacks
       const unsubBot = onBotHit((data) => {
         setAttackResult(data.message);
         addFeedItem(data.message, '#ff8800');
@@ -790,10 +786,13 @@ export default function MapScreen() {
             const currentSession = await getActiveSession();
             if (!currentSession) {
               sessionEndedRef.current = true;
+              setSession(null);
+              setShowBuyIn(true);
+              sessionNullCountRef.current = 0;
               Alert.alert(
                 'SESSION ENDED',
                 'Your session ended while you were disconnected. You may have been attacked. Buy in again to keep playing.',
-                [{ text: 'OK', onPress: () => { setSession(null); setShowBuyIn(true); sessionEndedRef.current = false; sessionNullCountRef.current = 0; } }],
+                [{ text: 'OK', onPress: () => { sessionEndedRef.current = false; } }],
               );
             }
           } catch {
@@ -802,12 +801,7 @@ export default function MapScreen() {
         }
       });
 
-      return () => {
-        unsubElim();
-        unsubBot();
-        unsubBatch();
-        unsubConn();
-      };
+      socketListenersRef.current = [unsubBatch, unsubElim, unsubBot, unsubConn];
     })();
 
     return () => {
@@ -816,6 +810,8 @@ export default function MapScreen() {
         socketUnsubRef.current();
         socketUnsubRef.current = null;
       }
+      for (const fn of socketListenersRef.current) fn();
+      socketListenersRef.current = [];
     };
   }, [session?.id]);
 
