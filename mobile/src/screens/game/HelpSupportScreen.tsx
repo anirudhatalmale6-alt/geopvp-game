@@ -120,6 +120,12 @@ export default function HelpSupportScreen() {
         <BulletItem text="No exploiting bugs or glitches — report them to support" />
         <BulletItem text="Violations may result in account suspension or permanent ban" />
 
+        <Text style={styles.subheading}>Battlefield</Text>
+        <BulletItem text="Not every player on the map is a real person — bots are disguised as real players" />
+        <BulletItem text="Bots can and will attack you, so stay alert at all times" />
+        <BulletItem text="There is no way to tell a bot from a real player — treat every encounter as a real threat" />
+        <BulletItem text="Bots carry coins and can be defeated just like real players" />
+
         <Text style={styles.subheading}>Sessions</Text>
         <BulletItem text="Each buy-in starts a new session with fresh prowl coins" />
         <BulletItem text="Your session ends when you get eliminated (lose all coins) or voluntarily end it" />
