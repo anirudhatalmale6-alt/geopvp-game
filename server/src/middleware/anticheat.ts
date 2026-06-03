@@ -1,9 +1,12 @@
 import { query } from '../config/database';
 
-const MAX_SPEED_MPH = 200;
-const VIOLATION_THRESHOLD = 3;
+const MAX_SPEED_MPH = 300;
+const VIOLATION_THRESHOLD = 5;
+const GPS_NOISE_MILES = 0.5;
+const MIN_ELAPSED_MS = 3000;
+const VIOLATION_DECAY_MS = 30000;
 
-const violationCounts = new Map<string, number>();
+const violationCounts = new Map<string, { count: number; lastViolation: number }>();
 
 function distanceMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 3958.8;
@@ -35,15 +38,23 @@ export async function validateLocationUpdate(
   }
 
   const elapsedMs = Date.now() - new Date(prev.last_location_update).getTime();
-  if (elapsedMs < 500) return { valid: true };
+  if (elapsedMs < MIN_ELAPSED_MS) return { valid: true };
 
   const dist = distanceMiles(prev.latitude, prev.longitude, newLat, newLng);
+
+  // Short GPS jumps under 0.5 miles are normal noise, not spoofing
+  if (dist < GPS_NOISE_MILES) return { valid: true };
+
   const hours = elapsedMs / 3600000;
   const speed = hours > 0 ? dist / hours : 0;
 
   if (speed > MAX_SPEED_MPH) {
-    const count = (violationCounts.get(userId) ?? 0) + 1;
-    violationCounts.set(userId, count);
+    const now = Date.now();
+    const prev = violationCounts.get(userId);
+    // Decay violations if last one was more than 30s ago
+    const stale = prev && (now - prev.lastViolation > VIOLATION_DECAY_MS);
+    const count = (stale || !prev) ? 1 : prev.count + 1;
+    violationCounts.set(userId, { count, lastViolation: now });
 
     console.warn(`[AntiCheat] Speed violation: user=${userId}, speed=${speed.toFixed(0)}mph, dist=${dist.toFixed(2)}mi, count=${count}`);
 
@@ -57,7 +68,7 @@ export async function validateLocationUpdate(
       return { valid: false, reason: 'Session terminated: GPS spoofing detected.' };
     }
 
-    return { valid: false, reason: 'Location update rejected: movement too fast.' };
+    return { valid: true };
   }
 
   if (violationCounts.has(userId)) {
