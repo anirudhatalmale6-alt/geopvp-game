@@ -53,9 +53,10 @@ interface BuyInModalProps {
   visible: boolean;
   onClose: () => void;
   onSessionCreated: () => void;
+  eliminationMessage?: string | null;
 }
 
-export default function BuyInModal({ visible, onClose, onSessionCreated }: BuyInModalProps) {
+export default function BuyInModal({ visible, onClose, onSessionCreated, eliminationMessage }: BuyInModalProps) {
   const [selectedTier, setSelectedTier] = useState<TierOption>(TIERS[4]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -99,6 +100,13 @@ export default function BuyInModal({ visible, onClose, onSessionCreated }: BuyIn
               <Ionicons name="close" size={22} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
+
+          {eliminationMessage ? (
+            <View style={styles.elimBanner}>
+              <Ionicons name="skull-outline" size={18} color="#ff4444" />
+              <Text style={styles.elimText}>{eliminationMessage}</Text>
+            </View>
+          ) : null}
 
           <Text style={styles.subtitle}>Select your buy-in tier to enter the battlefield</Text>
 
@@ -249,6 +257,23 @@ const styles = StyleSheet.create({
   },
   closeBtn: {
     padding: 4,
+  },
+  elimBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ff444420',
+    borderWidth: 1,
+    borderColor: '#ff444460',
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
+    gap: spacing.xs,
+  },
+  elimText: {
+    flex: 1,
+    fontSize: fontSize.sm,
+    color: '#ff6666',
+    fontWeight: '700',
   },
   subtitle: {
     fontSize: fontSize.sm,

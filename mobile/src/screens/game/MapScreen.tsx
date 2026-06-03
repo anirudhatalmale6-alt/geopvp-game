@@ -536,6 +536,7 @@ export default function MapScreen() {
   const [locationPermission, setLocationPermission] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [showBuyIn, setShowBuyIn] = useState(false);
+  const [elimMessage, setElimMessage] = useState<string | null>(null);
 
   // Attack confirmation overlay
   const [attackTarget, setAttackTarget] = useState<{
@@ -630,10 +631,14 @@ export default function MapScreen() {
             const s = await getActiveSession();
             if (!s) {
               sessionEndedRef.current = true;
+              setElimMessage('Your session ended while the app was in the background. You may have been attacked!');
+              setSession(null);
+              setShowBuyIn(true);
+              sessionNullCountRef.current = 0;
               Alert.alert(
                 'SESSION ENDED',
                 'Your session ended while the app was in the background. You may have been attacked. Buy in again to keep playing.',
-                [{ text: 'OK', onPress: () => { setSession(null); setShowBuyIn(true); sessionEndedRef.current = false; sessionNullCountRef.current = 0; } }],
+                [{ text: 'OK', onPress: () => { sessionEndedRef.current = false; } }],
               );
             } else {
               setSession(s);
@@ -761,13 +766,15 @@ export default function MapScreen() {
 
       const unsubElim = onEliminated((data) => {
         sessionEndedRef.current = true;
-        addFeedItem(`${data.attackerName} attacked you and took ${data.coinsLost} coins!`, '#ff4444');
+        const msg = `${data.attackerName} attacked you and took ${data.coinsLost} coins!${data.coinsSaved > 0 ? ` ${data.coinsSaved} coins saved to wallet.` : ''}`;
+        addFeedItem(msg, '#ff4444');
+        setElimMessage(msg);
         setSession(null);
         setShowBuyIn(true);
         sessionNullCountRef.current = 0;
         Alert.alert(
           'YOU WERE ELIMINATED!',
-          `${data.attackerName} attacked you and took ${data.coinsLost} coins!${data.coinsSaved > 0 ? ` ${data.coinsSaved} coins saved to wallet.` : ''} Buy in again to keep playing.`,
+          `${msg} Buy in again to keep playing.`,
           [{ text: 'OK', onPress: () => { sessionEndedRef.current = false; } }],
         );
       });
@@ -786,6 +793,7 @@ export default function MapScreen() {
             const currentSession = await getActiveSession();
             if (!currentSession) {
               sessionEndedRef.current = true;
+              setElimMessage('Your session ended while you were disconnected. You may have been attacked!');
               setSession(null);
               setShowBuyIn(true);
               sessionNullCountRef.current = 0;
@@ -859,10 +867,14 @@ export default function MapScreen() {
           if (sessionNullCountRef.current < 5) return;
           if (sessionEndedRef.current) return;
           sessionEndedRef.current = true;
+          setElimMessage('Your session has been terminated. You may have been attacked!');
+          setSession(null);
+          setShowBuyIn(true);
+          sessionNullCountRef.current = 0;
           Alert.alert(
             'SESSION ENDED',
             'Your session has been terminated. You may have been attacked! Buy in again to keep playing.',
-            [{ text: 'OK', onPress: () => { setSession(null); setShowBuyIn(true); sessionEndedRef.current = false; sessionNullCountRef.current = 0; } }],
+            [{ text: 'OK', onPress: () => { sessionEndedRef.current = false; } }],
           );
           return;
         }
@@ -1330,8 +1342,9 @@ export default function MapScreen() {
 
       <BuyInModal
         visible={showBuyIn}
-        onClose={() => setShowBuyIn(false)}
-        onSessionCreated={refreshSession}
+        onClose={() => { setShowBuyIn(false); setElimMessage(null); }}
+        onSessionCreated={() => { setElimMessage(null); refreshSession(); }}
+        eliminationMessage={elimMessage}
       />
     </View>
   );
