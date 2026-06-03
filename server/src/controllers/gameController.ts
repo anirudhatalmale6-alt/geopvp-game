@@ -391,6 +391,15 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
         throw new Error('Location not available. Enable GPS and wait for location update.');
       }
 
+      // Location freshness check — prevent ambush from stale GPS
+      const LOCATION_STALE_MS = 60 * 1000;
+      const lastUpdate = attacker.last_location_update
+        ? new Date(attacker.last_location_update).getTime()
+        : 0;
+      if (Date.now() - lastUpdate > LOCATION_STALE_MS) {
+        throw new Error('Your location is stale. Wait for GPS to refresh before attacking.');
+      }
+
       const dist = distanceMiles(
         attacker.latitude, attacker.longitude,
         defender.latitude, defender.longitude,
@@ -594,6 +603,8 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
     const status = err.message?.includes('No active session') ||
                    err.message?.includes('Cannot attack') ||
                    err.message?.includes('too far') ||
+                   err.message?.includes('location is stale') ||
+                   err.message?.includes('Spawn protection') ||
                    err.message?.includes('Location not') ? 400 : 500;
     res.status(status).json({ error: err.message || 'Internal server error.' });
   }
