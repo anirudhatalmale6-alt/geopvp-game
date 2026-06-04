@@ -188,7 +188,7 @@ export default function WalletScreen() {
             <Ionicons name="trophy" size={16} color="#ffd700" />
             <Text style={[styles.currencyLabel, { color: '#ffd700' }]}>PROWL COINS</Text>
           </View>
-          <Text style={styles.currencyAmount}>{prowlBalance}</Text>
+          <Text style={styles.currencyAmount} numberOfLines={1} adjustsFontSizeToFit>{prowlBalance}</Text>
           <Text style={styles.currencySub}>Rank Score</Text>
         </View>
         <View style={[styles.currencyCard, { borderColor: colors.success + '40' }]}>
@@ -196,7 +196,7 @@ export default function WalletScreen() {
             <Ionicons name="cash" size={16} color={colors.success} />
             <Text style={[styles.currencyLabel, { color: colors.success }]}>SWEEP COINS</Text>
           </View>
-          <Text style={styles.currencyAmount}>${sweepDollars}</Text>
+          <Text style={styles.currencyAmount} numberOfLines={1} adjustsFontSizeToFit>${sweepDollars}</Text>
           <Text style={styles.currencySub}>Redeemable</Text>
         </View>
       </View>
