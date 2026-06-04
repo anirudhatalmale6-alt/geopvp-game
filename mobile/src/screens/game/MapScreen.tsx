@@ -207,6 +207,8 @@ var coinMarkers = {};
 var currentZoom = 16;
 var isZoomedOut = false;
 
+var userDragging = false;
+
 map.on('zoomend',function(){
   currentZoom = map.getZoom();
   var wasZoomedOut = isZoomedOut;
@@ -215,6 +217,12 @@ map.on('zoomend',function(){
   if(isZoomedOut) el.classList.add('zoomed-out');
   else el.classList.remove('zoomed-out');
   if(wasZoomedOut !== isZoomedOut) refreshEnemyIcons();
+});
+
+map.on('dragstart',function(){
+  userDragging = true;
+  zoomMode = 'free';
+  (window.ReactNativeWebView||window.parent).postMessage(JSON.stringify({type:'freeLook',active:true}),'*');
 });
 
 function refreshEnemyIcons(){
@@ -270,6 +278,7 @@ window.addEventListener('message',function(e){
 
     if(d.type==='setZoom'){
       zoomMode = d.mode;
+      userDragging = false;
       if(d.mode==='world'){
         var bounds = [playerMarker.getLatLng()];
         Object.keys(enemyMarkers).forEach(function(k){bounds.push(enemyMarkers[k].getLatLng());});
@@ -279,13 +288,14 @@ window.addEventListener('message',function(e){
       } else {
         map.setView(playerMarker.getLatLng(),16,{animate:true,duration:0.8});
       }
+      (window.ReactNativeWebView||window.parent).postMessage(JSON.stringify({type:'freeLook',active:false}),'*');
       return;
     }
 
     if(d.type==='update'||d.type==='init'){
       if(d.type==='init'){
         map.setView([d.lat,d.lng],16,{animate:false});
-      } else if(zoomMode==='player'){
+      } else if(zoomMode==='player' && !userDragging){
         map.setView([d.lat,d.lng],map.getZoom(),{animate:true,duration:1.5,easeLinearity:0.1,noMoveStart:true});
       }
       playerMarker.setLatLng([d.lat,d.lng]);
@@ -483,6 +493,11 @@ window.addEventListener('message',function(e){
           (global as any).__mapEventHandler(d);
         }
       }
+      if (d.type === 'freeLook') {
+        if ((global as any).__mapEventHandler) {
+          (global as any).__mapEventHandler(d);
+        }
+      }
     } catch {}
   }, []);
 
@@ -537,6 +552,7 @@ export default function MapScreen() {
   const [loading, setLoading] = useState(true);
   const [showBuyIn, setShowBuyIn] = useState(false);
   const [elimMessage, setElimMessage] = useState<string | null>(null);
+  const [freeLook, setFreeLook] = useState(false);
 
   // Attack confirmation overlay
   const [attackTarget, setAttackTarget] = useState<{
@@ -937,6 +953,9 @@ export default function MapScreen() {
       if (d.type === 'collectCoin') {
         handleCollectCoin(d.id, d.amount);
       }
+      if (d.type === 'freeLook') {
+        setFreeLook(!!d.active);
+      }
     };
 
     // Native: global handler called from WebView onMessage
@@ -1182,23 +1201,41 @@ export default function MapScreen() {
               </Text>
             </View>
             {session && (
-              <TouchableOpacity
-                style={[styles.zoomBtn, zoomedOut && styles.zoomBtnActive]}
-                onPress={() => {
-                  const newMode = !zoomedOut;
-                  setZoomedOut(newMode);
-                  if (mapRef.current) {
-                    mapRef.current({ type: 'setZoom', mode: newMode ? 'world' : 'player' });
-                  }
-                }}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name={zoomedOut ? 'locate' : 'globe-outline'}
-                  size={16}
-                  color={zoomedOut ? colors.background : colors.primary}
-                />
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+                {freeLook && (
+                  <TouchableOpacity
+                    style={[styles.zoomBtn, styles.zoomBtnActive]}
+                    onPress={() => {
+                      setFreeLook(false);
+                      setZoomedOut(false);
+                      if (mapRef.current) {
+                        mapRef.current({ type: 'setZoom', mode: 'player' });
+                      }
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="navigate" size={16} color={colors.background} />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={[styles.zoomBtn, zoomedOut && styles.zoomBtnActive]}
+                  onPress={() => {
+                    const newMode = !zoomedOut;
+                    setZoomedOut(newMode);
+                    setFreeLook(false);
+                    if (mapRef.current) {
+                      mapRef.current({ type: 'setZoom', mode: newMode ? 'world' : 'player' });
+                    }
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name={zoomedOut ? 'locate' : 'globe-outline'}
+                    size={16}
+                    color={zoomedOut ? colors.background : colors.primary}
+                  />
+                </TouchableOpacity>
+              </View>
             )}
           </View>
         )}
