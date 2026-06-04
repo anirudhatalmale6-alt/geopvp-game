@@ -12,7 +12,7 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: any) =>
     const loc = locations?.[0];
     if (!loc) return;
     try {
-      await api.post('/game/location', {
+      await api.post('/game/sessions/location', {
         latitude: loc.coords.latitude,
         longitude: loc.coords.longitude,
       });
@@ -30,13 +30,15 @@ export async function startBackgroundLocation(): Promise<boolean> {
   if (isStarted) return true;
 
   await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
-    accuracy: Location.Accuracy.Balanced,
-    timeInterval: 10000,
-    distanceInterval: 10,
+    accuracy: Location.Accuracy.High,
+    timeInterval: 5000,
+    distanceInterval: 5,
     showsBackgroundLocationIndicator: true,
+    pausesUpdatesAutomatically: false,
+    activityType: Location.ActivityType.OtherNavigation,
     foregroundService: {
       notificationTitle: 'CoinProwl',
-      notificationBody: 'Tracking your position on the map',
+      notificationBody: 'Your position is live on the map',
       notificationColor: '#00e5ff',
     },
   });
