@@ -766,7 +766,7 @@ export default function MapScreen() {
 
       const unsubElim = onEliminated((data) => {
         sessionEndedRef.current = true;
-        const msg = `${data.attackerName} attacked you and took ${data.coinsLost} coins!${data.coinsSaved > 0 ? ` ${data.coinsSaved} coins saved to wallet.` : ''}`;
+        const msg = `${data.attackerName} attacked you and took ${data.coinsLost} coins!`;
         addFeedItem(msg, '#ff4444');
         setElimMessage(msg);
         setSession(null);

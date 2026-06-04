@@ -570,8 +570,7 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
       }
       await Promise.all(txPromises);
 
-      const savedMsg = excessCoins > 0 ? ` ${excessCoins} coins saved to your wallet.` : '';
-      const eliminationMsg = `${attacker.attacker_name} took ${coinsStolen} coins!${savedMsg} You've been eliminated.`;
+      const eliminationMsg = `${attacker.attacker_name} took ${coinsStolen} coins! You've been eliminated.`;
 
       const io = getIO();
       if (io) {
