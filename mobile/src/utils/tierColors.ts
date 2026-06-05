@@ -24,6 +24,7 @@ const TIER_COLORS: Record<string, string> = {
   tanzanite: '#4d4dff',
   'red-beryl': '#c41e3a',
   diamond: '#b9f2ff',
+  prowler: '#ff6600',
 };
 
 export function getTierColor(tierName: string): string {

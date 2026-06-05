@@ -455,15 +455,15 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
         // Bot shields are down - player defeats it and takes all coins
         const botCoins = parseInt(defender.map_coins || '0', 10);
 
-        // Respawn bot with 10 coins and 30-min shield at a new random location nearby
+        // Respawn bot with $1-$15 value and 30-min shield at a new random location nearby
         const newLat = parseFloat(defender.latitude) + (Math.random() - 0.5) * 0.5;
         const newLng = parseFloat(defender.longitude) + (Math.random() - 0.5) * 0.5;
-        const visualTiers = ['copper','silver','gold','emerald','ruby','sapphire','amethyst','topaz','aquamarine','pearl'];
-        const randomTier = visualTiers[Math.floor(Math.random() * visualTiers.length)];
-        const botShieldExpiry = new Date(Date.now() + 30 * 60 * 1000); // 30 min shield
+        const respawnDollars = Math.floor(Math.random() * 15) + 1;
+        const respawnCoins = respawnDollars * 10;
+        const botShieldExpiry = new Date(Date.now() + 30 * 60 * 1000);
         await q(
-          `UPDATE game_sessions SET map_coins = 10, shields_remaining = 3, coin_tier = $1, latitude = $2, longitude = $3, shield_active_until = $4 WHERE id = $5`,
-          [randomTier, newLat, newLng, botShieldExpiry, defender.id],
+          `UPDATE game_sessions SET map_coins = $1, buyin_amount = $2, shields_remaining = 3, coin_tier = 'prowler', latitude = $3, longitude = $4, shield_active_until = $5 WHERE id = $6`,
+          [respawnCoins, respawnDollars * 100, newLat, newLng, botShieldExpiry, defender.id],
         );
 
         await q(

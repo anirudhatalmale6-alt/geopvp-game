@@ -268,19 +268,11 @@ export async function spawnBots(req: AuthRequest, res: Response): Promise<void> 
       const lat = Math.max(-90, Math.min(90, centerLat + latOffset));
       const lng = ((centerLng + lngOffset + 540) % 360) - 180;
 
-      // $1 bots with random visual tier colors for variety
-      const tier = COIN_TIERS[0];
-      const visualTiers = ['copper','silver','gold','emerald','ruby','sapphire','amethyst','topaz','aquamarine','pearl'];
-      const randomVisualTier = visualTiers[Math.floor(Math.random() * visualTiers.length)];
-      const mapCoins = tier.dollar * 10;
+      const botDollars = Math.floor(Math.random() * 15) + 1; // $1-$15
+      const mapCoins = botDollars * 10;
       const botId = crypto.randomUUID();
-      // Human-like usernames
-      const prefixes = ['shadow','ghost','prowl','hunt','dash','blaze','storm','swift','wolf','hawk','viper','cobra','raven','fox','ace','nova','zen','bolt','fury','claw','fang','spike','jet','max','rex','kai','zane','luke','finn','cole','jake','mark','tony','nick','sam','alex','ryan','mike','dave','joe','ben','leo','eli','ian'];
-      const suffixes = ['_x','99','_','23','88','_pro','7','42','13','_z','11','_q','33','77','55','01','_k','_r','66','44'];
-      const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
-      const suffix = suffixes[Math.floor(Math.random() * suffixes.length)];
-      const rnd = Math.floor(Math.random() * 900 + 100);
-      const botName = `${prefix}${suffix}${rnd}`;
+      const prowlerNum = Math.floor(Math.random() * 9000 + 1000);
+      const botName = `Prowler${prowlerNum}`;
 
       const userResult = await query(
         `INSERT INTO users (id, username, email, password_hash, is_verified)
@@ -293,11 +285,11 @@ export async function spawnBots(req: AuthRequest, res: Response): Promise<void> 
         [userResult.rows[0].id],
       );
 
-      const botShieldExpiry = new Date(Date.now() + 30 * 60 * 1000); // 30 min shield
+      const botShieldExpiry = new Date(Date.now() + 30 * 60 * 1000);
       await query(
         `INSERT INTO game_sessions (user_id, buyin_amount, coin_tier, map_coins, latitude, longitude, last_location_update, is_active, shields_purchased, shields_remaining, shield_active_until)
-         VALUES ($1, $2, $3, $4, $5, $6, now(), true, 0, 3, $7)`,
-        [userResult.rows[0].id, tier.dollar * 100, randomVisualTier, mapCoins, lat, lng, botShieldExpiry],
+         VALUES ($1, $2, 'prowler', $3, $4, $5, now(), true, 0, 3, $6)`,
+        [userResult.rows[0].id, botDollars * 100, mapCoins, lat, lng, botShieldExpiry],
       );
 
       created++;

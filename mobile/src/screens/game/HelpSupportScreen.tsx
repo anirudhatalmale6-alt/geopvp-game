@@ -101,6 +101,57 @@ export default function HelpSupportScreen() {
         <BulletItem text="You can use up to 3 shields per session" />
       </CollapsibleSection>
 
+      {/* Buy-In Tiers */}
+      <CollapsibleSection
+        title="BUY-IN TIERS"
+        icon="layers-outline"
+        iconColor="#ffd700"
+      >
+        <Text style={styles.paragraph}>
+          Each tier gives you 10 prowl coins per dollar. Higher tiers mean more coins on the map — but more risk. You can only attack players at your tier or lower.
+        </Text>
+        <View style={styles.rankList}>
+          {[
+            { name: 'COPPER', price: '$1', coins: '10', color: '#b87333' },
+            { name: 'TIN', price: '$2', coins: '20', color: '#8a9597' },
+            { name: 'IRON', price: '$3', coins: '30', color: '#6a6a6a' },
+            { name: 'NICKEL', price: '$4', coins: '40', color: '#7a7a7a' },
+            { name: 'BRONZE', price: '$5', coins: '50', color: '#cd7f32' },
+            { name: 'BRASS', price: '$6', coins: '60', color: '#b5a642' },
+            { name: 'SILVER', price: '$7', coins: '70', color: '#c0c0c0' },
+            { name: 'ELECTRUM', price: '$8', coins: '80', color: '#d4c675' },
+            { name: 'GOLD', price: '$9', coins: '90', color: '#ffd700' },
+            { name: 'ROSE GOLD', price: '$10', coins: '100', color: '#e8a090' },
+            { name: 'PALLADIUM', price: '$11', coins: '110', color: '#ced0ce' },
+            { name: 'PLATINUM', price: '$12', coins: '120', color: '#e5e4e2' },
+            { name: 'OPAL', price: '$13', coins: '130', color: '#d4eaf7' },
+            { name: 'TOPAZ', price: '$14', coins: '140', color: '#ffc87c' },
+            { name: 'AMETHYST', price: '$15', coins: '150', color: '#9966cc' },
+            { name: 'AQUAMARINE', price: '$16', coins: '160', color: '#7fffd4' },
+            { name: 'EMERALD', price: '$17', coins: '170', color: '#50c878' },
+            { name: 'PEARL', price: '$18', coins: '180', color: '#f0ead6' },
+            { name: 'SAPPHIRE', price: '$19', coins: '190', color: '#0f52ba' },
+            { name: 'ALEXANDRITE', price: '$20', coins: '200', color: '#008b8b' },
+            { name: 'RUBY', price: '$21', coins: '210', color: '#e0115f' },
+            { name: 'BLACK OPAL', price: '$22', coins: '220', color: '#1a1a2e' },
+            { name: 'TANZANITE', price: '$23', coins: '230', color: '#4d4dff' },
+            { name: 'RED BERYL', price: '$24', coins: '240', color: '#c41e3a' },
+            { name: 'DIAMOND', price: '$25', coins: '250', color: '#b9f2ff' },
+          ].map((t) => (
+            <View key={t.name} style={styles.rankItem}>
+              <View style={[styles.rankIcon, { backgroundColor: t.color + '20' }]}>
+                <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: t.color }} />
+              </View>
+              <View style={styles.rankInfo}>
+                <Text style={[styles.rankTitle, { color: t.color }]}>{t.name}</Text>
+                <Text style={styles.rankDesc}>{t.coins} prowl coins</Text>
+              </View>
+              <Text style={styles.rankCoins}>{t.price}</Text>
+            </View>
+          ))}
+        </View>
+      </CollapsibleSection>
+
       {/* Game Rules */}
       <CollapsibleSection
         title="GAME RULES"

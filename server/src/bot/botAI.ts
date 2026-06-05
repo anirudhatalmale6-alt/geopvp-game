@@ -8,7 +8,7 @@ const BOT_SPEED_MPH = 10;
 const BOT_CHASE_SPEED_MPH = 18;
 const TICK_INTERVAL_MS = 5000;
 const BOT_ATTACK_RADIUS = 0.5;
-const MAX_BOT_HITS_PER_PLAYER_PER_WEEK = 5;
+const MAX_BOT_HITS_PER_PLAYER_PER_WEEK = 3;
 const MIN_BOT_SPACING_MILES = 10;
 const MIN_BOT_SPACING_DEGS = MIN_BOT_SPACING_MILES / 69;
 const LEASH_RADIUS_DEGS = 2.0; // ~140 miles - bots stay within this radius of home
@@ -22,13 +22,8 @@ const US_LNG_MAX = -69;
 
 let tickHandle: ReturnType<typeof setInterval> | null = null;
 
-const BOT_VISUAL_TIERS = ['copper','silver','gold','emerald','ruby','sapphire','amethyst','topaz','aquamarine','pearl'];
-const botVisualTiers = new Map<string, string>();
-function getBotVisualTier(botId: string): string {
-  if (!botVisualTiers.has(botId)) {
-    botVisualTiers.set(botId, BOT_VISUAL_TIERS[Math.floor(Math.random() * BOT_VISUAL_TIERS.length)]);
-  }
-  return botVisualTiers.get(botId)!;
+function getBotVisualTier(_botId: string): string {
+  return 'prowler';
 }
 
 const botWanderAngles = new Map<string, number>();
