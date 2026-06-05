@@ -161,8 +161,8 @@ export async function attackPlayer(targetSessionId: string): Promise<AttackResul
   return data;
 }
 
-export async function buyShield(): Promise<GameSession> {
-  const { data } = await api.post<{ session: GameSession }>('/game/shield');
+export async function buyShield(type: 'standard' | 'gold' = 'standard'): Promise<GameSession> {
+  const { data } = await api.post<{ session: GameSession }>('/game/shield', { type });
   return data.session;
 }
 

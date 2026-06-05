@@ -616,6 +616,7 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
 export async function buyShield(req: AuthRequest, res: Response): Promise<void> {
   try {
     const userId = req.user!.id;
+    const shieldType = req.body?.type === 'gold' ? 'gold' : 'standard';
 
     const sessionResult = await query(
       `SELECT * FROM game_sessions WHERE user_id = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1`,
@@ -646,8 +647,12 @@ export async function buyShield(req: AuthRequest, res: Response): Promise<void> 
       return;
     }
 
-    const SHIELD_COST_CENTS = 100; // $1.00 per shield
-    const shieldExpiry = new Date(Date.now() + config.shieldDurationMinutes * 60 * 1000);
+    const isGold = shieldType === 'gold';
+    const costCents = isGold ? 500 : 100;
+    const durationMinutes = isGold ? 120 : config.shieldDurationMinutes;
+    const label = isGold ? 'Gold Shield ($5.00) — 2 hours' : `Shield ($1.00) — ${config.shieldDurationMinutes} minutes`;
+
+    const shieldExpiry = new Date(Date.now() + durationMinutes * 60 * 1000);
 
     const updated = await query(
       `UPDATE game_sessions
@@ -661,7 +666,7 @@ export async function buyShield(req: AuthRequest, res: Response): Promise<void> 
     await query(
       `INSERT INTO transactions (user_id, type, amount, currency, description)
        VALUES ($1, 'shield', $2, 'prowl', $3)`,
-      [userId, -SHIELD_COST_CENTS, `Shield purchased ($1.00) — active for ${config.shieldDurationMinutes} minutes`],
+      [userId, -costCents, label],
     );
 
     res.json({ session: formatSession(updated.rows[0], shieldsBoughtLast24h + 1) });

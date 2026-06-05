@@ -1047,15 +1047,24 @@ export default function MapScreen() {
     const remaining = 3 - bought24h;
     if (remaining <= 0) return;
     Alert.alert(
-      'Buy Shield?',
-      `Purchase a shield for $1 (active for 10 minutes). You can buy ${remaining} more today.`,
+      'Choose Shield',
+      `You can buy ${remaining} more shield${remaining !== 1 ? 's' : ''} today.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Buy $1',
+          text: '$1 — 10 min',
           onPress: async () => {
             try {
-              const updated = await buyShield();
+              const updated = await buyShield('standard');
+              setSession(updated);
+            } catch {}
+          },
+        },
+        {
+          text: '$5 — 2 hours (Gold)',
+          onPress: async () => {
+            try {
+              const updated = await buyShield('gold');
               setSession(updated);
             } catch {}
           },
