@@ -225,6 +225,14 @@ map.on('dragstart',function(){
   (window.ReactNativeWebView||window.parent).postMessage(JSON.stringify({type:'freeLook',active:true}),'*');
 });
 
+map.on('zoomstart',function(){
+  if(!userDragging){
+    userDragging = true;
+    zoomMode = 'free';
+    (window.ReactNativeWebView||window.parent).postMessage(JSON.stringify({type:'freeLook',active:true}),'*');
+  }
+});
+
 function refreshEnemyIcons(){
   Object.keys(enemyMarkers).forEach(function(k){
     var ed = enemyData[k];
