@@ -21,7 +21,7 @@ const TIER_COLORS: Record<string, string> = {
   alexandrite: '#008b8b',
   ruby: '#e0115f',
   'black-opal': '#1a1a2e',
-  tanzanite: '#4d4dff',
+  tanzanite: '#7b68ee',
   'red-beryl': '#c41e3a',
   diamond: '#b9f2ff',
   prowler: '#ff6600',
