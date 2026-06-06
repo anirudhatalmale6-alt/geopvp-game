@@ -70,7 +70,7 @@ async function attemptTokenRefresh(): Promise<boolean> {
       }
 
       console.log('[Auth] Attempting token refresh...');
-      const res = await fetch(`${BASE_URL}/auth/refresh`, {
+      const res = await fetch(`${BASE_URL}/auth/refresh-token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),

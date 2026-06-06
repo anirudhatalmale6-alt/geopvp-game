@@ -352,8 +352,10 @@ export async function login(req: Request, res: Response): Promise<void> {
 
 export async function refreshToken(req: Request, res: Response): Promise<void> {
   try {
+    console.log(`[refreshToken] Received request, body keys: ${Object.keys(req.body || {}).join(', ')}`);
     const parsed = refreshTokenSchema.safeParse(req.body);
     if (!parsed.success) {
+      console.log(`[refreshToken] Validation failed: ${parsed.error.errors[0].message}`);
       res.status(400).json({ error: parsed.error.errors[0].message });
       return;
     }
