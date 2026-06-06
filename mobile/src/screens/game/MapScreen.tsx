@@ -578,6 +578,14 @@ export default function MapScreen() {
     setActivityFeed((prev) => [item, ...prev].slice(0, 20));
   }, []);
 
+  // Master cleanup on unmount (logout)
+  useEffect(() => {
+    return () => {
+      disconnectSocket();
+      stopBackgroundLocation();
+    };
+  }, []);
+
   useEffect(() => {
     if (activityFeed.length === 0) return;
     const iv = setInterval(() => {

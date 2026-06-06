@@ -12,6 +12,8 @@ import React, {
   useMemo,
   useState,
 } from 'react';
+import { disconnectSocket } from '../api/socket';
+import { stopBackgroundLocation } from '../services/backgroundLocation';
 
 import { ApiError, clearTokens, getToken } from '../api/client';
 import {
@@ -105,6 +107,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const logout = useCallback(async () => {
+    disconnectSocket();
+    stopBackgroundLocation();
     await clearTokens();
     setUser(null);
   }, []);
