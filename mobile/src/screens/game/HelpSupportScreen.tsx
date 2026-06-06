@@ -96,9 +96,10 @@ export default function HelpSupportScreen() {
         <BulletItem text="If you get eliminated, your session ends — buy in again to keep playing" />
 
         <Text style={styles.subheading}>Defending</Text>
-        <BulletItem text="Buy a shield to protect yourself from attacks for 10 minutes" />
-        <BulletItem text="While shielded, no one can attack you" />
-        <BulletItem text="You can use up to 3 shields per session" />
+        <BulletItem text="Standard Shield ($1) — protects you from attacks for 10 minutes" />
+        <BulletItem text="Gold Shield ($5) — protects you from attacks for 2 hours" />
+        <BulletItem text="While shielded, no one can attack you — not even bots" />
+        <BulletItem text="You can buy up to 3 shields per 24 hours" />
       </CollapsibleSection>
 
       {/* Buy-In Tiers */}
@@ -280,7 +281,7 @@ export default function HelpSupportScreen() {
 
         <Text style={styles.faqQ}>How do shields work?</Text>
         <Text style={styles.faqA}>
-          Shields protect you from attacks for 10 minutes. You can use up to 3 shields per session. While shielded, no player can attack you.
+          There are two shield types: Standard ($1, 10 minutes) and Gold ($5, 2 hours). You can buy up to 3 shields per 24 hours. While shielded, no player or bot can attack you.
         </Text>
       </CollapsibleSection>
 
