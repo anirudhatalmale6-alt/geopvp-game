@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, fontSize } from '../../theme';
-import { getWallet, getTransactions, redeemSweepCoins, WalletData, Transaction } from '../../api/game';
+import { getWallet, getTransactions, getCombatStats, redeemSweepCoins, WalletData, Transaction, CombatStats } from '../../api/game';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -84,6 +84,7 @@ const MOCK_TRANSACTIONS: Transaction[] = [
 export default function WalletScreen() {
   const [wallet, setWallet] = useState<WalletData | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [stats, setStats] = useState<CombatStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showRedeem, setShowRedeem] = useState(false);
@@ -95,9 +96,10 @@ export default function WalletScreen() {
 
   const load = useCallback(async () => {
     try {
-      const [w, txs] = await Promise.all([getWallet(), getTransactions()]);
+      const [w, txs, s] = await Promise.all([getWallet(), getTransactions(), getCombatStats()]);
       setWallet(w);
       setTransactions(txs.length > 0 ? txs : MOCK_TRANSACTIONS);
+      setStats(s);
     } catch {
       setTransactions(MOCK_TRANSACTIONS);
     }
@@ -213,21 +215,21 @@ export default function WalletScreen() {
         <View style={styles.statCard}>
           <Ionicons name="flash" size={18} color={colors.gold} />
           <Text style={styles.statValue}>
-            {transactions.filter((t) => t.type === 'attack_win').length}
+            {stats?.attacksWon ?? 0}
           </Text>
           <Text style={styles.statLabel}>WINS</Text>
         </View>
         <View style={styles.statCard}>
           <Ionicons name="alert-circle" size={18} color={colors.secondary} />
           <Text style={styles.statValue}>
-            {transactions.filter((t) => t.type === 'attack_loss').length}
+            {stats?.attacksLost ?? 0}
           </Text>
           <Text style={styles.statLabel}>LOSSES</Text>
         </View>
         <View style={styles.statCard}>
           <Ionicons name="enter-outline" size={18} color={colors.primary} />
           <Text style={styles.statValue}>
-            {transactions.filter((t) => t.type === 'buyin').length}
+            {stats?.sessions ?? 0}
           </Text>
           <Text style={styles.statLabel}>SESSIONS</Text>
         </View>
