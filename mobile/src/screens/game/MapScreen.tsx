@@ -24,6 +24,7 @@ import {
   buyShield,
   getCoinDrops,
   collectCoinDrop,
+  getWallet,
   GameSession,
   NearbyPlayer,
   CoinDrop,
@@ -561,6 +562,7 @@ export default function MapScreen() {
   const [showBuyIn, setShowBuyIn] = useState(false);
   const [elimMessage, setElimMessage] = useState<string | null>(null);
   const [freeLook, setFreeLook] = useState(false);
+  const [sweepBalance, setSweepBalance] = useState(0);
 
   // Attack confirmation overlay
   const [attackTarget, setAttackTarget] = useState<{
@@ -913,9 +915,13 @@ export default function MapScreen() {
         sessionNullCountRef.current = 0;
         if (currentSession) setSession(currentSession);
         await updateLocation(location.lat, location.lng);
-        const { players, totalOnMap } = await getAllPlayers();
+        const [{ players, totalOnMap }, walletData] = await Promise.all([
+          getAllPlayers(),
+          getWallet().catch(() => null),
+        ]);
         setNearbyPlayers(players);
         setStatusMessage(`${totalOnMap} HUNTER${totalOnMap !== 1 ? 'S' : ''} ON MAP`);
+        if (walletData) setSweepBalance(Math.max(0, walletData.sweepBalance));
       } catch {
         // Network error — don't count as session null, just skip this cycle
       }
@@ -1176,9 +1182,9 @@ export default function MapScreen() {
         {session && (
           <View style={styles.hudRow}>
             <View style={styles.hudCard}>
-              <Ionicons name="cash-outline" size={18} color={getTierColor(session.coinTier)} />
-              <Text style={[styles.hudValue, { color: getTierColor(session.coinTier) }]}>{session.mapCoins}</Text>
-              <Text style={styles.hudLabel}>COINS</Text>
+              <Ionicons name="cash" size={18} color={colors.success} />
+              <Text style={[styles.hudValue, { color: colors.success }]}>${(sweepBalance / 100).toFixed(2)}</Text>
+              <Text style={styles.hudLabel}>SWEEP</Text>
             </View>
             <View style={styles.hudCard}>
               <Ionicons name="shield" size={18} color={shieldIsActive ? colors.primary : colors.textMuted} />
