@@ -480,11 +480,19 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
 
         // Record transaction so it shows in wallet history
         const stolenCents = botCoins * 10;
-        await q(
-          `INSERT INTO transactions (user_id, type, amount, currency, description, related_user_id)
-           VALUES ($1, 'attack_win', $2, 'sweep', $3, $4)`,
-          [attacker.user_id, stolenCents, `Took ${botCoins} coins from ${defender.defender_name}!`, defender.user_id],
-        );
+        await Promise.all([
+          q(
+            `INSERT INTO transactions (user_id, type, amount, currency, description, related_user_id)
+             VALUES ($1, 'attack_win', $2, 'sweep', $3, $4)`,
+            [attacker.user_id, stolenCents, `Took ${botCoins} coins from ${defender.defender_name}!`, defender.user_id],
+          ),
+          q(
+            `INSERT INTO prowl_balances (user_id, balance, updated_at)
+             VALUES ($1, $2, now())
+             ON CONFLICT (user_id) DO UPDATE SET balance = prowl_balances.balance + $2, updated_at = now()`,
+            [attacker.user_id, botCoins],
+          ),
+        ]);
 
         // Schedule bot counter-attack after 3-5 seconds
         const io = getIO();
@@ -556,9 +564,14 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
            VALUES ($1, 'attack_loss', $2, 'prowl', $3, $4)`,
           [defender.user_id, -stolenCents, `Defeated by ${attacker.attacker_name}`, attacker.user_id],
         ),
+        q(
+          `INSERT INTO prowl_balances (user_id, balance, updated_at)
+           VALUES ($1, $2, now())
+           ON CONFLICT (user_id) DO UPDATE SET balance = prowl_balances.balance + $2, updated_at = now()`,
+          [attacker.user_id, coinsStolen],
+        ),
       ];
 
-      // Excess coins above buy-in are lost on elimination — sweep coins only come from attack wins
       await Promise.all(txPromises);
 
       const eliminationMsg = `${attacker.attacker_name} took ${coinsStolen} coins! You've been eliminated.`;

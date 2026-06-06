@@ -1182,9 +1182,9 @@ export default function MapScreen() {
         {session && (
           <View style={styles.hudRow}>
             <View style={styles.hudCard}>
-              <Ionicons name="cash" size={18} color={colors.success} />
-              <Text style={[styles.hudValue, { color: colors.success }]}>${(sweepBalance / 100).toFixed(2)}</Text>
-              <Text style={styles.hudLabel}>SWEEP</Text>
+              <Ionicons name="cash-outline" size={18} color={getTierColor(session.coinTier)} />
+              <Text style={[styles.hudValue, { color: getTierColor(session.coinTier) }]}>{session.mapCoins}</Text>
+              <Text style={styles.hudLabel}>COINS</Text>
             </View>
             <View style={styles.hudCard}>
               <Ionicons name="shield" size={18} color={shieldIsActive ? colors.primary : colors.textMuted} />
