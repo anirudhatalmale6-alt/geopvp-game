@@ -558,16 +558,7 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
         ),
       ];
 
-      if (excessCoins > 0) {
-        const excessCents = excessCoins * 10;
-        txPromises.push(
-          q(
-            `INSERT INTO transactions (user_id, type, amount, currency, description)
-             VALUES ($1, 'salvage', $2, 'sweep', $3)`,
-            [defender.user_id, excessCents, `You've been eliminated`],
-          ),
-        );
-      }
+      // Excess coins above buy-in are lost on elimination — sweep coins only come from attack wins
       await Promise.all(txPromises);
 
       const eliminationMsg = `${attacker.attacker_name} took ${coinsStolen} coins! You've been eliminated.`;
