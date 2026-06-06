@@ -564,7 +564,7 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
           q(
             `INSERT INTO transactions (user_id, type, amount, currency, description)
              VALUES ($1, 'salvage', $2, 'sweep', $3)`,
-            [defender.user_id, excessCents, `Saved ${excessCoins} coins to wallet after elimination`],
+            [defender.user_id, excessCents, `Bonus sweep coins earned`],
           ),
         );
       }
