@@ -303,6 +303,22 @@ export default function HelpSupportScreen() {
         </TouchableOpacity>
       </CollapsibleSection>
 
+      {/* Legal */}
+      <CollapsibleSection
+        title="LEGAL"
+        icon="document-outline"
+        iconColor={colors.textMuted}
+      >
+        <TouchableOpacity
+          style={styles.contactBtn}
+          onPress={() => Linking.openURL('https://anirudhatalmale6-alt.github.io/coinprowl-privacy/')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="shield-checkmark" size={16} color={colors.background} />
+          <Text style={styles.contactBtnText}>PRIVACY POLICY</Text>
+        </TouchableOpacity>
+      </CollapsibleSection>
+
       <View style={{ height: spacing.xxl }} />
     </ScrollView>
   );
