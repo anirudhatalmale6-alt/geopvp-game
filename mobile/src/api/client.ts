@@ -136,17 +136,36 @@ async function request<T = unknown>(
     return fetch(url, options);
   };
 
-  let res = await makeRequest();
+  // Retry on network errors (low service)
+  let res: Response;
+  let lastError: Error | null = null;
+  const maxRetries = method === 'POST' && (path.includes('/attack') || path.includes('/shield')) ? 3 : 1;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      res = await makeRequest();
+      lastError = null;
+      break;
+    } catch (err: any) {
+      lastError = err;
+      if (attempt < maxRetries - 1) {
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+      }
+    }
+  }
+  if (lastError) {
+    throw new ApiError('Poor connection — please check your signal and try again', 0);
+  }
 
   // On 401, try to refresh and retry once.
-  if (res.status === 401) {
+  if (res!.status === 401) {
     const refreshed = await attemptTokenRefresh();
     if (refreshed) {
       res = await makeRequest();
     } else {
       const hasRefresh = await getRefreshToken();
       if (hasRefresh) {
-        throw new Error('Token refresh failed — network may be unavailable');
+        throw new ApiError('Session expired — please log in again', 401);
       }
     }
   }

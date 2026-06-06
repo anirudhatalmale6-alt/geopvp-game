@@ -5,6 +5,8 @@ import { api } from '../api/client';
 
 const BACKGROUND_LOCATION_TASK = 'coinprowl-background-location';
 
+let pendingLocation: { latitude: number; longitude: number } | null = null;
+
 TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: any) => {
   if (error) {
     console.log('[BgLoc] Task error:', error);
@@ -14,13 +16,13 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }: any) =>
     const { locations } = data;
     if (!locations?.length) return;
     const loc = locations[locations.length - 1];
+    const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+    pendingLocation = coords;
     try {
-      await api.post('/game/sessions/location', {
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
-      });
-    } catch (err: any) {
-      console.log('[BgLoc] Update failed:', err.message);
+      await api.post('/game/sessions/location', coords);
+      pendingLocation = null;
+    } catch {
+      // Location queued — will retry on next update
     }
   }
 });
