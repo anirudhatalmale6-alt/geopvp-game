@@ -59,30 +59,38 @@ export async function clearTokens(): Promise<void> {
 let refreshPromise: Promise<boolean> | null = null;
 
 async function attemptTokenRefresh(): Promise<boolean> {
-  // Coalesce concurrent refresh calls so only one request is in-flight.
   if (refreshPromise) return refreshPromise;
 
   refreshPromise = (async () => {
     try {
       const refreshToken = await getRefreshToken();
-      if (!refreshToken) return false;
+      if (!refreshToken) {
+        console.log('[Auth] No refresh token in storage');
+        return false;
+      }
 
+      console.log('[Auth] Attempting token refresh...');
       const res = await fetch(`${BASE_URL}/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),
       });
 
-      if (!res.ok) return false;
+      if (!res.ok) {
+        console.log('[Auth] Refresh failed:', res.status);
+        return false;
+      }
 
       const data = await res.json();
       if (data.token) {
         const newRefresh = data.refreshToken || refreshToken;
         await setTokens(data.token, newRefresh);
+        console.log('[Auth] Token refreshed OK');
         return true;
       }
       return false;
-    } catch {
+    } catch (err: any) {
+      console.log('[Auth] Refresh error:', err.message);
       return false;
     } finally {
       refreshPromise = null;

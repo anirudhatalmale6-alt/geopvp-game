@@ -95,7 +95,7 @@ function generateAccessToken(user: { id: string; email: string; username: string
   return jwt.sign(
     { id: user.id, email: user.email, username: user.username },
     config.jwtSecret,
-    { expiresIn: '24h' },
+    { expiresIn: '30d' },
   );
 }
 
@@ -103,7 +103,7 @@ function generateRefreshToken(user: { id: string }): string {
   return jwt.sign(
     { id: user.id },
     config.jwtRefreshSecret,
-    { expiresIn: '7d' },
+    { expiresIn: '90d' },
   );
 }
 
