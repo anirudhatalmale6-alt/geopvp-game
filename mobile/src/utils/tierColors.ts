@@ -20,10 +20,10 @@ const TIER_COLORS: Record<string, string> = {
   sapphire: '#0f52ba',
   alexandrite: '#008b8b',
   ruby: '#e0115f',
-  'black-opal': '#1a1a2e',
+  'black-opal': '#4a4a6e',
   tanzanite: '#7b68ee',
   'red-beryl': '#c41e3a',
-  diamond: '#b9f2ff',
+  diamond: '#e0f7ff',
   prowler: '#ff6600',
 };
 
