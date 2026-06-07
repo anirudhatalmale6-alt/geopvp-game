@@ -13,6 +13,8 @@ import {
   spawnBots,
   clearBots,
   resetDeviceLock,
+  listTransactions,
+  listAttacks,
 } from '../controllers/adminController';
 
 const router = Router();
@@ -31,5 +33,7 @@ router.delete('/coins', clearAllDrops);
 router.post('/bots/spawn', spawnBots);
 router.delete('/bots', clearBots);
 router.post('/users/:id/reset-device', resetDeviceLock);
+router.get('/transactions', listTransactions);
+router.get('/attacks', listAttacks);
 
 export default router;

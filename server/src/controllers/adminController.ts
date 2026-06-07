@@ -349,6 +349,75 @@ export async function resetDeviceLock(req: AuthRequest, res: Response): Promise<
   }
 }
 
+export async function listTransactions(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    if (!(await requireAdmin(req, res))) return;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+    const offset = (page - 1) * limit;
+    const typeFilter = req.query.type as string;
+    const userFilter = req.query.userId as string;
+
+    let where = 'WHERE 1=1';
+    const params: any[] = [];
+    let idx = 1;
+    if (typeFilter) { where += ` AND t.type = $${idx}`; params.push(typeFilter); idx++; }
+    if (userFilter) { where += ` AND t.user_id = $${idx}`; params.push(userFilter); idx++; }
+
+    const [txResult, countResult] = await Promise.all([
+      query(
+        `SELECT t.*, u.username, u.email FROM transactions t JOIN users u ON u.id = t.user_id ${where} ORDER BY t.created_at DESC LIMIT $${idx} OFFSET $${idx+1}`,
+        [...params, limit, offset]
+      ),
+      query(`SELECT COUNT(*) FROM transactions t ${where}`, params),
+    ]);
+
+    res.json({
+      transactions: txResult.rows.map(r => ({
+        id: r.id, type: r.type, amount: parseInt(r.amount), currency: r.currency,
+        description: r.description, username: r.username, email: r.email,
+        userId: r.user_id, relatedUserId: r.related_user_id, createdAt: r.created_at,
+      })),
+      total: parseInt(countResult.rows[0].count),
+      page, limit,
+    });
+  } catch (err) {
+    console.error('listTransactions error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+export async function listAttacks(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    if (!(await requireAdmin(req, res))) return;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+    const offset = (page - 1) * limit;
+
+    const result = await query(
+      `SELECT a.*, u1.username as attacker_name, u1.email as attacker_email,
+              u2.username as defender_name, u2.email as defender_email
+       FROM attacks a
+       JOIN users u1 ON u1.id = a.attacker_id
+       JOIN users u2 ON u2.id = a.defender_id
+       ORDER BY a.created_at DESC LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+
+    res.json({
+      attacks: result.rows.map(r => ({
+        id: r.id, attackerName: r.attacker_name, attackerEmail: r.attacker_email,
+        defenderName: r.defender_name, defenderEmail: r.defender_email,
+        coinsStolen: parseInt(r.coins_stolen), success: r.success,
+        defenderHadShield: r.defender_had_shield, createdAt: r.created_at,
+      })),
+    });
+  } catch (err) {
+    console.error('listAttacks error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
 function formatDrop(row: Record<string, any>) {
   return {
     id: row.id,
