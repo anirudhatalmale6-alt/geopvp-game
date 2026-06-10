@@ -163,7 +163,7 @@ export default function HelpSupportScreen() {
         <BulletItem text="You must be 18 or older to play CoinProwl" />
         <BulletItem text="One account per person — no multi-accounting" />
         <BulletItem text="GPS spoofing or location manipulation is strictly prohibited" />
-        <BulletItem text="Do not use the app while driving or operating any vehicle" />
+        <BulletItem text="You can play as a passenger in a vehicle, but never while driving" />
         <BulletItem text="Always be aware of your surroundings and stay safe" />
 
         <Text style={styles.subheading}>Fair Play</Text>
