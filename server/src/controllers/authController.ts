@@ -320,14 +320,16 @@ export async function login(req: Request, res: Response): Promise<void> {
     }
 
     // Device lock: if account has a registered device, reject logins from other devices
-    if (user.device_id && deviceId && user.device_id !== deviceId) {
+    // Skip device lock for the Apple review test account
+    const isReviewAccount = user.email === 'applereview@coinprowl.com';
+    if (!isReviewAccount && user.device_id && deviceId && user.device_id !== deviceId) {
       console.warn(`[AntiCheat] Device mismatch for ${user.email}: expected ${user.device_id.slice(0, 8)}..., got ${deviceId.slice(0, 8)}...`);
       res.status(403).json({ error: 'This account is locked to another device. Contact support if you need to transfer.' });
       return;
     }
 
     // If user has no device_id yet (legacy account), bind it now
-    if (!user.device_id && deviceId) {
+    if (!isReviewAccount && !user.device_id && deviceId) {
       await query('UPDATE users SET device_id = $1 WHERE id = $2', [deviceId, user.id]);
     }
 
