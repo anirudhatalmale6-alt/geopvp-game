@@ -15,6 +15,9 @@ import {
   collectCoinDrop,
   checkGeoFence,
   getLeaderboard,
+  blockUser,
+  unblockUser,
+  getBlockedUsers,
 } from '../controllers/gameController';
 
 const router = Router();
@@ -45,5 +48,10 @@ router.post('/coins/:id/collect', collectCoinDrop);
 
 // Leaderboard
 router.get('/leaderboard', getLeaderboard);
+
+// Block routes
+router.post('/block', blockUser);
+router.delete('/block/:userId', unblockUser);
+router.get('/blocked', getBlockedUsers);
 
 export default router;

@@ -238,6 +238,8 @@ export async function getNearbyPlayers(req: AuthRequest, res: Response): Promise
          AND gs.latitude IS NOT NULL
          AND gs.latitude BETWEEN $2 AND $3
          AND gs.longitude BETWEEN $4 AND $5
+         AND gs.user_id NOT IN (SELECT blocked_id FROM blocked_users WHERE blocker_id = $1)
+         AND gs.user_id NOT IN (SELECT blocker_id FROM blocked_users WHERE blocked_id = $1)
 `,
       [userId, myLat - delta, myLat + delta, myLng - delta, myLng + delta],
     );
@@ -302,6 +304,8 @@ export async function getAllPlayers(req: AuthRequest, res: Response): Promise<vo
          WHERE gs.is_active = true
            AND gs.user_id != $1
            AND gs.latitude IS NOT NULL
+           AND gs.user_id NOT IN (SELECT blocked_id FROM blocked_users WHERE blocker_id = $1)
+           AND gs.user_id NOT IN (SELECT blocker_id FROM blocked_users WHERE blocked_id = $1)
          ORDER BY (gs.latitude - $2)*(gs.latitude - $2) + (gs.longitude - $3)*(gs.longitude - $3) ASC
          LIMIT 1500`,
         [userId, myLat, myLng],
@@ -383,6 +387,15 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
 
       if (attacker.user_id === defender.user_id) {
         throw new Error('Cannot attack yourself.');
+      }
+
+      // Check if either player has blocked the other
+      const blockCheck = await q(
+        `SELECT id FROM blocked_users WHERE (blocker_id = $1 AND blocked_id = $2) OR (blocker_id = $2 AND blocked_id = $1) LIMIT 1`,
+        [attacker.user_id, defender.defender_user_id || defender.user_id],
+      );
+      if (blockCheck.rows.length > 0) {
+        throw new Error('Cannot attack this player.');
       }
 
       // Verify within attack radius
@@ -1153,6 +1166,82 @@ export async function getRedemptions(req: AuthRequest, res: Response): Promise<v
     res.json({ redemptions });
   } catch (err) {
     console.error('getRedemptions error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/game/block  — block a user
+// ---------------------------------------------------------------------------
+
+export async function blockUser(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const userId = req.user!.id;
+    const { targetUserId } = req.body;
+
+    if (!targetUserId) {
+      res.status(400).json({ error: 'targetUserId is required.' });
+      return;
+    }
+
+    if (targetUserId === userId) {
+      res.status(400).json({ error: 'Cannot block yourself.' });
+      return;
+    }
+
+    await query(
+      `INSERT INTO blocked_users (blocker_id, blocked_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      [userId, targetUserId],
+    );
+
+    res.json({ blocked: true });
+  } catch (err) {
+    console.error('blockUser error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// DELETE /api/game/block/:userId  — unblock a user
+// ---------------------------------------------------------------------------
+
+export async function unblockUser(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const userId = req.user!.id;
+    const targetUserId = req.params.userId;
+
+    await query(
+      `DELETE FROM blocked_users WHERE blocker_id = $1 AND blocked_id = $2`,
+      [userId, targetUserId],
+    );
+
+    res.json({ unblocked: true });
+  } catch (err) {
+    console.error('unblockUser error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/game/blocked  — get list of blocked users
+// ---------------------------------------------------------------------------
+
+export async function getBlockedUsers(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const userId = req.user!.id;
+
+    const result = await query(
+      `SELECT bu.blocked_id, u.username, bu.created_at
+       FROM blocked_users bu
+       JOIN users u ON u.id = bu.blocked_id
+       WHERE bu.blocker_id = $1
+       ORDER BY bu.created_at DESC`,
+      [userId],
+    );
+
+    res.json({ blockedUsers: result.rows.map(r => ({ userId: r.blocked_id, username: r.username, blockedAt: r.created_at })) });
+  } catch (err) {
+    console.error('getBlockedUsers error:', err);
     res.status(500).json({ error: 'Internal server error.' });
   }
 }

@@ -261,3 +261,30 @@ export async function getLeaderboard(): Promise<LeaderboardData> {
     return { leaderboard: [], myRank: 0, myProwlCoins: 0 };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Block User API
+// ---------------------------------------------------------------------------
+
+export interface BlockedUser {
+  userId: string;
+  username: string;
+  blockedAt: string;
+}
+
+export async function blockUser(targetUserId: string): Promise<void> {
+  await api.post('/game/block', { targetUserId });
+}
+
+export async function unblockUser(targetUserId: string): Promise<void> {
+  await api.delete(`/game/block/${targetUserId}`);
+}
+
+export async function getBlockedUsers(): Promise<BlockedUser[]> {
+  try {
+    const { data } = await api.get<{ blockedUsers: BlockedUser[] }>('/game/blocked');
+    return data.blockedUsers;
+  } catch {
+    return [];
+  }
+}

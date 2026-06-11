@@ -18,8 +18,9 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, fontSize } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../api/client';
-import { getCombatStats, CombatStats, getWallet } from '../../api/game';
+import { getCombatStats, CombatStats, getWallet, getBlockedUsers, unblockUser, BlockedUser } from '../../api/game';
 import { getNotificationPermissionStatus, registerForPushNotifications } from '../../services/notifications';
+import { deleteAccount as deleteAccountApi } from '../../api/auth';
 
 // ---------------------------------------------------------------------------
 // Avatar color from username
@@ -221,6 +222,8 @@ export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const navigation = useNavigation<any>();
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [showBlockedUsers, setShowBlockedUsers] = useState(false);
+  const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
   const [stats, setStats] = useState<CombatStats | null>(null);
   const [prowlCoins, setProwlCoins] = useState(0);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -230,6 +233,11 @@ export default function ProfileScreen() {
     const [s, w] = await Promise.all([getCombatStats(), getWallet()]);
     setStats(s);
     setProwlCoins(w.prowlBalance ?? 0);
+  }, []);
+
+  const loadBlockedUsers = useCallback(async () => {
+    const list = await getBlockedUsers();
+    setBlockedUsers(list);
   }, []);
 
   const checkNotificationStatus = useCallback(async () => {
@@ -244,9 +252,21 @@ export default function ProfileScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([loadStats(), checkNotificationStatus()]);
+    await Promise.all([loadStats(), checkNotificationStatus(), loadBlockedUsers()]);
     setRefreshing(false);
-  }, [loadStats, checkNotificationStatus]);
+  }, [loadStats, checkNotificationStatus, loadBlockedUsers]);
+
+  const handleUnblock = (userId: string, username: string) => {
+    Alert.alert('UNBLOCK', `Unblock ${username}? They will be visible on your map again.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'UNBLOCK', onPress: async () => {
+        try {
+          await unblockUser(userId);
+          setBlockedUsers(prev => prev.filter(b => b.userId !== userId));
+        } catch {}
+      }},
+    ]);
+  };
 
   const handleNotificationToggle = async () => {
     if (notificationsEnabled) {
@@ -287,6 +307,42 @@ export default function ProfileScreen() {
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'LOG OUT', style: 'destructive', onPress: logout },
+      ],
+    );
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'DELETE ACCOUNT',
+      'Are you sure you want to permanently delete your account? This action cannot be undone. All your data, coins, and progress will be lost forever.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'DELETE',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'FINAL CONFIRMATION',
+              'Type DELETE to confirm. This will permanently erase your account.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Yes, Delete Forever',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      await deleteAccountApi('DELETE');
+                      Alert.alert('Account Deleted', 'Your account has been permanently deleted.');
+                      logout();
+                    } catch (err: any) {
+                      Alert.alert('Error', err.message || 'Failed to delete account.');
+                    }
+                  },
+                },
+              ],
+            );
+          },
+        },
       ],
     );
   };
@@ -394,6 +450,54 @@ export default function ProfileScreen() {
               <Ionicons name="help-circle-outline" size={18} color={colors.accent} />
             </View>
             <Text style={styles.settingLabel}>Help & Support</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        </TouchableOpacity>
+
+        <View style={styles.divider} />
+
+        <TouchableOpacity
+          style={styles.settingRow}
+          onPress={() => { setShowBlockedUsers(!showBlockedUsers); if (!showBlockedUsers) loadBlockedUsers(); }}
+        >
+          <View style={styles.settingLeft}>
+            <View style={[styles.settingIcon, { backgroundColor: '#9e9e9e20' }]}>
+              <Ionicons name="ban-outline" size={18} color="#9e9e9e" />
+            </View>
+            <Text style={styles.settingLabel}>Blocked Users</Text>
+          </View>
+          <Ionicons
+            name={showBlockedUsers ? 'chevron-up' : 'chevron-forward'}
+            size={18}
+            color={colors.textMuted}
+          />
+        </TouchableOpacity>
+
+        {showBlockedUsers && (
+          <View style={{ padding: spacing.md, gap: spacing.xs }}>
+            {blockedUsers.length === 0 ? (
+              <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, textAlign: 'center' }}>No blocked users</Text>
+            ) : (
+              blockedUsers.map(b => (
+                <View key={b.userId} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.xs }}>
+                  <Text style={{ color: colors.text, fontSize: fontSize.md, fontWeight: '600' }}>{b.username}</Text>
+                  <TouchableOpacity onPress={() => handleUnblock(b.userId, b.username)}>
+                    <Text style={{ color: colors.primary, fontSize: fontSize.sm, fontWeight: '700' }}>UNBLOCK</Text>
+                  </TouchableOpacity>
+                </View>
+              ))
+            )}
+          </View>
+        )}
+
+        <View style={styles.divider} />
+
+        <TouchableOpacity style={styles.settingRow} onPress={handleDeleteAccount}>
+          <View style={styles.settingLeft}>
+            <View style={[styles.settingIcon, { backgroundColor: '#ff174420' }]}>
+              <Ionicons name="trash-outline" size={18} color="#ff1744" />
+            </View>
+            <Text style={[styles.settingLabel, { color: '#ff1744' }]}>Delete Account</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </TouchableOpacity>

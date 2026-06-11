@@ -1,0 +1,58 @@
+APP NAME: CoinProwl
+
+SUBTITLE: GPS PvP Coin Hunting Game
+
+CATEGORY: Games > Action
+
+AGE RATING: 17+ (Infrequent/Mild Simulated Gambling)
+
+KEYWORDS: pvp, gps game, location game, coin hunt, battle royale, real world game, prowl, map game, multiplayer
+
+---
+
+APP STORE DESCRIPTION:
+
+Hunt. Attack. Collect. Welcome to CoinProwl -- the GPS-based PvP game where every player on the map is a target.
+
+BUY IN AND START HUNTING
+Choose your buy-in tier from $1 to $25 and drop onto the live map. Your real-world location becomes your position on the battlefield. Move around, find opponents, and strike before they strike you.
+
+ATTACK NEARBY PLAYERS
+Spot another player within range? Tap to attack and steal their coins. But be careful -- they can see you coming too. Every encounter is a high-stakes showdown.
+
+DEFEND WITH SHIELDS
+Activate a shield to protect yourself from incoming attacks. Standard shields last 10 minutes, or go Gold for 2 full hours of protection.
+
+EARN REAL REWARDS
+Win attacks to earn Sweep Coins -- redeemable for real cash via PayPal or Venmo. The more you win, the more you earn.
+
+CLIMB THE RANKS
+From Rookie Hunter to Mythic Prowler, your total Prowl Coins determine your rank. Ranks are permanent -- once earned, you keep them forever.
+
+STAY ALERT
+Not every player on the map is human. Prowler bots roam the battlefield disguised as real players. They can attack anyone at any buy-in level, so stay on your toes.
+
+KEY FEATURES:
+- Real-time GPS multiplayer on a live map
+- 25 buy-in tiers from Copper ($1) to Diamond ($25)
+- PvP combat with real stakes
+- Sweep Coins redeemable via PayPal/Venmo
+- Shield system with Standard and Gold tiers
+- Push notifications when you're attacked
+- 9-tier rank system from Rookie to Mythic
+- Background location tracking keeps you in the game
+- Coin drops scattered across the map
+
+CoinProwl requires location services to play. You must be 18 or older. Please play responsibly and always be aware of your surroundings.
+
+---
+
+WHAT'S NEW (Version 1.0):
+
+Initial release! Hunt players, steal coins, and climb the ranks in CoinProwl -- the ultimate GPS PvP game.
+
+---
+
+PRIVACY POLICY URL: https://anirudhatalmale6-alt.github.io/coinprowl-privacy/
+
+SUPPORT URL: mailto:support@coinprowl.com

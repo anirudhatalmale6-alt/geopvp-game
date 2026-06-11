@@ -25,6 +25,7 @@ import {
   getCoinDrops,
   collectCoinDrop,
   getWallet,
+  blockUser,
   GameSession,
   NearbyPlayer,
   CoinDrop,
@@ -342,6 +343,7 @@ window.addEventListener('message',function(e){
                 (window.ReactNativeWebView||window.parent).postMessage(JSON.stringify({
                   type:'attackPlayer',
                   sessionId:enemy.sid,
+                  userId:enemy.uid||'',
                   username:enemy.name,
                   tierColor:enemy.tierColor,
                   shielded:enemy.shielded,
@@ -439,6 +441,7 @@ window.addEventListener('message',function(e){
       tierColor: p.coinTier ? getTierColor(p.coinTier) : '#ffd700',
       shielded: p.shieldActive,
       sid: p.sessionId,
+      uid: p.id,
       prowl: p.prowlBalance ?? 0,
     }));
     const coins = coinDrops.map(c => ({
@@ -567,6 +570,7 @@ export default function MapScreen() {
   // Attack confirmation overlay
   const [attackTarget, setAttackTarget] = useState<{
     sessionId: string;
+    userId: string;
     username: string;
     tierColor: string;
     shielded: boolean;
@@ -966,6 +970,7 @@ export default function MapScreen() {
       if (d.type === 'attackPlayer') {
         setAttackTarget({
           sessionId: d.sessionId,
+          userId: d.userId || '',
           username: d.username,
           tierColor: d.tierColor || '#ffd700',
           shielded: !!d.shielded,
@@ -1334,6 +1339,26 @@ export default function MapScreen() {
                 <TouchableOpacity style={styles.cancelBtn} onPress={() => setAttackTarget(null)}>
                   <Text style={styles.cancelBtnText}>CANCEL</Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.cancelBtn, { borderColor: '#ff174460' }]}
+                  onPress={() => {
+                    const t = attackTarget;
+                    setAttackTarget(null);
+                    if (t?.userId) {
+                      Alert.alert('BLOCK PLAYER', `Block ${t.username}? They won't appear on your map and can't attack you.`, [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'BLOCK', style: 'destructive', onPress: async () => {
+                          try {
+                            await blockUser(t.userId);
+                            addFeedItem(`Blocked ${t.username}`, '#ff1744');
+                          } catch {}
+                        }},
+                      ]);
+                    }
+                  }}
+                >
+                  <Ionicons name="ban-outline" size={14} color="#ff1744" />
+                </TouchableOpacity>
                 <TouchableOpacity style={styles.attackConfirmBtn} onPress={handleAttack}>
                   <Ionicons name="flash" size={16} color="#fff" />
                   <Text style={styles.attackConfirmText}>ATTACK</Text>
@@ -1375,6 +1400,7 @@ export default function MapScreen() {
                   if (nearestInRange) {
                     setAttackTarget({
                       sessionId: nearestInRange.sessionId,
+                      userId: nearestInRange.id,
                       username: nearestInRange.username,
                       tierColor: nearestInRange.coinTier ? getTierColor(nearestInRange.coinTier) : '#ffd700',
                       shielded: nearestInRange.shieldActive,
