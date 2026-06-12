@@ -60,6 +60,7 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
   const [selectedTier, setSelectedTier] = useState<TierOption>(TIERS[4]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [locationConsent, setLocationConsent] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
   const handleBuyIn = async () => {
@@ -177,6 +178,20 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
             </View>
           </View>
 
+          {/* Location consent */}
+          <TouchableOpacity
+            style={[styles.consentRow, locationConsent && styles.consentRowActive]}
+            onPress={() => setLocationConsent(!locationConsent)}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.checkbox, locationConsent && { backgroundColor: colors.primary, borderColor: colors.primary }]}>
+              {locationConsent && <Ionicons name="checkmark" size={14} color="#fff" />}
+            </View>
+            <Text style={styles.consentText}>
+              I understand that my live location will be displayed on the map and visible to other players while my session is active. I can end my session at any time to stop sharing my location.
+            </Text>
+          </TouchableOpacity>
+
           {error ? (
             <View style={styles.errorBox}>
               <Ionicons name="warning" size={16} color={colors.error} />
@@ -186,9 +201,9 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
 
           {/* CTA Button */}
           <TouchableOpacity
-            style={[styles.buyBtn, { backgroundColor: tierColor }, loading && styles.buyBtnDisabled]}
+            style={[styles.buyBtn, { backgroundColor: tierColor }, (loading || !locationConsent) && styles.buyBtnDisabled]}
             onPress={handleBuyIn}
-            disabled={loading}
+            disabled={loading || !locationConsent}
             activeOpacity={0.85}
           >
             {loading ? (
@@ -204,7 +219,7 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
           </TouchableOpacity>
 
           <Text style={styles.disclaimer}>
-            Coins earned can be withdrawn. By proceeding you agree to the game rules.
+            Your location is only shared while you have an active session. End your session or close the app to stop sharing. You can block any player from your profile. Coins earned can be withdrawn.
           </Text>
         </View>
       </View>
@@ -401,6 +416,37 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     fontSize: fontSize.md,
     letterSpacing: 1,
+  },
+  consentRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: colors.surfaceLight,
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: spacing.sm,
+  },
+  consentRowActive: {
+    borderColor: colors.primary + '60',
+    backgroundColor: colors.primary + '10',
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: colors.textMuted,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 1,
+  },
+  consentText: {
+    flex: 1,
+    fontSize: 11,
+    color: colors.textSecondary,
+    lineHeight: 16,
   },
   disclaimer: {
     fontSize: 10,
