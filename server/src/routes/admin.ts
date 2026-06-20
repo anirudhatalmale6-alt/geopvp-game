@@ -15,6 +15,9 @@ import {
   resetDeviceLock,
   listTransactions,
   listAttacks,
+  listWithdrawals,
+  approveWithdrawal,
+  denyWithdrawal,
 } from '../controllers/adminController';
 
 const router = Router();
@@ -35,5 +38,8 @@ router.delete('/bots', clearBots);
 router.post('/users/:id/reset-device', resetDeviceLock);
 router.get('/transactions', listTransactions);
 router.get('/attacks', listAttacks);
+router.get('/withdrawals', listWithdrawals);
+router.post('/withdrawals/:id/approve', approveWithdrawal);
+router.post('/withdrawals/:id/deny', denyWithdrawal);
 
 export default router;

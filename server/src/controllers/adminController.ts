@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import { query } from '../config/database';
 import { AuthRequest } from '../middleware/auth';
 import { COIN_TIERS } from '../utils/coins';
+import { sendPayout } from '../services/paypal';
 
 const spawnBotsSchema = z.object({
   count: z.number().int().min(1).max(2000),
@@ -430,4 +431,149 @@ function formatDrop(row: Record<string, any>) {
     createdBy: row.created_by,
     createdAt: row.created_at,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Withdrawal Management
+// ---------------------------------------------------------------------------
+
+export async function listWithdrawals(req: AuthRequest, res: Response): Promise<void> {
+  if (!(await requireAdmin(req, res))) return;
+
+  try {
+    const status = (req.query.status as string) || 'pending';
+    const result = await query(
+      `SELECT w.*, u.username, u.email
+       FROM withdrawals w
+       JOIN users u ON u.id = w.user_id
+       WHERE w.status = $1
+       ORDER BY w.created_at DESC
+       LIMIT 100`,
+      [status],
+    );
+
+    const withdrawals = result.rows.map(row => ({
+      id: row.id,
+      userId: row.user_id,
+      username: row.username,
+      email: row.email,
+      amount: row.amount,
+      method: row.method,
+      status: row.status,
+      payoutDetails: row.payout_details,
+      adminNotes: row.admin_notes,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+
+    res.json({ withdrawals });
+  } catch (err) {
+    console.error('listWithdrawals error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+export async function approveWithdrawal(req: AuthRequest, res: Response): Promise<void> {
+  if (!(await requireAdmin(req, res))) return;
+
+  try {
+    const { id } = req.params;
+
+    const result = await query(
+      `SELECT * FROM withdrawals WHERE id = $1 AND status = 'pending'`,
+      [id],
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: 'Pending withdrawal not found.' });
+      return;
+    }
+
+    const withdrawal = result.rows[0];
+    const details = withdrawal.payout_details || {};
+    const recipient = details.recipient;
+    const senderItemId = details.senderItemId || `coinprowl-approve-${Date.now()}`;
+    const amountDollars = (withdrawal.amount / 100).toFixed(2);
+    const method = withdrawal.method || 'paypal';
+
+    if (!recipient) {
+      res.status(400).json({ error: 'No recipient found in withdrawal details.' });
+      return;
+    }
+
+    // Send payout via PayPal
+    try {
+      const payoutResult = await sendPayout(
+        recipient,
+        amountDollars,
+        senderItemId,
+        `CoinProwl sweep coin redemption — $${amountDollars}`,
+        method,
+      );
+
+      await query(
+        `UPDATE withdrawals
+         SET status = 'completed',
+             payout_details = payout_details || $1,
+             admin_notes = $2,
+             updated_at = NOW()
+         WHERE id = $3`,
+        [
+          JSON.stringify({ batchId: payoutResult.batchId, paypalStatus: payoutResult.status }),
+          `Approved by admin ${req.user!.id}`,
+          id,
+        ],
+      );
+
+      res.json({ success: true, message: `$${amountDollars} sent to ${recipient} via ${method}.` });
+    } catch (payoutErr: any) {
+      console.error('Payout error during approval:', payoutErr);
+      res.status(500).json({ error: `PayPal payout failed: ${payoutErr.message}` });
+    }
+  } catch (err) {
+    console.error('approveWithdrawal error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+export async function denyWithdrawal(req: AuthRequest, res: Response): Promise<void> {
+  if (!(await requireAdmin(req, res))) return;
+
+  try {
+    const { id } = req.params;
+    const reason = (req.body.reason as string) || 'Denied by admin';
+
+    const result = await query(
+      `SELECT * FROM withdrawals WHERE id = $1 AND status = 'pending'`,
+      [id],
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: 'Pending withdrawal not found.' });
+      return;
+    }
+
+    const withdrawal = result.rows[0];
+
+    // Refund sweep coins
+    await query(
+      `INSERT INTO transactions (user_id, type, amount, currency, description)
+       VALUES ($1, 'deposit', $2, 'sweep', $3)`,
+      [withdrawal.user_id, withdrawal.amount, `Redemption denied: ${reason}`],
+    );
+
+    await query(
+      `UPDATE withdrawals
+       SET status = 'denied',
+           admin_notes = $1,
+           updated_at = NOW()
+       WHERE id = $2`,
+      [`Denied: ${reason}`, id],
+    );
+
+    res.json({ success: true, message: 'Withdrawal denied. Sweep coins refunded to user.' });
+  } catch (err) {
+    console.error('denyWithdrawal error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
 }

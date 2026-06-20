@@ -66,6 +66,10 @@ a{color:var(--primary);text-decoration:none}
 .btn-gold:hover{filter:brightness(1.15)}
 .btn-danger{background:var(--red);color:#fff}
 .btn-danger:hover{filter:brightness(1.15)}
+.btn-green{background:var(--green);color:var(--bg);border:none;cursor:pointer;border-radius:4px;font-weight:700}
+.btn-green:hover{filter:brightness(1.15)}
+.btn-red{background:var(--red);color:#fff;border:none;cursor:pointer;border-radius:4px;font-weight:700}
+.btn-red:hover{filter:brightness(1.15)}
 .btn-outline{background:transparent;border:1px solid var(--border);color:var(--text2)}
 .btn-outline:hover{border-color:var(--primary);color:var(--primary)}
 .btn-sm{padding:6px 10px;font-size:10px}
@@ -198,6 +202,7 @@ a{color:var(--primary);text-decoration:none}
       <div class="tab" data-tab="players" onclick="switchTab('players')">PLAYERS</div>
       <div class="tab" data-tab="users" onclick="switchTab('users')">USERS</div>
       <div class="tab" data-tab="drops" onclick="switchTab('drops')">DROPS</div>
+      <div class="tab" data-tab="withdrawals" onclick="switchTab('withdrawals')">PAYOUTS</div>
     </div>
 
     <!-- Overview Panel -->
@@ -304,6 +309,16 @@ a{color:var(--primary);text-decoration:none}
     <div class="panel" id="panel-drops">
       <div class="section-title">ACTIVE DROPS (<span id="dropCount">0</span>)</div>
       <div id="dropsList"></div>
+    </div>
+
+    <div class="panel" id="panel-withdrawals">
+      <div class="section-title">PENDING WITHDRAWALS (<span id="withdrawalCount">0</span>)</div>
+      <div style="margin-bottom:8px;display:flex;gap:4px">
+        <button class="mode-btn" onclick="loadWithdrawals('pending')" id="wdPendingBtn" style="background:var(--primary);color:var(--bg)">PENDING</button>
+        <button class="mode-btn" onclick="loadWithdrawals('completed')" id="wdCompletedBtn">COMPLETED</button>
+        <button class="mode-btn" onclick="loadWithdrawals('denied')" id="wdDeniedBtn">DENIED</button>
+      </div>
+      <div id="withdrawalsList"></div>
     </div>
   </div>
 
@@ -746,9 +761,11 @@ async function refreshActivity() {
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + name));
-  // Invalidate map size when switching to map tab
   if (name === 'map' && map) {
     setTimeout(() => map.invalidateSize(), 100);
+  }
+  if (name === 'withdrawals') {
+    loadWithdrawals(currentWdStatus || 'pending');
   }
 }
 
@@ -774,6 +791,86 @@ function toast(msg) {
   el.textContent = msg;
   el.classList.add('show');
   setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ---- Withdrawals ----
+let currentWdStatus = 'pending';
+
+async function loadWithdrawals(status = 'pending') {
+  currentWdStatus = status;
+  document.querySelectorAll('#panel-withdrawals .mode-btn').forEach(b => b.style.background = 'var(--surface2)');
+  document.querySelectorAll('#panel-withdrawals .mode-btn').forEach(b => b.style.color = 'var(--text2)');
+  const btnMap = { pending: 'wdPendingBtn', completed: 'wdCompletedBtn', denied: 'wdDeniedBtn' };
+  const activeBtn = document.getElementById(btnMap[status]);
+  if (activeBtn) { activeBtn.style.background = 'var(--primary)'; activeBtn.style.color = 'var(--bg)'; }
+
+  try {
+    const res = await fetch(`/api/admin/withdrawals?status=${status}`, { headers: { Authorization: 'Bearer ' + TOKEN } });
+    const data = await res.json();
+    const list = data.withdrawals || [];
+    document.getElementById('withdrawalCount').textContent = list.length;
+
+    if (list.length === 0) {
+      document.getElementById('withdrawalsList').innerHTML = '<p style="color:var(--text3);font-size:11px;text-align:center;padding:20px">No ' + status + ' withdrawals</p>';
+      return;
+    }
+
+    document.getElementById('withdrawalsList').innerHTML = `
+      <table class="admin-table">
+        <tr><th>USER</th><th>AMOUNT</th><th>METHOD</th><th>RECIPIENT</th><th>DATE</th><th>ACTION</th></tr>
+        ${list.map(w => {
+          const details = w.payoutDetails || {};
+          const actions = status === 'pending'
+            ? `<button class="btn btn-green" style="font-size:9px;padding:2px 6px;margin-right:4px" onclick="approveWd('${w.id}')">APPROVE</button><button class="btn btn-red" style="font-size:9px;padding:2px 6px" onclick="denyWd('${w.id}')">DENY</button>`
+            : (status === 'completed' ? '<span class="success-badge">PAID</span>' : '<span class="fail-badge">DENIED</span>');
+          return `<tr>
+            <td>${w.username || w.email}</td>
+            <td class="amount-neg">$${(w.amount / 100).toFixed(2)}</td>
+            <td>${(w.method || 'paypal').toUpperCase()}</td>
+            <td class="mono">${details.recipient || '-'}</td>
+            <td>${formatTime(w.createdAt)}</td>
+            <td>${actions}</td>
+          </tr>`;
+        }).join('')}
+      </table>`;
+  } catch (err) {
+    document.getElementById('withdrawalsList').innerHTML = '<p style="color:var(--red);font-size:11px;padding:12px">Failed to load withdrawals</p>';
+  }
+}
+
+async function approveWd(id) {
+  if (!confirm('Approve this withdrawal? PayPal will send the money immediately.')) return;
+  try {
+    const res = await fetch(`/api/admin/withdrawals/${id}/approve`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + TOKEN, 'Content-Type': 'application/json' }
+    });
+    const data = await res.json();
+    if (data.success) {
+      toast(data.message);
+      loadWithdrawals('pending');
+    } else {
+      toast('Error: ' + (data.error || 'Failed'));
+    }
+  } catch { toast('Network error'); }
+}
+
+async function denyWd(id) {
+  const reason = prompt('Reason for denial (optional):') || 'Denied by admin';
+  try {
+    const res = await fetch(`/api/admin/withdrawals/${id}/deny`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + TOKEN, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason })
+    });
+    const data = await res.json();
+    if (data.success) {
+      toast('Withdrawal denied. Coins refunded.');
+      loadWithdrawals('pending');
+    } else {
+      toast('Error: ' + (data.error || 'Failed'));
+    }
+  } catch { toast('Network error'); }
 }
 
 // Auto-refresh every 30s

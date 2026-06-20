@@ -1077,60 +1077,27 @@ export async function redeemSweepCoins(req: AuthRequest, res: Response): Promise
     const amountDollars = (amountCents / 100).toFixed(2);
     const senderItemId = `coinprowl-${userId.slice(0, 8)}-${Date.now()}`;
 
-    // Create withdrawal record
+    // Create withdrawal record as PENDING (requires admin approval)
     const withdrawalResult = await query(
       `INSERT INTO withdrawals (user_id, amount, method, payout_details, status)
-       VALUES ($1, $2, $3, $4, 'processing')
+       VALUES ($1, $2, $3, $4, 'pending')
        RETURNING id`,
       [userId, amountCents, method, JSON.stringify({ recipient, senderItemId })],
     );
     const withdrawalId = withdrawalResult.rows[0].id;
 
-    // Deduct sweep coins
+    // Deduct sweep coins immediately (held until approved/denied)
     await query(
       `INSERT INTO transactions (user_id, type, amount, currency, description)
        VALUES ($1, 'withdrawal', $2, 'sweep', $3)`,
-      [userId, -amountCents, `Redeemed $${amountDollars} via ${methodLabel}`],
+      [userId, -amountCents, `Redemption pending: $${amountDollars} via ${methodLabel}`],
     );
 
-    // Send payout
-    try {
-      const result = await sendPayout(
-        recipient,
-        amountDollars,
-        senderItemId,
-        `CoinProwl sweep coin redemption — $${amountDollars}`,
-        method,
-      );
-
-      await query(
-        `UPDATE withdrawals SET status = 'completed', payout_details = payout_details || $1, updated_at = NOW()
-         WHERE id = $2`,
-        [JSON.stringify({ batchId: result.batchId, paypalStatus: result.status }), withdrawalId],
-      );
-
-      res.json({
-        success: true,
-        message: `$${amountDollars} has been sent to ${recipient} via ${methodLabel}.`,
-        withdrawalId,
-        batchId: result.batchId,
-      });
-    } catch (payoutErr: any) {
-      // Payout failed — refund the sweep coins
-      await query(
-        `INSERT INTO transactions (user_id, type, amount, currency, description)
-         VALUES ($1, 'deposit', $2, 'sweep', $3)`,
-        [userId, amountCents, `Refund: ${methodLabel} payout failed`],
-      );
-      await query(
-        `UPDATE withdrawals SET status = 'failed', admin_notes = $1, updated_at = NOW()
-         WHERE id = $2`,
-        [payoutErr.message, withdrawalId],
-      );
-
-      console.error(`${methodLabel} payout error:`, payoutErr);
-      res.status(500).json({ error: `${methodLabel} payout failed. Your sweep coins have been refunded.` });
-    }
+    res.json({
+      success: true,
+      message: `Your redemption of $${amountDollars} via ${methodLabel} has been submitted and is pending approval. You'll receive the funds once approved.`,
+      withdrawalId,
+    });
   } catch (err) {
     console.error('redeemSweepCoins error:', err);
     res.status(500).json({ error: 'Internal server error.' });
