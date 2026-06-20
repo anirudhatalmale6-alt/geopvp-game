@@ -159,6 +159,11 @@ export default function HelpSupportScreen() {
         icon="document-text-outline"
         iconColor={colors.warning}
       >
+        <Text style={styles.subheading}>Availability</Text>
+        <BulletItem text="CoinProwl is currently available in the United States only" />
+        <BulletItem text="The app verifies your location before allowing gameplay" />
+        <BulletItem text="Not available in: Arizona, Arkansas, Connecticut, Delaware, Louisiana, Montana, South Carolina, South Dakota, and Tennessee due to local regulations" />
+
         <Text style={styles.subheading}>General Rules</Text>
         <BulletItem text="You must be 18 or older to play CoinProwl" />
         <BulletItem text="One account per person — no multi-accounting" />
@@ -249,6 +254,11 @@ export default function HelpSupportScreen() {
         icon="chatbubble-ellipses-outline"
         iconColor={colors.accent}
       >
+        <Text style={styles.faqQ}>Where is CoinProwl available?</Text>
+        <Text style={styles.faqA}>
+          CoinProwl is currently available in the United States only, excluding Arizona, Arkansas, Connecticut, Delaware, Louisiana, Montana, South Carolina, South Dakota, and Tennessee due to local regulations regarding skill-based gaming.
+        </Text>
+
         <Text style={styles.faqQ}>What happens when I get attacked?</Text>
         <Text style={styles.faqA}>
           If another player attacks you and wins, they take some of your prowl coins. If you lose all your prowl coins, your session ends and you'll need to buy in again.

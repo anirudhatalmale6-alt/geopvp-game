@@ -4,6 +4,7 @@ import { query } from '../config/database';
 import { AuthRequest } from '../middleware/auth';
 import { getCoinTier } from '../utils/coins';
 import { createOrder, captureOrder } from '../services/paypal';
+import { checkLocationBlocked } from '../utils/geofence';
 
 const createBuyInOrderSchema = z.object({
   tierDollars: z.number().int().min(1).max(25),
@@ -121,6 +122,22 @@ export async function captureBuyInOrder(req: AuthRequest, res: Response): Promis
       `UPDATE paypal_orders SET status = 'COMPLETED', capture_id = $1, payer_email = $2 WHERE order_id = $3`,
       [capture.captureId, capture.payerEmail, orderId],
     );
+
+    // Server-side geo check using last known location
+    const lastLoc = await query(
+      `SELECT latitude, longitude FROM game_sessions WHERE user_id = $1 AND latitude IS NOT NULL ORDER BY created_at DESC LIMIT 1`,
+      [userId],
+    );
+    if (lastLoc.rows.length > 0) {
+      const geoCheck = checkLocationBlocked(
+        parseFloat(lastLoc.rows[0].latitude),
+        parseFloat(lastLoc.rows[0].longitude),
+      );
+      if (geoCheck.blocked) {
+        res.status(403).json({ error: `CoinProwl is not available in ${geoCheck.state} due to local regulations.` });
+        return;
+      }
+    }
 
     // Deactivate any existing active session
     await query(

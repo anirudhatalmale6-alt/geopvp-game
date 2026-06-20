@@ -6,7 +6,6 @@ const BLOCKED_STATES: Record<string, string> = {
   AR: 'Arkansas',
   CT: 'Connecticut',
   DE: 'Delaware',
-  FL: 'Florida',
   LA: 'Louisiana',
   MT: 'Montana',
   SC: 'South Carolina',
@@ -14,14 +13,11 @@ const BLOCKED_STATES: Record<string, string> = {
   TN: 'Tennessee',
 };
 
-// Approximate state bounding boxes [minLat, maxLat, minLng, maxLng]
-// Used as a first-pass check — not pixel-perfect but sufficient for enforcement
 const STATE_BOUNDS: Record<string, [number, number, number, number]> = {
   AZ: [31.33, 37.00, -114.82, -109.04],
   AR: [33.00, 36.50, -94.62, -89.64],
   CT: [40.95, 42.05, -73.73, -71.79],
   DE: [38.45, 39.84, -75.79, -75.05],
-  FL: [24.40, 31.00, -87.63, -80.03],
   LA: [28.92, 33.02, -94.04, -88.82],
   MT: [44.36, 49.00, -116.05, -104.04],
   SC: [32.03, 35.22, -83.35, -78.54],
