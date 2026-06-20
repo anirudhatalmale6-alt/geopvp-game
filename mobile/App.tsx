@@ -6,6 +6,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { colors } from './src/theme';
+import GeoRestrictedScreen from './src/screens/game/GeoRestrictedScreen';
 
 import LoginScreen from './src/screens/auth/LoginScreen';
 import SignUpScreen from './src/screens/auth/SignUpScreen';
@@ -109,7 +110,13 @@ function AppNavigator() {
 
   return (
     <NavigationContainer theme={DarkTheme}>
-      {isAuthenticated ? <MainStack /> : <AuthStack />}
+      {isAuthenticated ? (
+        <GeoRestrictedScreen>
+          <MainStack />
+        </GeoRestrictedScreen>
+      ) : (
+        <AuthStack />
+      )}
     </NavigationContainer>
   );
 }
