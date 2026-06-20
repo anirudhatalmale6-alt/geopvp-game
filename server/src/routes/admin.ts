@@ -18,6 +18,8 @@ import {
   listWithdrawals,
   approveWithdrawal,
   denyWithdrawal,
+  adminLogin,
+  adminLogout,
 } from '../controllers/adminController';
 
 const router = Router();
@@ -41,5 +43,7 @@ router.get('/attacks', listAttacks);
 router.get('/withdrawals', listWithdrawals);
 router.post('/withdrawals/:id/approve', approveWithdrawal);
 router.post('/withdrawals/:id/deny', denyWithdrawal);
+router.post('/login', adminLogin);
+router.post('/logout', adminLogout);
 
 export default router;

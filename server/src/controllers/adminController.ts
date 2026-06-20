@@ -24,6 +24,9 @@ const bulkDropSchema = z.object({
   drops: z.array(dropCoinSchema).min(1).max(100),
 });
 
+// Single active admin session — only one admin can be logged into the panel at a time
+let activeAdminSession: { userId: string; token: string; loginAt: number } | null = null;
+
 async function requireAdmin(req: AuthRequest, res: Response): Promise<boolean> {
   const userId = req.user!.id;
   const result = await query(`SELECT is_admin FROM users WHERE id = $1`, [userId]);
@@ -31,7 +34,39 @@ async function requireAdmin(req: AuthRequest, res: Response): Promise<boolean> {
     res.status(403).json({ error: 'Admin access required.' });
     return false;
   }
+
+  // Check if this is the active admin session
+  const token = req.headers.authorization?.replace('Bearer ', '') || '';
+  if (activeAdminSession && activeAdminSession.token !== token) {
+    res.status(401).json({ error: 'Session expired. Another admin has logged in.' });
+    return false;
+  }
+
   return true;
+}
+
+export async function adminLogin(req: AuthRequest, res: Response): Promise<void> {
+  const userId = req.user!.id;
+  const result = await query(`SELECT is_admin, username FROM users WHERE id = $1`, [userId]);
+  if (result.rows.length === 0 || !result.rows[0].is_admin) {
+    res.status(403).json({ error: 'Admin access required.' });
+    return;
+  }
+
+  const token = req.headers.authorization?.replace('Bearer ', '') || '';
+
+  // Invalidate any previous admin session
+  activeAdminSession = { userId, token, loginAt: Date.now() };
+
+  res.json({ success: true, message: 'Admin session activated.' });
+}
+
+export async function adminLogout(req: AuthRequest, res: Response): Promise<void> {
+  const token = req.headers.authorization?.replace('Bearer ', '') || '';
+  if (activeAdminSession && activeAdminSession.token === token) {
+    activeAdminSession = null;
+  }
+  res.json({ success: true });
 }
 
 export async function dropCoin(req: AuthRequest, res: Response): Promise<void> {

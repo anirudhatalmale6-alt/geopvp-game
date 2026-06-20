@@ -368,9 +368,13 @@ async function doLogin() {
     if (!res.ok) throw new Error(data.error || 'Login failed');
     TOKEN = data.token;
     localStorage.setItem('coinprowl_admin_token', TOKEN);
-    // Verify admin access
-    const statsRes = await apiFetch('/api/admin/stats');
-    if (statsRes.error) throw new Error('Not an admin account');
+    // Register as active admin session (kicks other admins)
+    const loginRes = await fetch('/api/admin/login', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json' },
+    });
+    const loginData = await loginRes.json();
+    if (!loginRes.ok) throw new Error(loginData.error || 'Not an admin account');
     showApp();
   } catch (err) {
     errEl.textContent = err.message;
@@ -390,7 +394,10 @@ async function apiFetch(url, opts = {}) {
     headers: { 'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json', ...(opts.headers || {}) },
   });
   if (res.status === 401 || res.status === 403) {
+    const data = await res.json().catch(() => ({}));
     localStorage.removeItem('coinprowl_admin_token');
+    TOKEN = '';
+    alert(data.error || 'Session expired. Please log in again.');
     location.reload();
     return { error: 'Unauthorized' };
   }
@@ -399,10 +406,14 @@ async function apiFetch(url, opts = {}) {
 
 // ---- Init ----
 if (TOKEN) {
-  apiFetch('/api/admin/stats').then(data => {
-    if (!data.error) showApp();
+  // Re-register admin session on page load
+  fetch('/api/admin/login', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json' },
+  }).then(r => r.json()).then(data => {
+    if (data.success) showApp();
     else { TOKEN = ''; localStorage.removeItem('coinprowl_admin_token'); }
-  });
+  }).catch(() => { TOKEN = ''; localStorage.removeItem('coinprowl_admin_token'); });
 }
 
 // ---- Map ----
