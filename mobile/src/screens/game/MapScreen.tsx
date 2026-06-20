@@ -22,6 +22,8 @@ import {
   getAllPlayers,
   attackPlayer,
   buyShield,
+  createShieldOrder,
+  captureShieldOrder,
   getCoinDrops,
   collectCoinDrop,
   getWallet,
@@ -1074,25 +1076,26 @@ export default function MapScreen() {
     const remaining = 3 - bought24h;
     if (remaining <= 0) return;
     Alert.alert(
-      'Choose Shield',
-      `You can buy ${remaining} more shield${remaining !== 1 ? 's' : ''} today.`,
+      'Buy Shield',
+      `Shield provides 10 minutes of protection. You can buy ${remaining} more today. ($0.99 via PayPal)`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: '$1 — 10 min',
+          text: 'Buy Shield — $0.99',
           onPress: async () => {
             try {
-              const updated = await buyShield('standard');
-              setSession(updated);
-            } catch {}
-          },
-        },
-        {
-          text: '$5 — 2 hours (Gold)',
-          onPress: async () => {
-            try {
-              const updated = await buyShield('gold');
-              setSession(updated);
+              const order = await createShieldOrder();
+              const Linking = require('react-native').Linking;
+              await Linking.openURL(order.approvalUrl);
+              const sub = AppState.addEventListener('change', async (state: string) => {
+                if (state === 'active') {
+                  sub.remove();
+                  try {
+                    const result = await captureShieldOrder(order.orderId);
+                    setSession(result.session);
+                  } catch {}
+                }
+              });
             } catch {}
           },
         },

@@ -8,10 +8,13 @@ import {
   ActivityIndicator,
   ScrollView,
   Platform,
+  Linking,
+  Alert,
+  AppState,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, fontSize } from '../../theme';
-import { createSession } from '../../api/game';
+import { createBuyInOrder, captureBuyInOrder } from '../../api/game';
 
 interface TierOption {
   dollars: number;
@@ -63,16 +66,53 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
   const [locationConsent, setLocationConsent] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
+  const pendingOrderRef = useRef<string | null>(null);
+
   const handleBuyIn = async () => {
     setLoading(true);
     setError(null);
     try {
-      await createSession(selectedTier.dollars);
-      onSessionCreated();
-      onClose();
+      const order = await createBuyInOrder(selectedTier.dollars);
+      pendingOrderRef.current = order.orderId;
+
+      // Open PayPal approval URL in browser
+      const supported = await Linking.canOpenURL(order.approvalUrl);
+      if (!supported) {
+        setError('Could not open PayPal. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      await Linking.openURL(order.approvalUrl);
+
+      // Listen for app returning to foreground after PayPal approval
+      const sub = AppState.addEventListener('change', async (state) => {
+        if (state === 'active' && pendingOrderRef.current) {
+          const orderId = pendingOrderRef.current;
+          pendingOrderRef.current = null;
+          sub.remove();
+
+          try {
+            await captureBuyInOrder(orderId);
+            onSessionCreated();
+            onClose();
+          } catch (captureErr: any) {
+            if (captureErr.message?.includes('not completed')) {
+              Alert.alert(
+                'Payment Pending',
+                'It looks like the payment wasn\'t completed. Please try again.',
+                [{ text: 'OK' }],
+              );
+            } else {
+              setError(captureErr.message || 'Failed to process payment.');
+            }
+          } finally {
+            setLoading(false);
+          }
+        }
+      });
     } catch (err: any) {
-      setError(err.message || 'Failed to start session. Please try again.');
-    } finally {
+      setError(err.message || 'Failed to start payment. Please try again.');
       setLoading(false);
     }
   };

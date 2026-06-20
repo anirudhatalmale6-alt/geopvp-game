@@ -98,6 +98,112 @@ export async function sendPayout(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Orders API — accept payments (buy-in / shield purchases)
+// ---------------------------------------------------------------------------
+
+export interface CreateOrderResult {
+  orderId: string;
+  approvalUrl: string;
+}
+
+export async function createOrder(
+  amountUsd: string,
+  description: string,
+  referenceId: string,
+): Promise<CreateOrderResult> {
+  const token = await getAccessToken();
+
+  const res = await fetch(`${BASE_URL}/v2/checkout/orders`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      intent: 'CAPTURE',
+      purchase_units: [
+        {
+          reference_id: referenceId,
+          description,
+          amount: {
+            currency_code: 'USD',
+            value: amountUsd,
+          },
+        },
+      ],
+      application_context: {
+        brand_name: 'CoinProwl',
+        shipping_preference: 'NO_SHIPPING',
+        user_action: 'PAY_NOW',
+        return_url: 'https://api.coinprowl.com/api/paypal/return',
+        cancel_url: 'https://api.coinprowl.com/api/paypal/cancel',
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`PayPal create order failed (${res.status}): ${body}`);
+  }
+
+  const data: any = await res.json();
+  const approvalLink = data.links?.find((l: any) => l.rel === 'approve');
+
+  return {
+    orderId: data.id,
+    approvalUrl: approvalLink?.href ?? '',
+  };
+}
+
+export interface CaptureResult {
+  orderId: string;
+  status: string;
+  payerEmail: string;
+  captureId: string;
+}
+
+export async function captureOrder(orderId: string): Promise<CaptureResult> {
+  const token = await getAccessToken();
+
+  const res = await fetch(`${BASE_URL}/v2/checkout/orders/${orderId}/capture`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`PayPal capture failed (${res.status}): ${body}`);
+  }
+
+  const data: any = await res.json();
+  const capture = data.purchase_units?.[0]?.payments?.captures?.[0];
+
+  return {
+    orderId: data.id,
+    status: data.status,
+    payerEmail: data.payer?.email_address ?? '',
+    captureId: capture?.id ?? '',
+  };
+}
+
+export async function getOrderDetails(orderId: string): Promise<any> {
+  const token = await getAccessToken();
+
+  const res = await fetch(`${BASE_URL}/v2/checkout/orders/${orderId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) {
+    throw new Error(`PayPal get order failed (${res.status})`);
+  }
+
+  return res.json();
+}
+
 export async function getPayoutStatus(batchId: string): Promise<string> {
   const token = await getAccessToken();
 

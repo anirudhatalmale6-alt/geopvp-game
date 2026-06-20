@@ -288,3 +288,32 @@ export async function getBlockedUsers(): Promise<BlockedUser[]> {
     return [];
   }
 }
+
+// ---------------------------------------------------------------------------
+// PayPal Payment API
+// ---------------------------------------------------------------------------
+
+export interface PayPalOrderResult {
+  orderId: string;
+  approvalUrl: string;
+}
+
+export async function createBuyInOrder(tierDollars: number): Promise<PayPalOrderResult> {
+  const { data } = await api.post<PayPalOrderResult>('/paypal/buyin/create', { tierDollars });
+  return data;
+}
+
+export async function captureBuyInOrder(orderId: string): Promise<{ session: GameSession }> {
+  const { data } = await api.post<{ session: GameSession }>('/paypal/buyin/capture', { orderId });
+  return data;
+}
+
+export async function createShieldOrder(): Promise<PayPalOrderResult> {
+  const { data } = await api.post<PayPalOrderResult>('/paypal/shield/create', {});
+  return data;
+}
+
+export async function captureShieldOrder(orderId: string): Promise<{ session: GameSession }> {
+  const { data } = await api.post<{ session: GameSession }>('/paypal/shield/capture', { orderId });
+  return data;
+}
