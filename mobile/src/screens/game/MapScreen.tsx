@@ -35,6 +35,7 @@ import {
 import { connectSocket, disconnectSocket, emitLocation, onPlayersUpdate, onBatchUpdate, onEliminated, onBotHit, onConnectionChange } from '../../api/socket';
 import NetInfo from '@react-native-community/netinfo';
 import BuyInModal from './BuyInModal';
+import PayPalWebViewModal from '../../components/PayPalWebViewModal';
 import { startBackgroundLocation, stopBackgroundLocation } from '../../services/backgroundLocation';
 import { registerForPushNotifications } from '../../services/notifications';
 import { getTierColor } from '../../utils/tierColors';
@@ -606,6 +607,8 @@ export default function MapScreen() {
   const [connectionLost, setConnectionLost] = useState(false);
   const [spawnSecsLeft, setSpawnSecsLeft] = useState(0);
   const [shieldSecsLeft, setShieldSecsLeft] = useState(0);
+  const [shieldPaypalUrl, setShieldPaypalUrl] = useState<string | null>(null);
+  const shieldOrderRef = useRef<string | null>(null);
   const [zoomedOut, setZoomedOut] = useState(false);
   const mapRef = useRef<any>(null);
   const locationSub = useRef<Location.LocationSubscription | null>(null);
@@ -1085,22 +1088,29 @@ export default function MapScreen() {
           onPress: async () => {
             try {
               const order = await createShieldOrder();
-              const Linking = require('react-native').Linking;
-              await Linking.openURL(order.approvalUrl);
-              const sub = AppState.addEventListener('change', async (state: string) => {
-                if (state === 'active') {
-                  sub.remove();
-                  try {
-                    const result = await captureShieldOrder(order.orderId);
-                    setSession(result.session);
-                  } catch {}
-                }
-              });
+              shieldOrderRef.current = order.orderId;
+              setShieldPaypalUrl(order.approvalUrl);
             } catch {}
           },
         },
       ],
     );
+  };
+
+  const handleShieldPayPalApproved = async () => {
+    setShieldPaypalUrl(null);
+    const orderId = shieldOrderRef.current;
+    shieldOrderRef.current = null;
+    if (!orderId) return;
+    try {
+      const result = await captureShieldOrder(orderId);
+      setSession(result.session);
+    } catch {}
+  };
+
+  const handleShieldPayPalCancelled = () => {
+    setShieldPaypalUrl(null);
+    shieldOrderRef.current = null;
   };
 
   const shieldIsActive = shieldSecsLeft > 0 && !!session?.shieldActiveUntil;
@@ -1442,6 +1452,13 @@ export default function MapScreen() {
         onClose={() => { setShowBuyIn(false); setElimMessage(null); }}
         onSessionCreated={() => { setElimMessage(null); refreshSession(); }}
         eliminationMessage={elimMessage}
+      />
+
+      <PayPalWebViewModal
+        visible={!!shieldPaypalUrl}
+        approvalUrl={shieldPaypalUrl || ''}
+        onApproved={handleShieldPayPalApproved}
+        onCancelled={handleShieldPayPalCancelled}
       />
     </View>
   );

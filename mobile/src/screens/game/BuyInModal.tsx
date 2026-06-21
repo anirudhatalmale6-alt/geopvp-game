@@ -8,13 +8,12 @@ import {
   ActivityIndicator,
   ScrollView,
   Platform,
-  Linking,
   Alert,
-  AppState,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, fontSize } from '../../theme';
 import { createBuyInOrder, captureBuyInOrder } from '../../api/game';
+import PayPalWebViewModal from '../../components/PayPalWebViewModal';
 
 interface TierOption {
   dollars: number;
@@ -66,6 +65,7 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
   const [locationConsent, setLocationConsent] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
+  const [paypalUrl, setPaypalUrl] = useState<string | null>(null);
   const pendingOrderRef = useRef<string | null>(null);
 
   const handleBuyIn = async () => {
@@ -74,47 +74,49 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
     try {
       const order = await createBuyInOrder(selectedTier.dollars);
       pendingOrderRef.current = order.orderId;
-
-      // Open PayPal approval URL in browser
-      const supported = await Linking.canOpenURL(order.approvalUrl);
-      if (!supported) {
-        setError('Could not open PayPal. Please try again.');
-        setLoading(false);
-        return;
-      }
-
-      await Linking.openURL(order.approvalUrl);
-
-      // Listen for app returning to foreground after PayPal approval
-      const sub = AppState.addEventListener('change', async (state) => {
-        if (state === 'active' && pendingOrderRef.current) {
-          const orderId = pendingOrderRef.current;
-          pendingOrderRef.current = null;
-          sub.remove();
-
-          try {
-            await captureBuyInOrder(orderId);
-            onSessionCreated();
-            onClose();
-          } catch (captureErr: any) {
-            if (captureErr.message?.includes('not completed')) {
-              Alert.alert(
-                'Payment Pending',
-                'It looks like the payment wasn\'t completed. Please try again.',
-                [{ text: 'OK' }],
-              );
-            } else {
-              setError(captureErr.message || 'Failed to process payment.');
-            }
-          } finally {
-            setLoading(false);
-          }
-        }
-      });
+      setPaypalUrl(order.approvalUrl);
+      setLoading(false);
     } catch (err: any) {
       setError(err.message || 'Failed to start payment. Please try again.');
       setLoading(false);
     }
+  };
+
+  const handlePayPalApproved = async () => {
+    setPaypalUrl(null);
+    setLoading(true);
+    const orderId = pendingOrderRef.current;
+    pendingOrderRef.current = null;
+
+    if (!orderId) {
+      setError('Payment reference lost. Please try again.');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      await captureBuyInOrder(orderId);
+      onSessionCreated();
+      onClose();
+    } catch (captureErr: any) {
+      if (captureErr.message?.includes('not completed')) {
+        Alert.alert(
+          'Payment Pending',
+          'It looks like the payment wasn\'t completed. Please try again.',
+          [{ text: 'OK' }],
+        );
+      } else {
+        setError(captureErr.message || 'Failed to process payment.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePayPalCancelled = () => {
+    setPaypalUrl(null);
+    pendingOrderRef.current = null;
+    setLoading(false);
   };
 
   const tierColor = selectedTier.color;
@@ -263,6 +265,13 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
           </Text>
         </View>
       </View>
+
+      <PayPalWebViewModal
+        visible={!!paypalUrl}
+        approvalUrl={paypalUrl || ''}
+        onApproved={handlePayPalApproved}
+        onCancelled={handlePayPalCancelled}
+      />
     </Modal>
   );
 }
