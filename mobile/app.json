@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.coinprowl.app",
-      "buildNumber": "86",
+      "buildNumber": "87",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "CoinProwl needs your location to show you on the game map and let you interact with nearby players and coin drops.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "CoinProwl uses your location to track your position on the game map even when the app is in the background.",
@@ -36,7 +36,7 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.coinprowl.app",
-      "versionCode": 4,
+      "versionCode": 5,
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION"
