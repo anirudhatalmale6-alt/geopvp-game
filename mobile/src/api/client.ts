@@ -25,7 +25,7 @@ const TOKEN_KEY = 'geoapp_token';
 const REFRESH_TOKEN_KEY = 'geoapp_refresh_token';
 
 const BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000/api';
+  process.env.EXPO_PUBLIC_API_URL || 'https://api.coinprowl.com/api';
 
 // ---------------------------------------------------------------------------
 // Token helpers
