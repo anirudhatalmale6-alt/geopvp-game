@@ -38,6 +38,7 @@ import {
   purchaseProduct,
   acknowledgePurchase,
   listenForPurchases,
+  getLoadedProducts,
   type ProductPurchase,
 } from '../../services/iap';
 import { connectSocket, disconnectSocket, emitLocation, onPlayersUpdate, onBatchUpdate, onEliminated, onBotHit, onConnectionChange } from '../../api/socket';
@@ -1126,7 +1127,7 @@ export default function MapScreen() {
         {
           text: 'Buy Shield — $0.99',
           onPress: async () => {
-            if (Platform.OS === 'ios') {
+            if (Platform.OS === 'ios' && getLoadedProducts().length > 0) {
               try {
                 shieldIapPendingRef.current = true;
                 await purchaseProduct(SHIELD_PRODUCT_ID);
@@ -1135,7 +1136,7 @@ export default function MapScreen() {
               }
               return;
             }
-            // Android: PayPal
+            // PayPal (Android, or iOS fallback)
             try {
               const order = await createShieldOrder();
               shieldOrderRef.current = order.orderId;

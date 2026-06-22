@@ -19,6 +19,7 @@ import {
   purchaseProduct,
   acknowledgePurchase,
   listenForPurchases,
+  getLoadedProducts,
   type ProductPurchase,
 } from '../../services/iap';
 
@@ -119,7 +120,8 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
     setLoading(true);
     setError(null);
 
-    if (Platform.OS === 'ios') {
+    // Use IAP on iOS when products are available
+    if (Platform.OS === 'ios' && getLoadedProducts().length > 0) {
       try {
         const productId = getBuyInProductId(selectedTier.dollars);
         pendingTierRef.current = selectedTier.dollars;
@@ -132,7 +134,7 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
       return;
     }
 
-    // Android: PayPal flow
+    // PayPal flow (Android, or iOS fallback when IAP not configured)
     try {
       const order = await createBuyInOrder(selectedTier.dollars);
       pendingOrderRef.current = order.orderId;
