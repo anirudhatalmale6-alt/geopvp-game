@@ -308,8 +308,8 @@ export async function captureBuyInOrder(orderId: string): Promise<{ session: Gam
   return data;
 }
 
-export async function createShieldOrder(): Promise<PayPalOrderResult> {
-  const { data } = await api.post<PayPalOrderResult>('/paypal/shield/create', {});
+export async function createShieldOrder(type: 'standard' | 'gold' = 'standard'): Promise<PayPalOrderResult> {
+  const { data } = await api.post<PayPalOrderResult>('/paypal/shield/create', { type });
   return data;
 }
 

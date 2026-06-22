@@ -15,7 +15,8 @@ import {
 
 const BUYIN_PRODUCT_IDS = Array.from({ length: 25 }, (_, i) => `coinprowl_buyin_${i + 1}`);
 const SHIELD_PRODUCT_ID = 'coinprowl_shield';
-export const ALL_PRODUCT_IDS = [...BUYIN_PRODUCT_IDS, SHIELD_PRODUCT_ID];
+const SHIELD_PREMIUM_PRODUCT_ID = 'coinprowl_shield_premium';
+export const ALL_PRODUCT_IDS = [...BUYIN_PRODUCT_IDS, SHIELD_PRODUCT_ID, SHIELD_PREMIUM_PRODUCT_ID];
 
 export function getBuyInProductId(tierDollars: number): string {
   return `coinprowl_buyin_${tierDollars}`;
@@ -88,5 +89,5 @@ export async function teardownIAP(): Promise<void> {
   await endConnection();
 }
 
-export { SHIELD_PRODUCT_ID, BUYIN_PRODUCT_IDS };
+export { SHIELD_PRODUCT_ID, SHIELD_PREMIUM_PRODUCT_ID, BUYIN_PRODUCT_IDS };
 export type { ProductPurchase, PurchaseError, Product };

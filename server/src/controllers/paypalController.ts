@@ -193,6 +193,8 @@ export async function captureBuyInOrder(req: AuthRequest, res: Response): Promis
 // POST /api/paypal/shield/create — create PayPal order for shield purchase
 export async function createShieldOrder(req: AuthRequest, res: Response): Promise<void> {
   try {
+    const parsed = createShieldOrderSchema.safeParse(req.body);
+    const shieldType = parsed.success ? parsed.data.type : 'standard';
     const userId = req.user!.id;
 
     // Check active session
@@ -207,18 +209,22 @@ export async function createShieldOrder(req: AuthRequest, res: Response): Promis
     }
 
     const session = sessionResult.rows[0];
-    const shieldPrice = 0.99;
+    const isGold = shieldType === 'gold';
+    const shieldPrice = isGold ? 4.99 : 0.99;
+    const shieldAmountCents = isGold ? 499 : 99;
+    const shieldLabel = isGold ? 'CoinProwl Gold Shield — 2 hour protection' : 'CoinProwl Shield — 10 minute protection';
+    const orderType = isGold ? 'shield_gold' : 'shield';
 
     const result = await createOrder(
       shieldPrice.toFixed(2),
-      'CoinProwl Shield — 10 minute protection',
+      shieldLabel,
       `shield-${userId}-${Date.now()}`,
     );
 
     await query(
       `INSERT INTO paypal_orders (order_id, user_id, type, amount_cents, tier_dollars, status)
-       VALUES ($1, $2, 'shield', $3, 0, 'CREATED')`,
-      [result.orderId, userId, 99],
+       VALUES ($1, $2, $3, $4, 0, 'CREATED')`,
+      [result.orderId, userId, orderType, shieldAmountCents],
     );
 
     res.json({
@@ -275,12 +281,17 @@ export async function captureShieldOrder(req: AuthRequest, res: Response): Promi
       [capture.captureId, capture.payerEmail, orderId],
     );
 
+    const isGold = order.type === 'shield_gold';
+    const durationInterval = isGold ? '120 minutes' : '10 minutes';
+    const costCents = isGold ? -499 : -99;
+    const txLabel = isGold ? 'Gold Shield ($4.99) — 2 hours via PayPal' : 'Shield ($0.99) — 10 minutes via PayPal';
+
     // Activate shield on current session
     const sessionResult = await query(
       `UPDATE game_sessions
        SET shields_purchased = shields_purchased + 1,
            shields_remaining = shields_remaining + 1,
-           shield_active_until = now() + interval '10 minutes'
+           shield_active_until = now() + interval '${durationInterval}'
        WHERE user_id = $1 AND is_active = true
        RETURNING *`,
       [userId],
@@ -293,8 +304,8 @@ export async function captureShieldOrder(req: AuthRequest, res: Response): Promi
 
     await query(
       `INSERT INTO transactions (user_id, type, amount, currency, description)
-       VALUES ($1, 'shield', -99, 'usd', 'Shield purchased via PayPal')`,
-      [userId],
+       VALUES ($1, 'shield', $2, 'usd', $3)`,
+      [userId, costCents, txLabel],
     );
 
     res.json({ session: formatSession(sessionResult.rows[0]) });

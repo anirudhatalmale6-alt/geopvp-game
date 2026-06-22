@@ -35,6 +35,7 @@ import {
 } from '../../api/game';
 import {
   SHIELD_PRODUCT_ID,
+  SHIELD_PREMIUM_PRODUCT_ID,
   purchaseProduct,
   acknowledgePurchase,
   listenForPurchases,
@@ -1091,7 +1092,8 @@ export default function MapScreen() {
 
     const cleanup = listenForPurchases(
       async (purchase: ProductPurchase) => {
-        if (!shieldIapPendingRef.current || purchase.productId !== SHIELD_PRODUCT_ID) return;
+        if (!shieldIapPendingRef.current) return;
+        if (purchase.productId !== SHIELD_PRODUCT_ID && purchase.productId !== SHIELD_PREMIUM_PRODUCT_ID) return;
         if (!purchase.transactionReceipt) return;
 
         try {
@@ -1118,31 +1120,36 @@ export default function MapScreen() {
     const remaining = 3 - bought24h;
     if (remaining <= 0) return;
 
-    const priceLabel = Platform.OS === 'ios' ? '$0.99' : '$0.99 via PayPal';
+    const purchaseShield = async (type: 'standard' | 'gold') => {
+      const productId = type === 'gold' ? SHIELD_PREMIUM_PRODUCT_ID : SHIELD_PRODUCT_ID;
+      if (Platform.OS === 'ios' && getLoadedProducts().length > 0) {
+        try {
+          shieldIapPendingRef.current = true;
+          await purchaseProduct(productId);
+        } catch {
+          shieldIapPendingRef.current = false;
+        }
+        return;
+      }
+      try {
+        const order = await createShieldOrder(type);
+        shieldOrderRef.current = order.orderId;
+        setShieldPaypalUrl(order.approvalUrl);
+      } catch {}
+    };
+
     Alert.alert(
       'Buy Shield',
-      `Shield provides 10 minutes of protection. You can buy ${remaining} more today. (${priceLabel})`,
+      `Shields protect you from attacks. You can buy ${remaining} more today.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Buy Shield — $0.99',
-          onPress: async () => {
-            if (Platform.OS === 'ios' && getLoadedProducts().length > 0) {
-              try {
-                shieldIapPendingRef.current = true;
-                await purchaseProduct(SHIELD_PRODUCT_ID);
-              } catch {
-                shieldIapPendingRef.current = false;
-              }
-              return;
-            }
-            // PayPal (Android, or iOS fallback)
-            try {
-              const order = await createShieldOrder();
-              shieldOrderRef.current = order.orderId;
-              setShieldPaypalUrl(order.approvalUrl);
-            } catch {}
-          },
+          text: 'Shield — $0.99 (10 min)',
+          onPress: () => purchaseShield('standard'),
+        },
+        {
+          text: 'Gold Shield — $4.99 (2 hrs)',
+          onPress: () => purchaseShield('gold'),
         },
       ],
     );

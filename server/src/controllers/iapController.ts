@@ -215,7 +215,8 @@ export async function verifyShield(req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
-    if (productId !== 'coinprowl_shield') {
+    const isGold = productId === 'coinprowl_shield_premium';
+    if (productId !== 'coinprowl_shield' && !isGold) {
       res.status(400).json({ error: 'Invalid shield product ID.' });
       return;
     }
@@ -233,12 +234,16 @@ export async function verifyShield(req: AuthRequest, res: Response): Promise<voi
       [transactionId, userId, productId, verification.sandbox],
     );
 
+    const durationMinutes = isGold ? 120 : 10;
+    const costCents = isGold ? -499 : -99;
+    const label = isGold ? 'Gold Shield ($4.99) — 2 hours via Apple IAP' : 'Shield ($0.99) — 10 minutes via Apple IAP';
+
     // Activate shield
     const sessionResult = await query(
       `UPDATE game_sessions
        SET shields_purchased = shields_purchased + 1,
            shields_remaining = shields_remaining + 1,
-           shield_active_until = now() + interval '10 minutes'
+           shield_active_until = now() + interval '${durationMinutes} minutes'
        WHERE user_id = $1 AND is_active = true
        RETURNING *`,
       [userId],
@@ -251,8 +256,8 @@ export async function verifyShield(req: AuthRequest, res: Response): Promise<voi
 
     await query(
       `INSERT INTO transactions (user_id, type, amount, currency, description)
-       VALUES ($1, 'shield', -99, 'usd', 'Shield purchased via Apple IAP')`,
-      [userId],
+       VALUES ($1, 'shield', $2, 'usd', $3)`,
+      [userId, costCents, label],
     );
 
     res.json({ session: formatSession(sessionResult.rows[0]) });
