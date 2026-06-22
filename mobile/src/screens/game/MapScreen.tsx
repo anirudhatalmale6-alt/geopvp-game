@@ -24,6 +24,7 @@ import {
   buyShield,
   createShieldOrder,
   captureShieldOrder,
+  verifyShieldReceipt,
   getCoinDrops,
   collectCoinDrop,
   getWallet,
@@ -32,6 +33,13 @@ import {
   NearbyPlayer,
   CoinDrop,
 } from '../../api/game';
+import {
+  SHIELD_PRODUCT_ID,
+  purchaseProduct,
+  acknowledgePurchase,
+  listenForPurchases,
+  type ProductPurchase,
+} from '../../services/iap';
 import { connectSocket, disconnectSocket, emitLocation, onPlayersUpdate, onBatchUpdate, onEliminated, onBotHit, onConnectionChange } from '../../api/socket';
 import NetInfo from '@react-native-community/netinfo';
 import BuyInModal from './BuyInModal';
@@ -1074,18 +1082,60 @@ export default function MapScreen() {
   // -------------------------------------------------------------------------
   // Shield handler
   // -------------------------------------------------------------------------
+
+  // IAP shield purchase listener (iOS only)
+  const shieldIapPendingRef = useRef(false);
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+
+    const cleanup = listenForPurchases(
+      async (purchase: ProductPurchase) => {
+        if (!shieldIapPendingRef.current || purchase.productId !== SHIELD_PRODUCT_ID) return;
+        if (!purchase.transactionReceipt) return;
+
+        try {
+          const result = await verifyShieldReceipt(
+            purchase.transactionReceipt,
+            purchase.productId,
+            purchase.transactionId ?? '',
+          );
+          await acknowledgePurchase(purchase);
+          setSession(result.session);
+        } catch {}
+        shieldIapPendingRef.current = false;
+      },
+      () => {
+        shieldIapPendingRef.current = false;
+      },
+    );
+
+    return cleanup;
+  }, []);
+
   const handleBuyShield = () => {
     const bought24h = session?.shieldsBought24h ?? 0;
     const remaining = 3 - bought24h;
     if (remaining <= 0) return;
+
+    const priceLabel = Platform.OS === 'ios' ? '$0.99' : '$0.99 via PayPal';
     Alert.alert(
       'Buy Shield',
-      `Shield provides 10 minutes of protection. You can buy ${remaining} more today. ($0.99 via PayPal)`,
+      `Shield provides 10 minutes of protection. You can buy ${remaining} more today. (${priceLabel})`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Buy Shield — $0.99',
           onPress: async () => {
+            if (Platform.OS === 'ios') {
+              try {
+                shieldIapPendingRef.current = true;
+                await purchaseProduct(SHIELD_PRODUCT_ID);
+              } catch {
+                shieldIapPendingRef.current = false;
+              }
+              return;
+            }
+            // Android: PayPal
             try {
               const order = await createShieldOrder();
               shieldOrderRef.current = order.orderId;

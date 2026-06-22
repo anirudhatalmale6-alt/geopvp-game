@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
@@ -6,6 +6,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { colors } from './src/theme';
+import { setupIAP, loadProducts, teardownIAP } from './src/services/iap';
 import GeoRestrictedScreen from './src/screens/game/GeoRestrictedScreen';
 
 import LoginScreen from './src/screens/auth/LoginScreen';
@@ -122,6 +123,11 @@ function AppNavigator() {
 }
 
 export default function App() {
+  useEffect(() => {
+    setupIAP().then(() => loadProducts());
+    return () => { teardownIAP(); };
+  }, []);
+
   return (
     <AuthProvider>
       <StatusBar style="light" />

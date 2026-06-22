@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,8 +12,15 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, fontSize } from '../../theme';
-import { createBuyInOrder, captureBuyInOrder } from '../../api/game';
+import { createBuyInOrder, captureBuyInOrder, verifyBuyInReceipt } from '../../api/game';
 import PayPalWebViewModal from '../../components/PayPalWebViewModal';
+import {
+  getBuyInProductId,
+  purchaseProduct,
+  acknowledgePurchase,
+  listenForPurchases,
+  type ProductPurchase,
+} from '../../services/iap';
 
 interface TierOption {
   dollars: number;
@@ -67,10 +74,65 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
 
   const [paypalUrl, setPaypalUrl] = useState<string | null>(null);
   const pendingOrderRef = useRef<string | null>(null);
+  const pendingTierRef = useRef<number>(0);
+
+  // IAP purchase listener (iOS only)
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+
+    const cleanup = listenForPurchases(
+      async (purchase: ProductPurchase) => {
+        const tierDollars = pendingTierRef.current;
+        if (!tierDollars || !purchase.transactionReceipt) return;
+
+        setLoading(true);
+        try {
+          await verifyBuyInReceipt(
+            purchase.transactionReceipt,
+            purchase.productId,
+            purchase.transactionId ?? '',
+            tierDollars,
+          );
+          await acknowledgePurchase(purchase);
+          pendingTierRef.current = 0;
+          onSessionCreated();
+          onClose();
+        } catch (err: any) {
+          setError(err.message || 'Failed to verify purchase.');
+        } finally {
+          setLoading(false);
+        }
+      },
+      (err) => {
+        if (err.code !== 'E_USER_CANCELLED') {
+          setError('Purchase failed. Please try again.');
+        }
+        setLoading(false);
+        pendingTierRef.current = 0;
+      },
+    );
+
+    return cleanup;
+  }, [onSessionCreated, onClose]);
 
   const handleBuyIn = async () => {
     setLoading(true);
     setError(null);
+
+    if (Platform.OS === 'ios') {
+      try {
+        const productId = getBuyInProductId(selectedTier.dollars);
+        pendingTierRef.current = selectedTier.dollars;
+        await purchaseProduct(productId);
+      } catch (err: any) {
+        setError(err.message || 'Failed to start purchase.');
+        setLoading(false);
+        pendingTierRef.current = 0;
+      }
+      return;
+    }
+
+    // Android: PayPal flow
     try {
       const order = await createBuyInOrder(selectedTier.dollars);
       pendingOrderRef.current = order.orderId;

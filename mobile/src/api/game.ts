@@ -317,3 +317,35 @@ export async function captureShieldOrder(orderId: string): Promise<{ session: Ga
   const { data } = await api.post<{ session: GameSession }>('/paypal/shield/capture', { orderId });
   return data;
 }
+
+// ---------------------------------------------------------------------------
+// Apple In-App Purchase API
+// ---------------------------------------------------------------------------
+
+export async function verifyBuyInReceipt(
+  receiptData: string,
+  productId: string,
+  transactionId: string,
+  tierDollars: number,
+): Promise<{ session: GameSession }> {
+  const { data } = await api.post<{ session: GameSession }>('/iap/buyin/verify', {
+    receiptData,
+    productId,
+    transactionId,
+    tierDollars,
+  });
+  return data;
+}
+
+export async function verifyShieldReceipt(
+  receiptData: string,
+  productId: string,
+  transactionId: string,
+): Promise<{ session: GameSession }> {
+  const { data } = await api.post<{ session: GameSession }>('/iap/shield/verify', {
+    receiptData,
+    productId,
+    transactionId,
+  });
+  return data;
+}

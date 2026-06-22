@@ -10,6 +10,7 @@ import walletRoutes from './routes/wallet';
 import adminRoutes from './routes/admin';
 import publicRoutes from './routes/public';
 import paypalRoutes from './routes/paypal';
+import iapRoutes from './routes/iap';
 import { setupGameSocket } from './socket/gameSocket';
 import { setIO } from './socket/ioInstance';
 import { startBotAI } from './bot/botAI';
@@ -35,6 +36,7 @@ app.use('/api/wallet', walletRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/paypal', paypalRoutes);
+app.use('/api/iap', iapRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {
