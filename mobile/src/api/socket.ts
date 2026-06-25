@@ -19,7 +19,7 @@ function getSocketUrl(): string {
     return '/';
   }
   // Native: fall back to env or localhost
-  const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3001/api';
+  const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? 'https://api.coinprowl.com/api';
   // Strip the /api suffix to get the base server URL
   return apiUrl.replace(/\/api\/?$/, '');
 }
