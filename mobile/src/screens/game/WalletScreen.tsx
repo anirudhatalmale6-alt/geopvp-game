@@ -47,35 +47,6 @@ function txIcon(type: string): { name: string; color: string } {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Mock transactions (used as fallback / seeded UI)
-// ---------------------------------------------------------------------------
-const MOCK_TRANSACTIONS: Transaction[] = [
-  {
-    id: 'm1',
-    type: 'attack_win',
-    amount: 500,
-    description: 'Stole 5 coins from hunter_x',
-    relatedUserId: null,
-    createdAt: new Date(Date.now() - 3600_000).toISOString(),
-  },
-  {
-    id: 'm2',
-    type: 'buyin',
-    amount: -1000,
-    description: 'Buy-in: $10 Bronze tier',
-    relatedUserId: null,
-    createdAt: new Date(Date.now() - 7200_000).toISOString(),
-  },
-  {
-    id: 'm3',
-    type: 'attack_loss',
-    amount: -200,
-    description: 'Lost coins to shadow99',
-    relatedUserId: null,
-    createdAt: new Date(Date.now() - 86400_000).toISOString(),
-  },
-];
 
 // ---------------------------------------------------------------------------
 // Component
@@ -98,10 +69,10 @@ export default function WalletScreen() {
     try {
       const [w, txs, s] = await Promise.all([getWallet(), getTransactions(), getCombatStats()]);
       setWallet(w);
-      setTransactions(txs.length > 0 ? txs : MOCK_TRANSACTIONS);
+      setTransactions(txs);
       setStats(s);
     } catch {
-      setTransactions(MOCK_TRANSACTIONS);
+      setTransactions([]);
     }
   }, []);
 
