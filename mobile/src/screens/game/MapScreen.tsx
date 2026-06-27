@@ -319,7 +319,7 @@ window.addEventListener('message',function(e){
       if(d.type==='init'){
         map.setView([d.lat,d.lng],16,{animate:false});
       } else if(zoomMode==='player' && !userDragging){
-        map.setView([d.lat,d.lng],map.getZoom(),{animate:true,duration:1.5,easeLinearity:0.1,noMoveStart:true});
+        map.panTo([d.lat,d.lng],{animate:true,duration:0.5,easeLinearity:0.5});
       }
       playerMarker.setLatLng([d.lat,d.lng]);
 
