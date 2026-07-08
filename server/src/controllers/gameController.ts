@@ -69,12 +69,14 @@ export async function createGameSession(req: AuthRequest, res: Response): Promis
     // Ensure wallet row exists
     await query(`INSERT INTO wallets (user_id, balance) VALUES ($1, 0) ON CONFLICT DO NOTHING`, [userId]);
 
-    // Create session — shields start at 0, purchased separately
+    // Create session — shields start at 0, purchased separately.
+    // Paid buy-ins are always the 'prowl' (non-redeemable) currency. Free-entry
+    // 'sweep' sessions are a Phase 2 addition once the sweepstakes model is live.
     const sessionResult = await query(
       `INSERT INTO game_sessions (
          user_id, buyin_amount, coin_tier, map_coins,
-         shields_purchased, shields_remaining
-       ) VALUES ($1, $2, $3, $4, 0, 0)
+         shields_purchased, shields_remaining, currency
+       ) VALUES ($1, $2, $3, $4, 0, 0, 'prowl')
        RETURNING *`,
       [userId, tierCents, tier.name, mapCoins],
     );
@@ -389,6 +391,12 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
         throw new Error('Cannot attack yourself.');
       }
 
+      // Sweepstakes model: winnings are minted in the SAME currency the session
+      // is played in. Paid 'prowl' games mint non-redeemable Prowl Coins (pure
+      // entertainment). Only free-entry 'sweep' sessions mint redeemable Sweep
+      // Coins. Column defaults to 'prowl', so the paid game is never cashable.
+      const winCurrency = attacker.currency === 'sweep' ? 'sweep' : 'prowl';
+
       // Check if either player has blocked the other
       const blockCheck = await q(
         `SELECT id FROM blocked_users WHERE (blocker_id = $1 AND blocked_id = $2) OR (blocker_id = $2 AND blocked_id = $1) LIMIT 1`,
@@ -495,8 +503,8 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
         await Promise.all([
           q(
             `INSERT INTO transactions (user_id, type, amount, currency, description, related_user_id)
-             VALUES ($1, 'attack_win', $2, 'sweep', $3, $4)`,
-            [attacker.user_id, stolenCents, `Took ${botCoins} coins from ${defender.defender_name}!`, defender.user_id],
+             VALUES ($1, 'attack_win', $2, $5, $3, $4)`,
+            [attacker.user_id, stolenCents, `Took ${botCoins} coins from ${defender.defender_name}!`, defender.user_id, winCurrency],
           ),
           q(
             `INSERT INTO prowl_balances (user_id, balance, updated_at)
@@ -562,8 +570,8 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
       const txPromises = [
         q(
           `INSERT INTO transactions (user_id, type, amount, currency, description, related_user_id)
-           VALUES ($1, 'attack_win', $2, 'sweep', $3, $4)`,
-          [attacker.user_id, stolenCents, `Took ${coinsStolen} coins from ${defender.defender_name}!`, defender.user_id],
+           VALUES ($1, 'attack_win', $2, $5, $3, $4)`,
+          [attacker.user_id, stolenCents, `Took ${coinsStolen} coins from ${defender.defender_name}!`, defender.user_id, winCurrency],
         ),
         q(
           `INSERT INTO transactions (user_id, type, amount, currency, description, related_user_id)
