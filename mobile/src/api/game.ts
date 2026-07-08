@@ -60,12 +60,19 @@ export interface CollectResult {
   mapCoins: number;
 }
 
+export interface PayoutMethods {
+  paypal: boolean;
+  venmo: boolean;
+  debit: boolean;
+}
+
 export interface WalletData {
   balance: number;
   sweepBalance: number;
   prowlBalance: number;
   canClaimDaily: boolean;
   userId: string;
+  payoutMethods?: PayoutMethods;
 }
 
 export interface LeaderboardEntry {
@@ -235,8 +242,28 @@ export interface Redemption {
   createdAt: string;
 }
 
-export async function redeemSweepCoins(recipient: string, amountCents: number, method: 'paypal' | 'venmo' = 'paypal'): Promise<RedeemResult> {
-  const { data } = await api.post<RedeemResult>('/wallet/redeem', { recipient, amountCents, method });
+export interface DebitCardInput {
+  number: string;
+  expiry: string;
+  cvc: string;
+  firstName: string;
+  lastName: string;
+  zip: string;
+}
+
+export async function redeemSweepCoins(
+  recipient: string,
+  amountCents: number,
+  method: 'paypal' | 'venmo' | 'debit' = 'paypal',
+  card?: DebitCardInput,
+): Promise<RedeemResult> {
+  const payload: Record<string, unknown> = { amountCents, method };
+  if (method === 'debit') {
+    payload.card = card;
+  } else {
+    payload.recipient = recipient;
+  }
+  const { data } = await api.post<RedeemResult>('/wallet/redeem', payload);
   return data;
 }
 

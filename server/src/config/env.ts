@@ -40,6 +40,12 @@ export interface AppConfig {
     clientSecret: string;
     mode: 'sandbox' | 'live';
   };
+  tabapay: {
+    bearerToken: string;
+    clientId: string;
+    settlementAccountId: string;
+    mode: 'sandbox' | 'production';
+  };
   appName: string;
   attackRadiusMiles: number;
   shieldPriceCents: number;
@@ -64,6 +70,13 @@ export const config: AppConfig = {
     clientId: optional('PAYPAL_CLIENT_ID', ''),
     clientSecret: optional('PAYPAL_CLIENT_SECRET', ''),
     mode: (optional('PAYPAL_MODE', 'sandbox') as 'sandbox' | 'live'),
+  },
+  tabapay: {
+    // Push-to-debit-card payouts (gaming-friendly alternative to PayPal Payouts).
+    bearerToken: optional('TABAPAY_BEARER_TOKEN', ''),
+    clientId: optional('TABAPAY_CLIENT_ID', ''),
+    settlementAccountId: optional('TABAPAY_SETTLEMENT_ACCOUNT_ID', ''),
+    mode: (optional('TABAPAY_MODE', 'sandbox') as 'sandbox' | 'production'),
   },
   appName: optional('APP_NAME', 'CoinProwl'),
   attackRadiusMiles: parseFloat(optional('ATTACK_RADIUS_MILES', '0.25')),

@@ -6,6 +6,7 @@ import { query } from '../config/database';
 import { AuthRequest } from '../middleware/auth';
 import { COIN_TIERS } from '../utils/coins';
 import { sendPayout } from '../services/paypal';
+import * as tabapay from '../services/tabapay';
 
 const spawnBotsSchema = z.object({
   count: z.number().int().min(1).max(2000),
@@ -531,12 +532,46 @@ export async function approveWithdrawal(req: AuthRequest, res: Response): Promis
     const amountDollars = (withdrawal.amount / 100).toFixed(2);
     const method = withdrawal.method || 'paypal';
 
+    // -----------------------------------------------------------------------
+    // Debit card (Tabapay push-to-card)
+    // -----------------------------------------------------------------------
+    if (method === 'debit') {
+      const accountID = details.tabapayAccountID;
+      if (!accountID) {
+        res.status(400).json({ error: 'No debit card token found on this withdrawal.' });
+        return;
+      }
+      try {
+        const push = await tabapay.pushToCard(accountID, amountDollars, senderItemId);
+        await query(
+          `UPDATE withdrawals
+           SET status = 'completed',
+               payout_details = payout_details || $1,
+               admin_notes = $2,
+               updated_at = NOW()
+           WHERE id = $3`,
+          [
+            JSON.stringify({ tabapayTransactionID: push.transactionID, tabapayStatus: push.status }),
+            `Approved by admin ${req.user!.id}`,
+            id,
+          ],
+        );
+        res.json({ success: true, message: `$${amountDollars} sent to ${details.network || 'debit'} card •••• ${details.last4 || ''}.` });
+      } catch (payoutErr: any) {
+        console.error('Tabapay payout error during approval:', payoutErr);
+        res.status(500).json({ error: `Debit card payout failed: ${payoutErr.message}` });
+      }
+      return;
+    }
+
+    // -----------------------------------------------------------------------
+    // PayPal / Venmo
+    // -----------------------------------------------------------------------
     if (!recipient) {
       res.status(400).json({ error: 'No recipient found in withdrawal details.' });
       return;
     }
 
-    // Send payout via PayPal
     try {
       const payoutResult = await sendPayout(
         recipient,

@@ -9,6 +9,7 @@ import { getIO } from '../socket/ioInstance';
 import { sendPushNotification } from '../utils/pushNotification';
 import { checkLocationBlocked, isBlockedState, getBlockedStates } from '../utils/geofence';
 import { sendPayout } from '../services/paypal';
+import * as tabapay from '../services/tabapay';
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -24,9 +25,21 @@ const updateLocationSchema = z.object({
 });
 
 const redeemSchema = z.object({
-  recipient: z.string().min(1, 'Email or phone number required'),
+  recipient: z.string().optional(), // PayPal/Venmo email or phone
   amountCents: z.number().int().min(1000, 'Minimum redemption is $10.00'),
-  method: z.enum(['paypal', 'venmo']).default('paypal'),
+  method: z.enum(['paypal', 'venmo', 'debit']).default('paypal'),
+  // Debit-card details (only for method === 'debit'). Tokenized immediately via
+  // Tabapay; the raw card number is never stored.
+  card: z
+    .object({
+      number: z.string().min(12).max(23),
+      expiry: z.string().min(3).max(7),
+      cvc: z.string().min(3).max(4),
+      firstName: z.string().min(1).max(50),
+      lastName: z.string().min(1).max(50),
+      zip: z.string().min(3).max(10),
+    })
+    .optional(),
 });
 
 const attackSchema = z.object({
@@ -714,6 +727,11 @@ export async function getWallet(req: AuthRequest, res: Response): Promise<void> 
       sweepBalance,
       prowlBalance,
       canClaimDaily: false,
+      payoutMethods: {
+        paypal: true,
+        venmo: true,
+        debit: tabapay.isConfigured(),
+      },
     });
   } catch (err) {
     console.error('getWallet error:', err);
@@ -1049,8 +1067,23 @@ export async function redeemSweepCoins(req: AuthRequest, res: Response): Promise
       return;
     }
 
-    const { recipient, amountCents, method } = parsed.data;
-    const methodLabel = method === 'venmo' ? 'Venmo' : 'PayPal';
+    const { recipient, amountCents, method, card } = parsed.data;
+    const methodLabel = method === 'venmo' ? 'Venmo' : method === 'debit' ? 'Debit Card' : 'PayPal';
+
+    // Validate the recipient details required for the chosen method.
+    if (method === 'debit') {
+      if (!tabapay.isConfigured()) {
+        res.status(400).json({ error: 'Debit card cash-out is not available yet. Please use PayPal or Venmo.' });
+        return;
+      }
+      if (!card) {
+        res.status(400).json({ error: 'Debit card details are required.' });
+        return;
+      }
+    } else if (!recipient || recipient.trim().length === 0) {
+      res.status(400).json({ error: 'Email or phone number required.' });
+      return;
+    }
 
     // Check for pending withdrawals
     const pendingCheck = await query(
@@ -1077,12 +1110,53 @@ export async function redeemSweepCoins(req: AuthRequest, res: Response): Promise
     const amountDollars = (amountCents / 100).toFixed(2);
     const senderItemId = `coinprowl-${userId.slice(0, 8)}-${Date.now()}`;
 
+    // Build the payout details we persist on the withdrawal record.
+    // For debit, tokenize the card NOW so we store only a token + last4 (never
+    // the raw card number); the actual push happens on admin approval.
+    let payoutDetails: Record<string, unknown>;
+    let recipientLabel: string;
+    if (method === 'debit') {
+      let tokenized;
+      try {
+        tokenized = await tabapay.createCardAccount(
+          {
+            number: card!.number,
+            expiry: card!.expiry,
+            cvc: card!.cvc,
+            firstName: card!.firstName,
+            lastName: card!.lastName,
+            zip: card!.zip,
+          },
+          senderItemId,
+        );
+      } catch (e: any) {
+        res.status(400).json({ error: e?.message?.includes('Tabapay') ? 'We could not verify that debit card. Please double-check the number, expiry, CVV and ZIP.' : (e?.message || 'Card verification failed.') });
+        return;
+      }
+      if (!tokenized.pushAvailable) {
+        res.status(400).json({ error: 'That card does not support instant deposits. Please try a different debit card.' });
+        return;
+      }
+      payoutDetails = {
+        method: 'debit',
+        tabapayAccountID: tokenized.accountID,
+        last4: tokenized.last4,
+        network: tokenized.network,
+        cardholder: `${card!.firstName} ${card!.lastName}`.trim(),
+        senderItemId,
+      };
+      recipientLabel = `${tokenized.network} debit •••• ${tokenized.last4}`;
+    } else {
+      payoutDetails = { method, recipient, senderItemId };
+      recipientLabel = recipient!;
+    }
+
     // Create withdrawal record as PENDING (requires admin approval)
     const withdrawalResult = await query(
       `INSERT INTO withdrawals (user_id, amount, method, payout_details, status)
        VALUES ($1, $2, $3, $4, 'pending')
        RETURNING id`,
-      [userId, amountCents, method, JSON.stringify({ recipient, senderItemId })],
+      [userId, amountCents, method, JSON.stringify(payoutDetails)],
     );
     const withdrawalId = withdrawalResult.rows[0].id;
 
@@ -1090,7 +1164,7 @@ export async function redeemSweepCoins(req: AuthRequest, res: Response): Promise
     await query(
       `INSERT INTO transactions (user_id, type, amount, currency, description)
        VALUES ($1, 'withdrawal', $2, 'sweep', $3)`,
-      [userId, -amountCents, `Redemption pending: $${amountDollars} via ${methodLabel}`],
+      [userId, -amountCents, `Redemption pending: $${amountDollars} via ${methodLabel} (${recipientLabel})`],
     );
 
     res.json({

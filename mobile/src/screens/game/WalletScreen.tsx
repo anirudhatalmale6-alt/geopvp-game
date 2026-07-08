@@ -59,11 +59,19 @@ export default function WalletScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showRedeem, setShowRedeem] = useState(false);
-  const [redeemMethod, setRedeemMethod] = useState<'paypal' | 'venmo'>('paypal');
+  const [redeemMethod, setRedeemMethod] = useState<'paypal' | 'venmo' | 'debit'>('paypal');
   const [redeemRecipient, setRedeemRecipient] = useState('');
   const [redeemAmount, setRedeemAmount] = useState('');
   const [redeeming, setRedeeming] = useState(false);
   const [redeemError, setRedeemError] = useState<string | null>(null);
+  // Debit card fields (only used when redeemMethod === 'debit')
+  const [cardName, setCardName] = useState('');
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [cardCvc, setCardCvc] = useState('');
+  const [cardZip, setCardZip] = useState('');
+
+  const debitEnabled = wallet?.payoutMethods?.debit ?? false;
 
   const load = useCallback(async () => {
     try {
@@ -97,23 +105,17 @@ export default function WalletScreen() {
     }
     setRedeemRecipient('');
     setRedeemAmount('');
+    setCardName('');
+    setCardNumber('');
+    setCardExpiry('');
+    setCardCvc('');
+    setCardZip('');
     setRedeemError(null);
     setShowRedeem(true);
   };
 
   const handleRedeemSubmit = async () => {
-    const recipient = redeemRecipient.trim();
-    if (!recipient) {
-      setRedeemError(redeemMethod === 'venmo'
-        ? 'Please enter your Venmo email or phone number.'
-        : 'Please enter your PayPal email address.');
-      return;
-    }
-    const isPhone = /^\+?\d[\d\s()-]{8,}$/.test(recipient);
-    if (!isPhone && !recipient.includes('@')) {
-      setRedeemError('Please enter a valid email address or phone number.');
-      return;
-    }
+    // Amount is common to all methods.
     const dollars = parseFloat(redeemAmount);
     if (isNaN(dollars) || dollars < 10) {
       setRedeemError('Minimum redemption is $10.00.');
@@ -126,6 +128,68 @@ export default function WalletScreen() {
       return;
     }
 
+    if (redeemMethod === 'debit') {
+      const number = cardNumber.replace(/\s/g, '');
+      if (!/^\d{12,19}$/.test(number)) {
+        setRedeemError('Please enter a valid debit card number.');
+        return;
+      }
+      if (!/^\d{2}\s*\/?\s*\d{2,4}$/.test(cardExpiry.trim())) {
+        setRedeemError('Enter the card expiry as MM/YY.');
+        return;
+      }
+      if (!/^\d{3,4}$/.test(cardCvc.trim())) {
+        setRedeemError('Enter a valid CVV.');
+        return;
+      }
+      if (!/^\d{5}(-\d{4})?$/.test(cardZip.trim())) {
+        setRedeemError('Enter a valid ZIP code.');
+        return;
+      }
+      const nameParts = cardName.trim().split(/\s+/);
+      if (nameParts.length < 2) {
+        setRedeemError('Enter the cardholder\'s first and last name.');
+        return;
+      }
+      const firstName = nameParts[0];
+      const lastName = nameParts.slice(1).join(' ');
+
+      setRedeeming(true);
+      setRedeemError(null);
+      try {
+        const result = await redeemSweepCoins('', cents, 'debit', {
+          number,
+          expiry: cardExpiry.trim(),
+          cvc: cardCvc.trim(),
+          firstName,
+          lastName,
+          zip: cardZip.trim(),
+        });
+        setShowRedeem(false);
+        Alert.alert('Redemption Submitted', result.message);
+        await load();
+      } catch (err: any) {
+        setRedeemError(err?.response?.data?.error || err.message || 'Redemption failed. Please try again.');
+      } finally {
+        setRedeeming(false);
+      }
+      return;
+    }
+
+    // PayPal / Venmo
+    const recipient = redeemRecipient.trim();
+    if (!recipient) {
+      setRedeemError(redeemMethod === 'venmo'
+        ? 'Please enter your Venmo email or phone number.'
+        : 'Please enter your PayPal email address.');
+      return;
+    }
+    const isPhone = /^\+?\d[\d\s()-]{8,}$/.test(recipient);
+    if (!isPhone && !recipient.includes('@')) {
+      setRedeemError('Please enter a valid email address or phone number.');
+      return;
+    }
+
     setRedeeming(true);
     setRedeemError(null);
     try {
@@ -134,7 +198,7 @@ export default function WalletScreen() {
       Alert.alert('Redemption Successful', result.message);
       await load();
     } catch (err: any) {
-      setRedeemError(err.message || 'Redemption failed. Please try again.');
+      setRedeemError(err?.response?.data?.error || err.message || 'Redemption failed. Please try again.');
     } finally {
       setRedeeming(false);
     }
@@ -291,21 +355,93 @@ export default function WalletScreen() {
                 <Ionicons name="phone-portrait-outline" size={16} color={redeemMethod === 'venmo' ? colors.background : colors.textSecondary} />
                 <Text style={[styles.methodBtnText, redeemMethod === 'venmo' && styles.methodBtnTextActive]}>Venmo</Text>
               </TouchableOpacity>
+              {debitEnabled && (
+                <TouchableOpacity
+                  style={[styles.methodBtn, redeemMethod === 'debit' && styles.methodBtnActive]}
+                  onPress={() => setRedeemMethod('debit')}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="card-outline" size={16} color={redeemMethod === 'debit' ? colors.background : colors.textSecondary} />
+                  <Text style={[styles.methodBtnText, redeemMethod === 'debit' && styles.methodBtnTextActive]}>Debit</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
-            <Text style={styles.inputLabel}>
-              {redeemMethod === 'venmo' ? 'VENMO EMAIL OR PHONE' : 'PAYPAL EMAIL'}
-            </Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder={redeemMethod === 'venmo' ? 'email or phone number' : 'your@email.com'}
-              placeholderTextColor={colors.textMuted}
-              keyboardType={redeemMethod === 'venmo' ? 'default' : 'email-address'}
-              autoCapitalize="none"
-              autoCorrect={false}
-              value={redeemRecipient}
-              onChangeText={setRedeemRecipient}
-            />
+            {redeemMethod === 'debit' ? (
+              <>
+                <Text style={styles.inputLabel}>CARDHOLDER NAME</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Full name on card"
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  value={cardName}
+                  onChangeText={setCardName}
+                />
+                <Text style={styles.inputLabel}>DEBIT CARD NUMBER</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="1234 5678 9012 3456"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="number-pad"
+                  value={cardNumber}
+                  onChangeText={setCardNumber}
+                />
+                <View style={styles.cardRow}>
+                  <View style={styles.cardCol}>
+                    <Text style={styles.inputLabel}>EXPIRY</Text>
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="MM/YY"
+                      placeholderTextColor={colors.textMuted}
+                      keyboardType="number-pad"
+                      value={cardExpiry}
+                      onChangeText={setCardExpiry}
+                    />
+                  </View>
+                  <View style={styles.cardCol}>
+                    <Text style={styles.inputLabel}>CVV</Text>
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="123"
+                      placeholderTextColor={colors.textMuted}
+                      keyboardType="number-pad"
+                      secureTextEntry
+                      value={cardCvc}
+                      onChangeText={setCardCvc}
+                    />
+                  </View>
+                  <View style={styles.cardCol}>
+                    <Text style={styles.inputLabel}>ZIP</Text>
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="12345"
+                      placeholderTextColor={colors.textMuted}
+                      keyboardType="number-pad"
+                      value={cardZip}
+                      onChangeText={setCardZip}
+                    />
+                  </View>
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={styles.inputLabel}>
+                  {redeemMethod === 'venmo' ? 'VENMO EMAIL OR PHONE' : 'PAYPAL EMAIL'}
+                </Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder={redeemMethod === 'venmo' ? 'email or phone number' : 'your@email.com'}
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType={redeemMethod === 'venmo' ? 'default' : 'email-address'}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  value={redeemRecipient}
+                  onChangeText={setRedeemRecipient}
+                />
+              </>
+            )}
 
             <Text style={styles.inputLabel}>AMOUNT (USD)</Text>
             <TextInput
@@ -336,14 +472,16 @@ export default function WalletScreen() {
                 <>
                   <Ionicons name="send" size={16} color={colors.background} />
                   <Text style={styles.redeemBtnText}>
-                    {redeemMethod === 'venmo' ? 'SEND TO VENMO' : 'SEND TO PAYPAL'}
+                    {redeemMethod === 'venmo' ? 'SEND TO VENMO' : redeemMethod === 'debit' ? 'SEND TO DEBIT CARD' : 'SEND TO PAYPAL'}
                   </Text>
                 </>
               )}
             </TouchableOpacity>
 
             <Text style={styles.redeemDisclaimer}>
-              Funds will be sent to your PayPal email. Processing may take a few minutes. Minimum $10.00.
+              {redeemMethod === 'debit'
+                ? 'Funds are sent to your debit card after approval, usually within minutes. Your card details are securely tokenized and never stored. Minimum $10.00.'
+                : 'Funds will be sent to your PayPal email. Processing may take a few minutes. Minimum $10.00.'}
             </Text>
           </View>
         </KeyboardAvoidingView>
@@ -611,6 +749,13 @@ const styles = StyleSheet.create({
   },
   methodBtnTextActive: {
     color: colors.background,
+  },
+  cardRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  cardCol: {
+    flex: 1,
   },
   inputLabel: {
     fontSize: 9,
