@@ -25,7 +25,7 @@ const updateLocationSchema = z.object({
 
 const redeemSchema = z.object({
   recipient: z.string().min(1, 'Email or phone number required'),
-  amountCents: z.number().int().min(100, 'Minimum redemption is $1.00'),
+  amountCents: z.number().int().min(1000, 'Minimum redemption is $10.00'),
   method: z.enum(['paypal', 'venmo']).default('paypal'),
 });
 

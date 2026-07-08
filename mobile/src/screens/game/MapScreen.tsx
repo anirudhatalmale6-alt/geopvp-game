@@ -319,7 +319,9 @@ window.addEventListener('message',function(e){
       if(d.type==='init'){
         map.setView([d.lat,d.lng],16,{animate:false});
       } else if(zoomMode==='player' && !userDragging){
-        map.panTo([d.lat,d.lng],{animate:true,duration:0.5,easeLinearity:0.5});
+        // Keep the player locked dead-center — no animation so the camera can
+        // never lag behind while travelling (it moves in lockstep with the marker).
+        map.setView([d.lat,d.lng],map.getZoom(),{animate:false});
       }
       playerMarker.setLatLng([d.lat,d.lng]);
 

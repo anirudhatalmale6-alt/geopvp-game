@@ -91,8 +91,8 @@ export default function WalletScreen() {
 
   const handleCashOut = () => {
     const balance = wallet?.sweepBalance ?? 0;
-    if (balance < 100) {
-      Alert.alert('Insufficient Balance', 'You need at least $1.00 in sweep coins to redeem. Keep winning attacks to earn more!');
+    if (balance < 1000) {
+      Alert.alert('Insufficient Balance', 'You need at least $10.00 in sweep coins to redeem. Keep winning attacks to earn more!');
       return;
     }
     setRedeemRecipient('');
@@ -115,8 +115,8 @@ export default function WalletScreen() {
       return;
     }
     const dollars = parseFloat(redeemAmount);
-    if (isNaN(dollars) || dollars < 1) {
-      setRedeemError('Minimum redemption is $1.00.');
+    if (isNaN(dollars) || dollars < 10) {
+      setRedeemError('Minimum redemption is $10.00.');
       return;
     }
     const cents = Math.round(dollars * 100);
@@ -343,7 +343,7 @@ export default function WalletScreen() {
             </TouchableOpacity>
 
             <Text style={styles.redeemDisclaimer}>
-              Funds will be sent to your PayPal email. Processing may take a few minutes. Minimum $1.00.
+              Funds will be sent to your PayPal email. Processing may take a few minutes. Minimum $10.00.
             </Text>
           </View>
         </KeyboardAvoidingView>
