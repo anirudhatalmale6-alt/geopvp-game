@@ -122,54 +122,6 @@ CREATE TABLE IF NOT EXISTS daily_bonuses (
 );
 CREATE INDEX IF NOT EXISTS idx_daily_bonuses_user ON daily_bonuses(user_id, claimed_at);
 
--- ==========================================================================
--- SWEEPSTAKES MODEL (2026-07-08)
--- Prowl Coins = purchasable play coins, NO cash value (existing prowl_balances).
--- Sweep Coins = free-only, the ONLY redeemable coins. Sourced exclusively from
--- free paths: daily bonus, AMOE mail-in codes, and free bonus bundled with a
--- Prowl purchase. Never sold directly. This is what makes it a sweepstakes and
--- not gambling. Sweep balance = SUM(transactions WHERE currency='sweep').
--- ==========================================================================
-
--- Which currency a game session is played in: 'prowl' (paid, non-redeemable)
--- or 'sweep' (free-entry, redeemable). Defaults to prowl to preserve behavior.
-ALTER TABLE game_sessions ADD COLUMN IF NOT EXISTS currency VARCHAR(10) DEFAULT 'prowl';
-
--- Sweep Coin promo / AMOE codes. Admin issues a code per mail-in postcard
--- (genuine no-purchase entry) or for promotions. Each code grants free sweeps.
-CREATE TABLE IF NOT EXISTS sweep_codes (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  code VARCHAR(32) UNIQUE NOT NULL,
-  amount INTEGER NOT NULL,                 -- sweep coins granted (100 = $1)
-  source VARCHAR(20) DEFAULT 'promo',      -- 'amoe' (mail-in) | 'promo'
-  max_redemptions INTEGER DEFAULT 1,       -- how many users may redeem total
-  redemption_count INTEGER DEFAULT 0,
-  per_user_once BOOLEAN DEFAULT true,
-  note TEXT,
-  expires_at TIMESTAMPTZ,
-  created_by UUID REFERENCES users(id),
-  is_active BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS idx_sweep_codes_code ON sweep_codes(code) WHERE is_active = true;
-
-CREATE TABLE IF NOT EXISTS sweep_code_redemptions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  code_id UUID REFERENCES sweep_codes(id) ON DELETE CASCADE,
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  amount INTEGER NOT NULL,
-  redeemed_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE (code_id, user_id)
-);
-CREATE INDEX IF NOT EXISTS idx_sweep_code_redemptions_user ON sweep_code_redemptions(user_id);
-
--- KYC / identity verification — required before any sweep redemption (cash out).
-ALTER TABLE users ADD COLUMN IF NOT EXISTS kyc_status VARCHAR(20) DEFAULT 'unverified'; -- unverified | pending | verified | rejected
-ALTER TABLE users ADD COLUMN IF NOT EXISTS kyc_full_name VARCHAR(150);
-ALTER TABLE users ADD COLUMN IF NOT EXISTS kyc_address TEXT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS kyc_state VARCHAR(50);
-ALTER TABLE users ADD COLUMN IF NOT EXISTS kyc_verified_at TIMESTAMPTZ;
-
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON game_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_active ON game_sessions(is_active) WHERE is_active = true;
 CREATE INDEX IF NOT EXISTS idx_sessions_location ON game_sessions(latitude, longitude) WHERE is_active = true;

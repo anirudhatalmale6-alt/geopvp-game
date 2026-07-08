@@ -20,8 +20,6 @@ import {
   denyWithdrawal,
   adminLogin,
   adminLogout,
-  issueSweepCode,
-  listSweepCodes,
 } from '../controllers/adminController';
 
 const router = Router();
@@ -47,7 +45,5 @@ router.post('/withdrawals/:id/approve', approveWithdrawal);
 router.post('/withdrawals/:id/deny', denyWithdrawal);
 router.post('/login', adminLogin);
 router.post('/logout', adminLogout);
-router.get('/sweep-codes', listSweepCodes);
-router.post('/sweep-codes', issueSweepCode);
 
 export default router;
