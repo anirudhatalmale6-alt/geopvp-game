@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, fontSize } from '../../theme';
-import { getWallet, getTransactions, getCombatStats, redeemSweepCoins, getSweepStatus, claimDailyBonus, redeemSweepCode, WalletData, Transaction, CombatStats, SweepStatus } from '../../api/game';
+import { getWallet, getTransactions, getCombatStats, redeemSweepCoins, WalletData, Transaction, CombatStats } from '../../api/game';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -64,25 +64,13 @@ export default function WalletScreen() {
   const [redeemAmount, setRedeemAmount] = useState('');
   const [redeeming, setRedeeming] = useState(false);
   const [redeemError, setRedeemError] = useState<string | null>(null);
-  const [sweepStatus, setSweepStatus] = useState<SweepStatus | null>(null);
-  const [claimingDaily, setClaimingDaily] = useState(false);
-  const [showCode, setShowCode] = useState(false);
-  const [codeInput, setCodeInput] = useState('');
-  const [redeemingCode, setRedeemingCode] = useState(false);
-  const [codeError, setCodeError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [w, txs, s, ss] = await Promise.all([
-        getWallet(),
-        getTransactions(),
-        getCombatStats(),
-        getSweepStatus().catch(() => null),
-      ]);
+      const [w, txs, s] = await Promise.all([getWallet(), getTransactions(), getCombatStats()]);
       setWallet(w);
       setTransactions(txs);
       setStats(s);
-      setSweepStatus(ss);
     } catch {
       setTransactions([]);
     }
@@ -99,41 +87,6 @@ export default function WalletScreen() {
     setRefreshing(true);
     await load();
     setRefreshing(false);
-  };
-
-  const handleClaimDaily = async () => {
-    if (claimingDaily) return;
-    setClaimingDaily(true);
-    try {
-      const res = await claimDailyBonus();
-      await load();
-      Alert.alert('Daily Bonus Claimed!', `You received $${(res.granted / 100).toFixed(2)} in free Sweep Coins. Come back tomorrow for more!`);
-    } catch (err: any) {
-      Alert.alert('Daily Bonus', err?.response?.data?.error || err?.message || 'Could not claim your bonus right now.');
-    } finally {
-      setClaimingDaily(false);
-    }
-  };
-
-  const handleRedeemCode = async () => {
-    const code = codeInput.trim();
-    if (!code) {
-      setCodeError('Please enter a code.');
-      return;
-    }
-    setRedeemingCode(true);
-    setCodeError(null);
-    try {
-      const res = await redeemSweepCode(code);
-      setShowCode(false);
-      setCodeInput('');
-      await load();
-      Alert.alert('Code Redeemed!', `You received $${(res.granted / 100).toFixed(2)} in free Sweep Coins.`);
-    } catch (err: any) {
-      setCodeError(err?.response?.data?.error || err?.message || 'Could not redeem that code.');
-    } finally {
-      setRedeemingCode(false);
-    }
   };
 
   const handleCashOut = () => {
@@ -227,45 +180,6 @@ export default function WalletScreen() {
           <Ionicons name="arrow-up-circle" size={18} color={colors.background} />
           <Text style={styles.cashOutText}>REDEEM SWEEP COINS</Text>
         </TouchableOpacity>
-      </View>
-
-      {/* Free Sweep Coins — daily bonus + mail-in/promo code (no purchase necessary) */}
-      <View style={styles.freeSection}>
-        <Text style={styles.freeSectionLabel}>GET FREE SWEEP COINS</Text>
-        <View style={styles.freeRow}>
-          <TouchableOpacity
-            style={[styles.freeBtn, !(sweepStatus?.canClaimDaily) && styles.freeBtnDisabled]}
-            onPress={handleClaimDaily}
-            disabled={!(sweepStatus?.canClaimDaily) || claimingDaily}
-            activeOpacity={0.85}
-          >
-            {claimingDaily ? (
-              <ActivityIndicator size="small" color={colors.success} />
-            ) : (
-              <>
-                <Ionicons
-                  name="sunny-outline"
-                  size={20}
-                  color={sweepStatus?.canClaimDaily ? colors.success : colors.textSecondary}
-                />
-                <Text style={[styles.freeBtnText, !(sweepStatus?.canClaimDaily) && styles.freeBtnTextDisabled]}>
-                  {sweepStatus?.canClaimDaily
-                    ? `Daily Bonus${sweepStatus?.dailyBonusCents ? ` +$${(sweepStatus.dailyBonusCents / 100).toFixed(2)}` : ''}`
-                    : 'Claimed Today'}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.freeBtn}
-            onPress={() => { setCodeInput(''); setCodeError(null); setShowCode(true); }}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="pricetag-outline" size={20} color={colors.gold} />
-            <Text style={styles.freeBtnText}>Redeem Code</Text>
-          </TouchableOpacity>
-        </View>
       </View>
 
       <View style={styles.statsRow}>
@@ -434,67 +348,6 @@ export default function WalletScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
-
-      {/* Redeem Code Modal (AMOE mail-in / promo) */}
-      <Modal visible={showCode} transparent animationType="fade" onRequestClose={() => setShowCode(false)}>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <View style={styles.modalHeaderLeft}>
-                <View style={[styles.modalIcon, { backgroundColor: colors.gold + '20' }]}>
-                  <Ionicons name="pricetag" size={20} color={colors.gold} />
-                </View>
-                <Text style={styles.modalTitle}>REDEEM CODE</Text>
-              </View>
-              <TouchableOpacity onPress={() => setShowCode(false)} style={{ padding: 4 }}>
-                <Ionicons name="close" size={22} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.modalSubtitle}>
-              Enter a promo or mail-in code to get free Sweep Coins.
-            </Text>
-
-            <Text style={styles.inputLabel}>CODE</Text>
-            <TextInput
-              style={[styles.modalInput, { textTransform: 'uppercase', letterSpacing: 1 }]}
-              placeholder="SC-XXXX-XXXX"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="characters"
-              autoCorrect={false}
-              value={codeInput}
-              onChangeText={setCodeInput}
-            />
-
-            {codeError && (
-              <View style={styles.redeemErrorBox}>
-                <Ionicons name="warning" size={14} color={colors.error} />
-                <Text style={styles.redeemErrorText}>{codeError}</Text>
-              </View>
-            )}
-
-            <TouchableOpacity
-              style={[styles.redeemBtn, redeemingCode && { opacity: 0.6 }]}
-              onPress={handleRedeemCode}
-              disabled={redeemingCode}
-              activeOpacity={0.85}
-            >
-              {redeemingCode ? (
-                <ActivityIndicator size="small" color={colors.background} />
-              ) : (
-                <>
-                  <Ionicons name="gift" size={16} color={colors.background} />
-                  <Text style={styles.redeemBtnText}>REDEEM</Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            <Text style={styles.redeemDisclaimer}>
-              No purchase necessary. See official rules for how to request a free mail-in code.
-            </Text>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
     </View>
   );
 }
@@ -587,45 +440,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     fontSize: 11,
     letterSpacing: 1,
-  },
-  freeSection: {
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.md,
-  },
-  freeSectionLabel: {
-    color: colors.textSecondary,
-    fontWeight: '800',
-    fontSize: 10,
-    letterSpacing: 1,
-    marginBottom: spacing.sm,
-  },
-  freeRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  freeBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
-  },
-  freeBtnDisabled: {
-    opacity: 0.5,
-  },
-  freeBtnText: {
-    color: colors.text,
-    fontWeight: '800',
-    fontSize: 12,
-  },
-  freeBtnTextDisabled: {
-    color: colors.textSecondary,
   },
   statsRow: {
     flexDirection: 'row',

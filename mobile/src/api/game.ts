@@ -250,32 +250,6 @@ export async function getRedemptions(): Promise<Redemption[]> {
 }
 
 // ---------------------------------------------------------------------------
-// Sweep Coins API (free, redeemable currency — sweepstakes model)
-// ---------------------------------------------------------------------------
-
-export interface SweepStatus {
-  sweepBalance: number;      // cents
-  canClaimDaily: boolean;
-  dailyBonusCents: number;
-  kycStatus: 'unverified' | 'pending' | 'verified' | 'rejected';
-}
-
-export async function getSweepStatus(): Promise<SweepStatus> {
-  const { data } = await api.get<SweepStatus>('/sweeps/status');
-  return data;
-}
-
-export async function claimDailyBonus(): Promise<{ granted: number; sweepBalance: number }> {
-  const { data } = await api.post<{ granted: number; sweepBalance: number }>('/sweeps/daily');
-  return data;
-}
-
-export async function redeemSweepCode(code: string): Promise<{ granted: number; sweepBalance: number }> {
-  const { data } = await api.post<{ granted: number; sweepBalance: number }>('/sweeps/redeem-code', { code });
-  return data;
-}
-
-// ---------------------------------------------------------------------------
 // Leaderboard API
 // ---------------------------------------------------------------------------
 
