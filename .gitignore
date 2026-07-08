@@ -14,3 +14,8 @@ __pycache__/
 ios-creds/
 credentials.json
 coinprowl-release.keystore
+
+# Stray files not part of this repo
+/jets-ski-rentals/
+/ad-video/
+/BookingWizard.tsx
