@@ -606,6 +606,52 @@ export async function approveWithdrawal(req: AuthRequest, res: Response): Promis
   }
 }
 
+// Mark a pending withdrawal as PAID manually — used when the admin sends the
+// money themselves (e.g. straight from the PayPal/Venmo app) instead of through
+// an automated payout API. Coins were already deducted when the user requested,
+// so this just closes out the record. This is the interim cash-out method while
+// an automated payout processor (Tabapay) is being set up.
+export async function markWithdrawalPaid(req: AuthRequest, res: Response): Promise<void> {
+  if (!(await requireAdmin(req, res))) return;
+
+  try {
+    const { id } = req.params;
+    const reference = (req.body?.reference as string) || '';
+
+    const result = await query(
+      `SELECT * FROM withdrawals WHERE id = $1 AND status = 'pending'`,
+      [id],
+    );
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: 'Pending withdrawal not found.' });
+      return;
+    }
+
+    const withdrawal = result.rows[0];
+    const amountDollars = (withdrawal.amount / 100).toFixed(2);
+    const method = (withdrawal.method || 'paypal').toString();
+
+    await query(
+      `UPDATE withdrawals
+       SET status = 'completed',
+           payout_details = payout_details || $1,
+           admin_notes = $2,
+           updated_at = NOW()
+       WHERE id = $3`,
+      [
+        JSON.stringify({ manualPaid: true, manualReference: reference }),
+        `Paid manually via ${method}${reference ? ` (ref: ${reference})` : ''} by admin ${req.user!.id}`,
+        id,
+      ],
+    );
+
+    res.json({ success: true, message: `Marked $${amountDollars} as paid manually.` });
+  } catch (err) {
+    console.error('markWithdrawalPaid error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
 export async function denyWithdrawal(req: AuthRequest, res: Response): Promise<void> {
   if (!(await requireAdmin(req, res))) return;
 

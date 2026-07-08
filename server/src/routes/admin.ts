@@ -18,6 +18,7 @@ import {
   listWithdrawals,
   approveWithdrawal,
   denyWithdrawal,
+  markWithdrawalPaid,
   adminLogin,
   adminLogout,
 } from '../controllers/adminController';
@@ -42,6 +43,7 @@ router.get('/transactions', listTransactions);
 router.get('/attacks', listAttacks);
 router.get('/withdrawals', listWithdrawals);
 router.post('/withdrawals/:id/approve', approveWithdrawal);
+router.post('/withdrawals/:id/mark-paid', markWithdrawalPaid);
 router.post('/withdrawals/:id/deny', denyWithdrawal);
 router.post('/login', adminLogin);
 router.post('/logout', adminLogout);

@@ -840,7 +840,7 @@ async function loadWithdrawals(status = 'pending') {
         ${list.map(w => {
           const details = w.payoutDetails || {};
           const actions = status === 'pending'
-            ? `<button class="btn btn-green" style="font-size:9px;padding:2px 6px;margin-right:4px" onclick="approveWd('${w.id}')">APPROVE</button><button class="btn btn-red" style="font-size:9px;padding:2px 6px" onclick="denyWd('${w.id}')">DENY</button>`
+            ? `<button class="btn btn-green" style="font-size:9px;padding:2px 6px;margin-right:4px" onclick="markPaidWd('${w.id}')">MARK PAID</button><button class="btn btn-red" style="font-size:9px;padding:2px 6px;margin-right:4px" onclick="denyWd('${w.id}')">DENY</button><button class="btn" style="font-size:9px;padding:2px 6px;background:var(--surface2);color:var(--text2)" onclick="approveWd('${w.id}')">AUTO</button>`
             : (status === 'completed' ? '<span class="success-badge">PAID</span>' : '<span class="fail-badge">DENIED</span>');
           return `<tr>
             <td>${w.username || w.email}</td>
@@ -857,8 +857,27 @@ async function loadWithdrawals(status = 'pending') {
   }
 }
 
+async function markPaidWd(id) {
+  if (!confirm('Mark this cash-out as PAID?\n\nOnly do this AFTER you have sent the money to the user (e.g. from your PayPal or Venmo app, to the recipient shown). This just closes out the request — it does NOT send any money itself.')) return;
+  const reference = prompt('Optional: paste a transaction ID / note for your records (or leave blank):') || '';
+  try {
+    const res = await fetch(`/api/admin/withdrawals/${id}/mark-paid`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + TOKEN, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reference })
+    });
+    const data = await res.json();
+    if (data.success) {
+      toast(data.message);
+      loadWithdrawals('pending');
+    } else {
+      toast('Error: ' + (data.error || 'Failed'));
+    }
+  } catch { toast('Network error'); }
+}
+
 async function approveWd(id) {
-  if (!confirm('Approve this withdrawal? PayPal will send the money immediately.')) return;
+  if (!confirm('Send this payout automatically via the connected processor?\n\nNote: this only works once an automated payout processor is approved and connected. If it is not set up yet, use MARK PAID instead after sending the money yourself.')) return;
   try {
     const res = await fetch(`/api/admin/withdrawals/${id}/approve`, {
       method: 'POST',
