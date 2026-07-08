@@ -346,6 +346,7 @@ a{color:var(--primary);text-decoration:none}
 
 <script>
 let TOKEN = localStorage.getItem('coinprowl_admin_token') || '';
+let loggedIn = false;
 let map, dropMode = false, lastClickLatLng = null;
 let coinMarkers = {}, playerMapMarkers = {};
 let txPage = 1, txTotal = 0;
@@ -382,6 +383,7 @@ async function doLogin() {
 }
 
 function showApp() {
+  loggedIn = true;
   document.getElementById('loginOverlay').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
   initMap();
@@ -397,8 +399,14 @@ async function apiFetch(url, opts = {}) {
     const data = await res.json().catch(() => ({}));
     localStorage.removeItem('coinprowl_admin_token');
     TOKEN = '';
-    alert(data.error || 'Session expired. Please log in again.');
-    location.reload();
+    // Only interrupt with an alert/reload if the admin was actually logged in.
+    // Otherwise (e.g. background polling before login) fail silently so the
+    // login screen stays usable.
+    if (loggedIn) {
+      loggedIn = false;
+      alert(data.error || 'Session expired. Please log in again.');
+      location.reload();
+    }
     return { error: 'Unauthorized' };
   }
   return res.json();
@@ -884,10 +892,10 @@ async function denyWd(id) {
   } catch { toast('Network error'); }
 }
 
-// Auto-refresh every 30s
-setInterval(() => { refreshStats(); refreshPlayers(); refreshTransactions(); refreshAttacks(); }, 30000);
-// Refresh positions every 5s
-setInterval(() => { refreshPlayers(); }, 5000);
+// Auto-refresh every 30s (only while logged in)
+setInterval(() => { if (!loggedIn) return; refreshStats(); refreshPlayers(); refreshTransactions(); refreshAttacks(); }, 30000);
+// Refresh positions every 5s (only while logged in)
+setInterval(() => { if (!loggedIn) return; refreshPlayers(); }, 5000);
 </script>
 </body>
 </html>
