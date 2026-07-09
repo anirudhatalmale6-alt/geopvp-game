@@ -699,6 +699,17 @@ export default function MapScreen() {
               setSession(s);
             }
           } catch {}
+        } else if (!session && !sessionEndedRef.current) {
+          // No session yet (buy-in screen) — check if one was pre-loaded for
+          // this account while the app was backgrounded, and drop them in.
+          try {
+            const s = await getActiveSession();
+            if (s) {
+              setSession(s);
+              setShowBuyIn(false);
+              setElimMessage(null);
+            }
+          } catch {}
         }
       }
     });
@@ -782,6 +793,26 @@ export default function MapScreen() {
       if (s || allowNull) setSession(s);
     } catch {}
   }, []);
+
+  // While the player has NO active session (e.g. sitting on the buy-in screen),
+  // poll for one every few seconds. This lets an admin-granted / pre-loaded
+  // balance drop them straight into the game with no app reopen required.
+  useEffect(() => {
+    if (session) return; // only poll when there's nothing to play yet
+    let alive = true;
+    const iv = setInterval(async () => {
+      if (sessionEndedRef.current) return; // let the elimination flow settle first
+      try {
+        const s = await getActiveSession();
+        if (alive && s) {
+          setSession(s);
+          setShowBuyIn(false);
+          setElimMessage(null);
+        }
+      } catch {}
+    }, 5000);
+    return () => { alive = false; clearInterval(iv); };
+  }, [session]);
 
   useEffect(() => {
     (async () => {
