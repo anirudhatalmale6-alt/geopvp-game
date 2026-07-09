@@ -350,6 +350,7 @@ a{color:var(--primary);text-decoration:none}
 let TOKEN = localStorage.getItem('coinprowl_admin_token') || '';
 let loggedIn = false;
 let map, dropMode = false, moveMode = false, lastClickLatLng = null;
+let playersById = {};
 let coinMarkers = {}, playerMapMarkers = {};
 let txPage = 1, txTotal = 0;
 let attacksPage = 1;
@@ -637,6 +638,10 @@ async function refreshPlayers() {
   if (data.error) return;
   document.getElementById('playerCount').textContent = data.count;
   document.getElementById('mapPlayerCount').textContent = data.count;
+  // Cache players by id so row actions (set coins) can look up name/coins
+  // without inlining them into HTML attributes (which broke on quotes).
+  playersById = {};
+  data.players.forEach(p => { playersById[p.userId] = p; });
   Object.values(playerMapMarkers).forEach(m => map.removeLayer(m));
   playerMapMarkers = {};
   data.players.forEach(p => addPlayerMarker(p));
@@ -663,7 +668,7 @@ async function refreshPlayers() {
         <div class="player-meta">${p.coinTier} tier${bot ? ' (BOT)' : ''} &mdash; last: ${lastUpdate ? timeSince(lastUpdate) : 'N/A'}</div>
       </div>
       <div class="player-coins">${p.mapCoins}</div>
-      <button class="btn-x" style="width:26px;height:26px" title="Set coins" onclick="event.stopPropagation();editCoins('${p.userId}', ${JSON.stringify(p.username)}, ${p.mapCoins})">&#9998;</button>
+      <button class="btn-x" style="width:26px;height:26px;flex-shrink:0" title="Set coins" onclick="event.stopPropagation();editCoins('${p.userId}')">&#9998;</button>
     </div>
   `}).join('') || '<p style="color:var(--text3);font-size:12px;text-align:center;padding:20px">No active players</p>';
 
@@ -849,7 +854,11 @@ function timeSince(date) {
 }
 
 // ---- Set player coins ----
-async function editCoins(userId, username, current) {
+async function editCoins(userId) {
+  const p = playersById[userId];
+  if (!p) { toast('Player not found — refresh and try again'); return; }
+  const username = p.username;
+  const current = p.mapCoins;
   const input = prompt(`Set coin count for ${username}\n\nCurrent: ${current} coins\nEnter the new coin count:`, current);
   if (input === null) return;
   const coins = parseInt(input, 10);
