@@ -302,7 +302,21 @@ a{color:var(--primary);text-decoration:none}
 
     <!-- Users Panel -->
     <div class="panel" id="panel-users">
-      <div class="section-title">ALL USERS (<span id="userCount">0</span>)</div>
+      <div class="section-title">USERS (<span id="userCount">0</span>)</div>
+      <div class="filter-bar">
+        <div>
+          <label>SHOW</label>
+          <select id="userStatusFilter" onchange="renderUsers()">
+            <option value="all">All accounts</option>
+            <option value="inactive">Inactive (not in game)</option>
+            <option value="active">Active (on map)</option>
+          </select>
+        </div>
+        <div>
+          <label>SEARCH</label>
+          <input type="text" id="userSearch" placeholder="name or email" onkeyup="renderUsers()" style="width:130px">
+        </div>
+      </div>
       <div id="usersList"></div>
     </div>
 
@@ -351,6 +365,7 @@ let TOKEN = localStorage.getItem('coinprowl_admin_token') || '';
 let loggedIn = false;
 let map, dropMode = false, moveMode = false, lastClickLatLng = null;
 let playersById = {};
+let allUsers = [];
 let coinMarkers = {}, playerMapMarkers = {};
 let txPage = 1, txTotal = 0;
 let attacksPage = 1;
@@ -719,18 +734,44 @@ async function refreshPlayers() {
 async function refreshUsers() {
   const data = await apiFetch('/api/admin/users');
   if (data.error) return;
-  document.getElementById('userCount').textContent = data.count;
-  const list = document.getElementById('usersList');
-  list.innerHTML = data.users.map(u => `
+  allUsers = data.users || [];
+  renderUsers();
+}
+
+// Renders the USERS list with the current status filter + search applied.
+// Lets the admin pull up inactive accounts (signed up but not currently in a
+// game / haven't bought in) as well as active ones.
+function renderUsers() {
+  const statusEl = document.getElementById('userStatusFilter');
+  const searchEl = document.getElementById('userSearch');
+  const status = statusEl ? statusEl.value : 'all';
+  const q = (searchEl ? searchEl.value : '').trim().toLowerCase();
+
+  let list = allUsers;
+  if (status === 'active') list = list.filter(u => u.activeSession);
+  else if (status === 'inactive') list = list.filter(u => !u.activeSession);
+  if (q) list = list.filter(u =>
+    (u.username || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
+
+  document.getElementById('userCount').textContent = list.length;
+  const el = document.getElementById('usersList');
+  el.innerHTML = list.map(u => {
+    const inactiveTag = u.activeSession
+      ? ''
+      : ' <span style="font-size:8px;background:var(--surface2);color:var(--text3);padding:1px 5px;border-radius:3px;letter-spacing:0.5px">INACTIVE</span>';
+    const right = u.activeSession
+      ? `<div class="player-coins">${u.activeSession.mapCoins}</div>`
+      : '<span style="font-size:10px;color:var(--text3);white-space:nowrap">not in game</span>';
+    return `
     <div class="user-item">
       <div class="${u.activeSession ? 'online-dot' : 'offline-dot'}"></div>
       <div class="user-info">
-        <div class="user-name">${u.username} ${u.isAdmin ? '<span class="admin-badge">ADMIN</span>' : ''}</div>
+        <div class="user-name">${u.username} ${u.isAdmin ? '<span class="admin-badge">ADMIN</span>' : ''}${inactiveTag}</div>
         <div class="user-email">${u.email}</div>
       </div>
-      ${u.activeSession ? `<div class="player-coins">${u.activeSession.mapCoins}</div>` : ''}
-    </div>
-  `).join('');
+      ${right}
+    </div>`;
+  }).join('') || '<p style="color:var(--text3);font-size:11px;text-align:center;padding:20px">No accounts match</p>';
 }
 
 // ---- Transactions ----
