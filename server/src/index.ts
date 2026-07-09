@@ -50,6 +50,14 @@ const adminPath = path.resolve(__dirname, '../public/admin');
 app.use('/admin', express.static(adminPath));
 
 // ---------------------------------------------------------------------------
+// Download / get-the-app smart redirect (iOS -> App Store, Android -> Play)
+// ---------------------------------------------------------------------------
+const downloadPage = path.resolve(__dirname, '../public/download/index.html');
+app.get(['/download', '/get', '/app'], (_req, res) => {
+  res.sendFile(downloadPage);
+});
+
+// ---------------------------------------------------------------------------
 // Serve CoinProwl website
 // ---------------------------------------------------------------------------
 const websitePath = path.resolve(__dirname, '../public/website');

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Get CoinProwl</title>
+<style>
+  :root{ --gold:#e0a417; --gold2:#f5c542; --bg:#0a0a0c; }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:#fff;
+       min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;
+       background-image:radial-gradient(1200px 600px at 50% -10%, rgba(224,164,23,0.12), transparent);}
+  .card{width:100%;max-width:400px;text-align:center;}
+  .logo{font-size:34px;font-weight:900;letter-spacing:2px;}
+  .logo .p{color:var(--gold);}
+  .tag{margin-top:8px;font-size:12px;letter-spacing:4px;color:#9a9aa2;text-transform:uppercase;}
+  .tag b{color:var(--gold);}
+  .hero{margin:30px 0 26px;font-size:20px;font-weight:700;line-height:1.4;}
+  .hero span{color:var(--gold2);}
+  .btns{display:flex;flex-direction:column;gap:14px;}
+  a.store{display:flex;align-items:center;justify-content:center;gap:10px;text-decoration:none;
+          padding:16px 18px;border-radius:14px;font-weight:800;font-size:16px;transition:transform .1s;}
+  a.store:active{transform:scale(0.98);}
+  .ios{background:#fff;color:#000;}
+  .play{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#111;}
+  .play.soon{background:#1d1d22;color:#8a8a92;border:1px solid #2a2a30;font-weight:700;cursor:default;}
+  .soon-tag{font-size:11px;font-weight:700;opacity:.8;}
+  .sub{margin-top:24px;font-size:12px;color:#6b6b73;line-height:1.6;}
+  .redir{margin-top:16px;font-size:13px;color:#9a9aa2;min-height:18px;}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">COIN<span class="p">PROWL</span></div>
+    <div class="tag">GPS &middot; <b>Earn Real Money</b></div>
+
+    <div class="hero">Hunt players near you on a live map &mdash; <span>win real cash.</span></div>
+
+    <div class="btns">
+      <a class="store ios" id="iosBtn" href="https://apps.apple.com/app/id6771944449">
+        Download on the App Store
+      </a>
+      <a class="store play" id="playBtn" href="https://play.google.com/store/apps/details?id=com.coinprowl.app">
+        Get it on Google Play
+      </a>
+    </div>
+
+    <div class="redir" id="redir"></div>
+    <div class="sub">Scanning opens the right store for your phone automatically.</div>
+  </div>
+
+<script>
+  // Flip to true the moment CoinProwl is live on the Google Play store.
+  var ANDROID_LIVE = false;
+
+  var IOS_URL  = 'https://apps.apple.com/app/id6771944449';
+  var PLAY_URL = 'https://play.google.com/store/apps/details?id=com.coinprowl.app';
+
+  var ua = navigator.userAgent || navigator.vendor || '';
+  var isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var isAndroid = /Android/i.test(ua);
+  var playBtn = document.getElementById('playBtn');
+  var redir = document.getElementById('redir');
+
+  if (!ANDROID_LIVE) {
+    playBtn.className = 'store play soon';
+    playBtn.removeAttribute('href');
+    playBtn.innerHTML = 'Google Play <span class="soon-tag">&nbsp;&middot; Coming soon</span>';
+  }
+
+  if (isIOS) {
+    redir.textContent = 'Opening the App Store…';
+    setTimeout(function(){ window.location.replace(IOS_URL); }, 400);
+  } else if (isAndroid && ANDROID_LIVE) {
+    redir.textContent = 'Opening Google Play…';
+    setTimeout(function(){ window.location.replace(PLAY_URL); }, 400);
+  } else if (isAndroid) {
+    redir.textContent = 'The Android app is coming soon — available now on iPhone.';
+  }
+</script>
+</body>
+</html>
