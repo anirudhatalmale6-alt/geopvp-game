@@ -308,6 +308,7 @@ a{color:var(--primary);text-decoration:none}
           <label>SHOW</label>
           <select id="userStatusFilter" onchange="renderUsers()">
             <option value="all">All accounts</option>
+            <option value="never">Never bought in</option>
             <option value="inactive">Inactive (not in game)</option>
             <option value="active">Active (on map)</option>
           </select>
@@ -366,6 +367,7 @@ let loggedIn = false;
 let map, dropMode = false, moveMode = false, lastClickLatLng = null;
 let playersById = {};
 let allUsers = [];
+let usersById = {};
 let coinMarkers = {}, playerMapMarkers = {};
 let txPage = 1, txTotal = 0;
 let attacksPage = 1;
@@ -747,31 +749,60 @@ function renderUsers() {
   const status = statusEl ? statusEl.value : 'all';
   const q = (searchEl ? searchEl.value : '').trim().toLowerCase();
 
+  usersById = {};
+  allUsers.forEach(u => { usersById[u.id] = u; });
+
   let list = allUsers;
   if (status === 'active') list = list.filter(u => u.activeSession);
   else if (status === 'inactive') list = list.filter(u => !u.activeSession);
+  else if (status === 'never') list = list.filter(u => !u.everPlayed);
   if (q) list = list.filter(u =>
     (u.username || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
 
   document.getElementById('userCount').textContent = list.length;
   const el = document.getElementById('usersList');
   el.innerHTML = list.map(u => {
-    const inactiveTag = u.activeSession
-      ? ''
-      : ' <span style="font-size:8px;background:var(--surface2);color:var(--text3);padding:1px 5px;border-radius:3px;letter-spacing:0.5px">INACTIVE</span>';
+    let tag = '';
+    if (!u.activeSession) {
+      tag = u.everPlayed
+        ? ' <span style="font-size:8px;background:var(--surface2);color:var(--text3);padding:1px 5px;border-radius:3px;letter-spacing:0.5px">INACTIVE</span>'
+        : ' <span style="font-size:8px;background:var(--purple);color:#fff;padding:1px 5px;border-radius:3px;letter-spacing:0.5px">NEW</span>';
+    }
+    // Coins on the right for active players; a LOAD button for anyone not in a game.
     const right = u.activeSession
       ? `<div class="player-coins">${u.activeSession.mapCoins}</div>`
-      : '<span style="font-size:10px;color:var(--text3);white-space:nowrap">not in game</span>';
+      : `<button class="btn btn-gold btn-sm" style="width:auto;padding:5px 10px;flex-shrink:0" title="Give this account a starting coin balance" onclick="loadAccount('${u.id}')">LOAD</button>`;
     return `
     <div class="user-item">
       <div class="${u.activeSession ? 'online-dot' : 'offline-dot'}"></div>
       <div class="user-info">
-        <div class="user-name">${u.username} ${u.isAdmin ? '<span class="admin-badge">ADMIN</span>' : ''}${inactiveTag}</div>
+        <div class="user-name">${u.username} ${u.isAdmin ? '<span class="admin-badge">ADMIN</span>' : ''}${tag}</div>
         <div class="user-email">${u.email}</div>
       </div>
       ${right}
     </div>`;
   }).join('') || '<p style="color:var(--text3);font-size:11px;text-align:center;padding:20px">No accounts match</p>';
+}
+
+// Pre-load a starting coin balance onto an account before they play.
+async function loadAccount(userId) {
+  const u = usersById[userId];
+  if (!u) { toast('Account not found — refresh and try again'); return; }
+  const input = prompt(`Load coins onto ${u.username}\n\nThis gives them a starting balance that will be waiting when they open the app.\n(10 coins = $1 tier)\n\nEnter the coin amount:`, '50');
+  if (input === null) return;
+  const coins = parseInt(input, 10);
+  if (isNaN(coins) || coins < 0) { toast('Enter a valid number (0 or more)'); return; }
+  const data = await apiFetch(`/api/admin/players/${userId}/load-coins`, {
+    method: 'POST',
+    body: JSON.stringify({ coins }),
+  });
+  if (data && data.ok) {
+    toast(`${u.username} loaded with ${data.newCoins} coins`);
+    refreshUsers();
+    refreshPlayers();
+  } else {
+    toast('Failed: ' + ((data && data.error) || 'error'));
+  }
 }
 
 // ---- Transactions ----

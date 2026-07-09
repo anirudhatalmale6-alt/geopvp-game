@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { query } from '../config/database';
 import { AuthRequest } from '../middleware/auth';
-import { COIN_TIERS } from '../utils/coins';
+import { COIN_TIERS, getCoinTier } from '../utils/coins';
 import { sendPayout } from '../services/paypal';
 import * as tabapay from '../services/tabapay';
 import { setBotHome } from '../bot/botAI';
@@ -205,7 +205,8 @@ export async function listUsers(req: AuthRequest, res: Response): Promise<void> 
     const result = await query(
       `SELECT u.id, u.username, u.email, u.is_admin, u.is_verified, u.created_at,
               gs.map_coins, gs.coin_tier, gs.buyin_amount, gs.is_active as has_active_session,
-              gs.latitude, gs.longitude, gs.last_location_update
+              gs.latitude, gs.longitude, gs.last_location_update,
+              EXISTS (SELECT 1 FROM game_sessions s WHERE s.user_id = u.id) AS ever_played
        FROM users u
        LEFT JOIN game_sessions gs ON gs.user_id = u.id AND gs.is_active = true
        ORDER BY u.created_at DESC`,
@@ -218,6 +219,7 @@ export async function listUsers(req: AuthRequest, res: Response): Promise<void> 
       isAdmin: r.is_admin,
       isVerified: r.is_verified,
       createdAt: r.created_at,
+      everPlayed: r.ever_played,
       activeSession: r.has_active_session ? {
         mapCoins: parseInt(r.map_coins || '0', 10),
         coinTier: r.coin_tier,
@@ -470,6 +472,76 @@ export async function setPlayerCoins(req: AuthRequest, res: Response): Promise<v
     res.json({ ok: true, username, oldCoins, newCoins: coins });
   } catch (err) {
     console.error('setPlayerCoins error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+// Pre-load coins onto an account BEFORE the user plays. If the user has no
+// active game session (they signed up but haven't bought in), this creates one
+// pre-filled with the given coins so the balance is waiting for them the moment
+// they open the app. If they already have an active session, it just sets the
+// coins (same as setPlayerCoins). Location stays null until the app shares GPS,
+// so they won't appear on the map or be attackable until they actually play.
+export async function loadCoins(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    if (!(await requireAdmin(req, res))) return;
+
+    const { userId } = req.params;
+    const parsed = setCoinsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0].message });
+      return;
+    }
+    const { coins } = parsed.data;
+
+    const userRes = await query(`SELECT id, username FROM users WHERE id = $1`, [userId]);
+    if (userRes.rows.length === 0) {
+      res.status(404).json({ error: 'User not found.' });
+      return;
+    }
+    const username = userRes.rows[0].username;
+
+    const sessRes = await query(
+      `SELECT id, map_coins FROM game_sessions WHERE user_id = $1 AND is_active = true LIMIT 1`,
+      [userId],
+    );
+
+    const buyinCents = coins * 10; // 10 coins per dollar -> value in cents
+    const tier = getCoinTier(buyinCents);
+
+    let created = false;
+    let oldCoins = 0;
+
+    if (sessRes.rows.length > 0) {
+      oldCoins = parseInt(sessRes.rows[0].map_coins || '0', 10);
+      await query(`UPDATE game_sessions SET map_coins = $1 WHERE id = $2`, [coins, sessRes.rows[0].id]);
+    } else {
+      await query(`INSERT INTO wallets (user_id, balance) VALUES ($1, 0) ON CONFLICT DO NOTHING`, [userId]);
+      await query(
+        `INSERT INTO game_sessions (user_id, buyin_amount, coin_tier, map_coins, shields_purchased, shields_remaining, is_active)
+         VALUES ($1, $2, $3, $4, 0, 0, true)`,
+        [userId, buyinCents, tier.name, coins],
+      );
+      created = true;
+    }
+
+    // Best-effort audit — never let a ledger issue break the load
+    try {
+      await query(
+        `INSERT INTO transactions (user_id, type, amount, currency, description)
+         VALUES ($1, 'deposit', $2, 'prowl', $3)`,
+        [userId, coins - oldCoins, `Admin ${created ? 'loaded new account with' : 'set'} ${coins} coins by ${req.user!.id}`],
+      );
+    } catch (logErr) {
+      console.error('loadCoins audit log failed (non-fatal):', logErr);
+    }
+
+    const io = getIO();
+    if (io) io.to(`user:${userId}`).emit('session:coins-updated', { mapCoins: coins });
+
+    res.json({ ok: true, username, created, newCoins: coins });
+  } catch (err) {
+    console.error('loadCoins error:', err);
     res.status(500).json({ error: 'Internal server error.' });
   }
 }
