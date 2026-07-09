@@ -368,6 +368,7 @@ let map, dropMode = false, moveMode = false, lastClickLatLng = null;
 let playersById = {};
 let allUsers = [];
 let usersById = {};
+let usersLoaded = false;
 let coinMarkers = {}, playerMapMarkers = {};
 let txPage = 1, txTotal = 0;
 let attacksPage = 1;
@@ -737,6 +738,7 @@ async function refreshUsers() {
   const data = await apiFetch('/api/admin/users');
   if (data.error) return;
   allUsers = data.users || [];
+  usersLoaded = true;
   renderUsers();
 }
 
@@ -781,7 +783,11 @@ function renderUsers() {
       </div>
       ${right}
     </div>`;
-  }).join('') || '<p style="color:var(--text3);font-size:11px;text-align:center;padding:20px">No accounts match</p>';
+  }).join('') || `<p style="color:var(--text3);font-size:11px;text-align:center;padding:20px">${
+    allUsers.length === 0
+      ? (usersLoaded ? 'No users yet' : 'Loading users…')
+      : 'No accounts match this filter'
+  }</p>`;
 }
 
 // Pre-load a starting coin balance onto an account before they play.
@@ -937,6 +943,12 @@ function switchTab(name) {
   }
   if (name === 'withdrawals') {
     loadWithdrawals(currentWdStatus || 'pending');
+  }
+  if (name === 'users') {
+    // Always reload the user list when opening the tab — it's not on the
+    // auto-refresh timer, so this guarantees fresh data (and recovers if the
+    // initial login-time load was ever interrupted).
+    refreshUsers();
   }
 }
 
