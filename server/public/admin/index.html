@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>CoinProwl Admin</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css"/>
+<script src="vendor/leaflet/leaflet.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
@@ -485,13 +485,17 @@ function addPlayerMarker(player) {
     iconSize: [12, 12], iconAnchor: [6, 6],
   });
   const m = L.marker([player.latitude, player.longitude], { icon, draggable }).addTo(map);
-  const lastUpdate = player.lastLocationUpdate ? new Date(player.lastLocationUpdate).toLocaleString() : 'N/A';
-  const sessionStart = player.sessionStart ? new Date(player.sessionStart).toLocaleString() : 'N/A';
-  m.bindPopup(`<b>${player.username}</b> ${bot ? '(BOT)' : ''}<br>Tier: ${player.coinTier}<br>Coins: ${player.mapCoins}<br>Last update: ${lastUpdate}<br>Session start: ${sessionStart}<br><small>${player.latitude.toFixed(5)}, ${player.longitude.toFixed(5)}</small>`);
+  m.bindPopup(playerPopupHtml(player, bot));
   if (draggable) {
     m.on('dragend', () => onBotDragEnd(player.userId, player.username, m));
   }
   playerMapMarkers[player.userId] = m;
+}
+
+function playerPopupHtml(player, bot) {
+  const lastUpdate = player.lastLocationUpdate ? new Date(player.lastLocationUpdate).toLocaleString() : 'N/A';
+  const sessionStart = player.sessionStart ? new Date(player.sessionStart).toLocaleString() : 'N/A';
+  return `<b>${player.username}</b> ${bot ? '(BOT)' : ''}<br>Tier: ${player.coinTier}<br>Coins: ${player.mapCoins}<br>Last update: ${lastUpdate}<br>Session start: ${sessionStart}<br><small>${player.latitude.toFixed(5)}, ${player.longitude.toFixed(5)}</small>`;
 }
 
 async function onBotDragEnd(userId, username, marker) {
@@ -515,12 +519,20 @@ function updateModeButtons() {
   document.getElementById('modeMove').classList.toggle('active', moveMode);
 }
 
+// Wipe all player markers so refreshPlayers rebuilds them fresh — needed when
+// switching modes so draggability (MOVE BOTS) is applied/removed correctly.
+function clearPlayerMarkers() {
+  Object.values(playerMapMarkers).forEach(m => map.removeLayer(m));
+  playerMapMarkers = {};
+}
+
 function setViewMode() {
   dropMode = false;
   moveMode = false;
   updateModeButtons();
   document.getElementById('mapInfo').textContent = 'View mode';
   document.getElementById('admin-map').style.cursor = '';
+  clearPlayerMarkers();
   refreshPlayers();
 }
 
@@ -533,6 +545,7 @@ function enableDropMode() {
   updateModeButtons();
   document.getElementById('mapInfo').textContent = 'Click map to place coins';
   document.getElementById('admin-map').style.cursor = 'crosshair';
+  clearPlayerMarkers();
   refreshPlayers();
 }
 
@@ -543,6 +556,7 @@ function enableMoveMode() {
   document.getElementById('mapInfo').textContent = 'Drag any orange bot to reposition it';
   document.getElementById('admin-map').style.cursor = '';
   switchTab('map');
+  clearPlayerMarkers();
   refreshPlayers(); // re-render markers as draggable
 }
 
@@ -642,9 +656,26 @@ async function refreshPlayers() {
   // without inlining them into HTML attributes (which broke on quotes).
   playersById = {};
   data.players.forEach(p => { playersById[p.userId] = p; });
-  Object.values(playerMapMarkers).forEach(m => map.removeLayer(m));
-  playerMapMarkers = {};
-  data.players.forEach(p => addPlayerMarker(p));
+
+  // Diff markers instead of tearing down + rebuilding all of them every 5s.
+  // With ~100 bots on the map, full recreation caused visible lag/flicker;
+  // moving existing markers in place is far lighter.
+  const seen = new Set();
+  data.players.forEach(p => {
+    seen.add(p.userId);
+    const existing = playerMapMarkers[p.userId];
+    if (existing) {
+      existing.setLatLng([p.latitude, p.longitude]);
+      const bot = isBot(p);
+      existing.setPopupContent(playerPopupHtml(p, bot));
+    } else {
+      addPlayerMarker(p);
+    }
+  });
+  // Remove markers for players who are no longer active
+  Object.keys(playerMapMarkers).forEach(uid => {
+    if (!seen.has(uid)) { map.removeLayer(playerMapMarkers[uid]); delete playerMapMarkers[uid]; }
+  });
 
   // Fit map to show all players on first load
   if (data.players.length > 0 && !window._mapFitted) {
