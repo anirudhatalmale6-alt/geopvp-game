@@ -120,8 +120,16 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
     setLoading(true);
     setError(null);
 
-    // Use IAP on iOS when products are available
-    if (Platform.OS === 'ios' && getLoadedProducts().length > 0) {
+    // iOS: coins are ALWAYS bought through Apple in-app purchase. We never fall
+    // back to PayPal on iOS — Apple requires IAP for in-app currency, and
+    // PayPal's fixed fee eats ~half of a small buy-in. If products haven't
+    // finished loading from the App Store yet, ask the user to retry.
+    if (Platform.OS === 'ios') {
+      if (getLoadedProducts().length === 0) {
+        setError('Connecting to the App Store… please wait a moment and try again.');
+        setLoading(false);
+        return;
+      }
       try {
         const productId = getBuyInProductId(selectedTier.dollars);
         pendingTierRef.current = selectedTier.dollars;
@@ -134,7 +142,8 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
       return;
     }
 
-    // PayPal flow (Android, or iOS fallback when IAP not configured)
+    // Android: PayPal for now (Google Play Billing will replace this once the
+    // app is approved on Google Play, dropping the fee to ~15%).
     try {
       const order = await createBuyInOrder(selectedTier.dollars);
       pendingOrderRef.current = order.orderId;
