@@ -26,9 +26,10 @@ a{color:var(--primary);text-decoration:none}
 .sidebar-header h1{font-size:14px;letter-spacing:3px;font-weight:900;color:var(--primary)}
 .sidebar-header .badge{font-size:9px;background:var(--primary);color:var(--bg);padding:2px 6px;border-radius:4px;font-weight:800;letter-spacing:1px}
 
-/* Tabs */
-.tabs{display:flex;border-bottom:1px solid var(--border);flex-wrap:wrap}
-.tab{padding:8px 6px;text-align:center;font-size:9px;font-weight:700;letter-spacing:0.5px;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s;flex:1;min-width:0}
+/* Tabs — fixed 4-column grid so labels never overlap/scramble on smaller (laptop) screens */
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--border)}
+.tab{padding:9px 4px;text-align:center;font-size:9px;font-weight:700;letter-spacing:0.5px;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;transition:color .2s,border-color .2s;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-right:1px solid var(--border)}
+.tab:nth-child(4n){border-right:none}
 .tab:hover{color:var(--text2)}
 .tab.active{color:var(--primary);border-bottom-color:var(--primary)}
 
@@ -325,8 +326,9 @@ a{color:var(--primary);text-decoration:none}
   <div class="main">
     <div class="map-toolbar">
       <span class="mode-label">MODE:</span>
-      <button class="mode-btn" id="modeView" onclick="disableDropMode()">VIEW</button>
+      <button class="mode-btn" id="modeView" onclick="setViewMode()">VIEW</button>
       <button class="mode-btn" id="modeDrop" onclick="enableDropMode()">DROP COINS</button>
+      <button class="mode-btn" id="modeMove" onclick="enableMoveMode()">MOVE BOTS</button>
       <span style="width:1px;height:20px;background:var(--border);margin:0 4px"></span>
       <span class="mode-label">REGION:</span>
       <button class="mode-btn" onclick="jumpRegion(38,-97,4)">US ALL</button>
@@ -347,7 +349,7 @@ a{color:var(--primary);text-decoration:none}
 <script>
 let TOKEN = localStorage.getItem('coinprowl_admin_token') || '';
 let loggedIn = false;
-let map, dropMode = false, lastClickLatLng = null;
+let map, dropMode = false, moveMode = false, lastClickLatLng = null;
 let coinMarkers = {}, playerMapMarkers = {};
 let txPage = 1, txTotal = 0;
 let attacksPage = 1;
@@ -473,33 +475,74 @@ function addPlayerMarker(player) {
   const bot = isBot(player);
   const markerClass = bot ? 'player-map-marker bot-marker' : 'player-map-marker';
   const labelClass = bot ? 'player-map-label bot-label' : 'player-map-label';
+  // In MOVE BOTS mode, bot markers become draggable so the admin can reposition them.
+  const draggable = moveMode && bot;
+  const dragHint = draggable ? '<div class="player-map-label bot-label" style="color:var(--gold)">&#10021; drag</div>' : '';
   const icon = L.divIcon({
     className: '',
-    html: `<div class="${markerClass}"></div><div class="${labelClass}">${player.username}</div>`,
+    html: `<div class="${markerClass}"></div><div class="${labelClass}">${player.username}</div>${dragHint}`,
     iconSize: [12, 12], iconAnchor: [6, 6],
   });
-  const m = L.marker([player.latitude, player.longitude], { icon }).addTo(map);
+  const m = L.marker([player.latitude, player.longitude], { icon, draggable }).addTo(map);
   const lastUpdate = player.lastLocationUpdate ? new Date(player.lastLocationUpdate).toLocaleString() : 'N/A';
   const sessionStart = player.sessionStart ? new Date(player.sessionStart).toLocaleString() : 'N/A';
   m.bindPopup(`<b>${player.username}</b> ${bot ? '(BOT)' : ''}<br>Tier: ${player.coinTier}<br>Coins: ${player.mapCoins}<br>Last update: ${lastUpdate}<br>Session start: ${sessionStart}<br><small>${player.latitude.toFixed(5)}, ${player.longitude.toFixed(5)}</small>`);
+  if (draggable) {
+    m.on('dragend', () => onBotDragEnd(player.userId, player.username, m));
+  }
   playerMapMarkers[player.userId] = m;
 }
 
-// ---- Drop mode ----
-function enableDropMode() {
-  dropMode = true;
-  document.getElementById('modeDrop').classList.add('active');
-  document.getElementById('modeView').classList.remove('active');
-  document.getElementById('mapInfo').textContent = 'Click map to place coins';
-  document.getElementById('admin-map').style.cursor = 'crosshair';
+async function onBotDragEnd(userId, username, marker) {
+  const ll = marker.getLatLng();
+  const data = await apiFetch(`/api/admin/bots/${userId}/move`, {
+    method: 'POST',
+    body: JSON.stringify({ latitude: ll.lat, longitude: ll.lng }),
+  });
+  if (data && data.ok) {
+    toast(`Moved ${username}`);
+  } else {
+    toast('Move failed: ' + ((data && data.error) || 'error'));
+    refreshPlayers();
+  }
 }
 
-function disableDropMode() {
+// ---- Map modes (view / drop coins / move bots) ----
+function updateModeButtons() {
+  document.getElementById('modeView').classList.toggle('active', !dropMode && !moveMode);
+  document.getElementById('modeDrop').classList.toggle('active', dropMode);
+  document.getElementById('modeMove').classList.toggle('active', moveMode);
+}
+
+function setViewMode() {
   dropMode = false;
-  document.getElementById('modeView').classList.add('active');
-  document.getElementById('modeDrop').classList.remove('active');
+  moveMode = false;
+  updateModeButtons();
   document.getElementById('mapInfo').textContent = 'View mode';
   document.getElementById('admin-map').style.cursor = '';
+  refreshPlayers();
+}
+
+// kept for backward compatibility with the VIEW button / quick actions
+function disableDropMode() { setViewMode(); }
+
+function enableDropMode() {
+  dropMode = true;
+  moveMode = false;
+  updateModeButtons();
+  document.getElementById('mapInfo').textContent = 'Click map to place coins';
+  document.getElementById('admin-map').style.cursor = 'crosshair';
+  refreshPlayers();
+}
+
+function enableMoveMode() {
+  moveMode = true;
+  dropMode = false;
+  updateModeButtons();
+  document.getElementById('mapInfo').textContent = 'Drag any orange bot to reposition it';
+  document.getElementById('admin-map').style.cursor = '';
+  switchTab('map');
+  refreshPlayers(); // re-render markers as draggable
 }
 
 function jumpRegion(lat, lng, zoom) {
@@ -620,6 +663,7 @@ async function refreshPlayers() {
         <div class="player-meta">${p.coinTier} tier${bot ? ' (BOT)' : ''} &mdash; last: ${lastUpdate ? timeSince(lastUpdate) : 'N/A'}</div>
       </div>
       <div class="player-coins">${p.mapCoins}</div>
+      <button class="btn-x" style="width:26px;height:26px" title="Set coins" onclick="event.stopPropagation();editCoins('${p.userId}', ${JSON.stringify(p.username)}, ${p.mapCoins})">&#9998;</button>
     </div>
   `}).join('') || '<p style="color:var(--text3);font-size:12px;text-align:center;padding:20px">No active players</p>';
 
@@ -804,6 +848,24 @@ function timeSince(date) {
   return Math.floor(seconds / 86400) + 'd ago';
 }
 
+// ---- Set player coins ----
+async function editCoins(userId, username, current) {
+  const input = prompt(`Set coin count for ${username}\n\nCurrent: ${current} coins\nEnter the new coin count:`, current);
+  if (input === null) return;
+  const coins = parseInt(input, 10);
+  if (isNaN(coins) || coins < 0) { toast('Enter a valid number (0 or more)'); return; }
+  const data = await apiFetch(`/api/admin/players/${userId}/set-coins`, {
+    method: 'POST',
+    body: JSON.stringify({ coins }),
+  });
+  if (data && data.ok) {
+    toast(`${username}: ${data.oldCoins} -> ${data.newCoins} coins`);
+    refreshPlayers();
+  } else {
+    toast('Failed: ' + ((data && data.error) || 'error'));
+  }
+}
+
 // ---- Toast ----
 function toast(msg) {
   const el = document.getElementById('toast');
@@ -911,10 +973,11 @@ async function denyWd(id) {
   } catch { toast('Network error'); }
 }
 
-// Auto-refresh every 30s (only while logged in)
-setInterval(() => { if (!loggedIn) return; refreshStats(); refreshPlayers(); refreshTransactions(); refreshAttacks(); }, 30000);
-// Refresh positions every 5s (only while logged in)
-setInterval(() => { if (!loggedIn) return; refreshPlayers(); }, 5000);
+// Auto-refresh every 30s (only while logged in; paused while dragging bots)
+setInterval(() => { if (!loggedIn || moveMode) return; refreshStats(); refreshPlayers(); refreshTransactions(); refreshAttacks(); }, 30000);
+// Refresh positions every 5s (only while logged in; paused in MOVE BOTS mode so
+// markers stay put while the admin drags them)
+setInterval(() => { if (!loggedIn || moveMode) return; refreshPlayers(); }, 5000);
 </script>
 </body>
 </html>

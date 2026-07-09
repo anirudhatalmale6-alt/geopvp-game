@@ -7,6 +7,8 @@ import { AuthRequest } from '../middleware/auth';
 import { COIN_TIERS } from '../utils/coins';
 import { sendPayout } from '../services/paypal';
 import * as tabapay from '../services/tabapay';
+import { setBotHome } from '../bot/botAI';
+import { getIO } from '../socket/ioInstance';
 
 const spawnBotsSchema = z.object({
   count: z.number().int().min(1).max(2000),
@@ -23,6 +25,15 @@ const dropCoinSchema = z.object({
 
 const bulkDropSchema = z.object({
   drops: z.array(dropCoinSchema).min(1).max(100),
+});
+
+const moveBotSchema = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+});
+
+const setCoinsSchema = z.object({
+  coins: z.number().int().min(0).max(1000000),
 });
 
 // Single active admin session — only one admin can be logged into the panel at a time
@@ -335,6 +346,130 @@ export async function spawnBots(req: AuthRequest, res: Response): Promise<void> 
     res.status(201).json({ ok: true, botsCreated: created });
   } catch (err) {
     console.error('spawnBots error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+// Manually relocate a prowler bot to a new spot on the map. Updates the bot's
+// active session position AND its in-memory "home" anchor so the AI leash keeps
+// it in the new area instead of dragging it back to its spawn point.
+export async function moveBot(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    if (!(await requireAdmin(req, res))) return;
+
+    const { userId } = req.params;
+    const parsed = moveBotSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0].message });
+      return;
+    }
+    const { latitude, longitude } = parsed.data;
+
+    // Confirm this is actually a bot session (safety — don't teleport real users)
+    const sessionRes = await query(
+      `SELECT gs.id AS session_id, u.username
+       FROM game_sessions gs
+       JOIN users u ON u.id = gs.user_id
+       WHERE gs.user_id = $1 AND gs.is_active = true AND u.email LIKE '%@bot.local'
+       LIMIT 1`,
+      [userId],
+    );
+    if (sessionRes.rows.length === 0) {
+      res.status(404).json({ error: 'Active bot not found for that id.' });
+      return;
+    }
+    const { session_id, username } = sessionRes.rows[0];
+
+    await query(
+      `UPDATE game_sessions SET latitude = $1, longitude = $2, last_location_update = now() WHERE id = $3`,
+      [latitude, longitude, session_id],
+    );
+
+    // Move its home anchor so the AI doesn't walk it back
+    setBotHome(userId, latitude, longitude);
+
+    // Push the new position to live maps immediately
+    const io = getIO();
+    if (io) {
+      const update = [{
+        userId,
+        sessionId: session_id,
+        username,
+        lat: latitude,
+        lng: longitude,
+        ts: Date.now(),
+        coinTier: 'prowler',
+      }];
+      io.to('game').emit('players:batch-update', update);
+      io.of('/spectator').emit('players:batch-update', update);
+    }
+
+    res.json({ ok: true, username, latitude, longitude });
+  } catch (err) {
+    console.error('moveBot error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+// Set a player's on-map coin count to an exact value (admin override). Works on
+// any active session — real player or bot. Records an audit transaction of the
+// difference so the change is traceable in the ledger.
+export async function setPlayerCoins(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    if (!(await requireAdmin(req, res))) return;
+
+    const { userId } = req.params;
+    const parsed = setCoinsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0].message });
+      return;
+    }
+    const { coins } = parsed.data;
+
+    const sessionRes = await query(
+      `SELECT gs.id AS session_id, gs.map_coins, u.username
+       FROM game_sessions gs
+       JOIN users u ON u.id = gs.user_id
+       WHERE gs.user_id = $1 AND gs.is_active = true
+       LIMIT 1`,
+      [userId],
+    );
+    if (sessionRes.rows.length === 0) {
+      res.status(404).json({ error: 'Player has no active game session. They need to be in a live game to adjust coins.' });
+      return;
+    }
+
+    const { session_id, username } = sessionRes.rows[0];
+    const oldCoins = parseInt(sessionRes.rows[0].map_coins || '0', 10);
+    const delta = coins - oldCoins;
+
+    await query(
+      `UPDATE game_sessions SET map_coins = $1 WHERE id = $2`,
+      [coins, session_id],
+    );
+
+    // Best-effort audit log — never let a ledger issue break the adjustment
+    if (delta !== 0) {
+      try {
+        await query(
+          `INSERT INTO transactions (user_id, type, amount, currency, description)
+           VALUES ($1, 'deposit', $2, 'prowl', $3)`,
+          [userId, delta, `Admin coin adjustment (${oldCoins} -> ${coins}) by ${req.user!.id}`],
+        );
+      } catch (logErr) {
+        console.error('setPlayerCoins audit log failed (non-fatal):', logErr);
+      }
+    }
+
+    // Nudge the player's app to refresh its wallet/session
+    const io = getIO();
+    if (io) {
+      io.to(`user:${userId}`).emit('session:coins-updated', { mapCoins: coins });
+    }
+
+    res.json({ ok: true, username, oldCoins, newCoins: coins });
+  } catch (err) {
+    console.error('setPlayerCoins error:', err);
     res.status(500).json({ error: 'Internal server error.' });
   }
 }

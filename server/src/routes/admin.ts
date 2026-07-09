@@ -12,6 +12,8 @@ import {
   getActivePlayers,
   spawnBots,
   clearBots,
+  moveBot,
+  setPlayerCoins,
   resetDeviceLock,
   listTransactions,
   listAttacks,
@@ -38,6 +40,8 @@ router.delete('/coins/:id', deleteCoinDrop);
 router.delete('/coins', clearAllDrops);
 router.post('/bots/spawn', spawnBots);
 router.delete('/bots', clearBots);
+router.post('/bots/:userId/move', moveBot);
+router.post('/players/:userId/set-coins', setPlayerCoins);
 router.post('/users/:id/reset-device', resetDeviceLock);
 router.get('/transactions', listTransactions);
 router.get('/attacks', listAttacks);

@@ -29,6 +29,15 @@ function getBotVisualTier(_botId: string): string {
 const botWanderAngles = new Map<string, number>();
 const botHomePositions = new Map<string, { lat: number; lng: number }>();
 
+// Relocate a bot's "home" anchor (used when an admin drags a bot to a new spot
+// on the map). Without this the leash logic would pull the bot straight back to
+// wherever it originally spawned. Also clears the stored wander heading so the
+// bot starts fresh from its new location instead of snapping back.
+export function setBotHome(userId: string, lat: number, lng: number): void {
+  botHomePositions.set(userId, { lat, lng });
+  botWanderAngles.delete(userId);
+}
+
 function distanceMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 3958.8;
   const dLat = (lat2 - lat1) * Math.PI / 180;
