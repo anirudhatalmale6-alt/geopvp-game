@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { ActivityIndicator, Image, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -87,16 +87,10 @@ function MainStack() {
 }
 
 function LoadingScreen() {
-  // Mirrors the native splash (same gold "C" logo on the same background) so the
-  // handoff from the native splash to this screen is seamless — no flash/overlap
-  // of the logo and wordmark on cold launch.
+  // Matches the native splash — just the "COINPROWL" wordmark on the dark
+  // background (no logo), so the handoff on cold launch is seamless.
   return (
     <View style={styles.loadingContainer}>
-      <Image
-        source={require('./assets/splash-icon.png')}
-        style={styles.loadingLogo}
-        resizeMode="contain"
-      />
       <Text style={styles.loadingTitle}>COINPROWL</Text>
       <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 22 }} />
     </View>
@@ -150,11 +144,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  loadingLogo: {
-    width: 96,
-    height: 96,
-    marginBottom: 20,
   },
   loadingTitle: {
     fontSize: 24,
