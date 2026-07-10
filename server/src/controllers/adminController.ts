@@ -530,7 +530,7 @@ export async function loadCoins(req: AuthRequest, res: Response): Promise<void> 
       await query(
         `INSERT INTO transactions (user_id, type, amount, currency, description)
          VALUES ($1, 'deposit', $2, 'prowl', $3)`,
-        [userId, coins - oldCoins, `Admin ${created ? 'loaded new account with' : 'set'} ${coins} coins by ${req.user!.id}`],
+        [userId, (coins - oldCoins) * 10, `Admin ${created ? 'loaded new account with' : 'set'} ${coins} coins by ${req.user!.id}`],
       );
     } catch (logErr) {
       console.error('loadCoins audit log failed (non-fatal):', logErr);
