@@ -38,8 +38,8 @@ header{
   display:flex;align-items:center;justify-content:space-between;
 }
 .logo{display:flex;align-items:center;gap:12px}
-.logo-img{height:38px;width:auto;display:block}
-.footer-logo-img{height:30px;width:auto;display:block}
+.logo-img{height:38px;width:auto;max-width:60vw;object-fit:contain;display:block}
+.footer-logo-img{height:34px;width:auto;max-width:80vw;object-fit:contain;display:block}
 .logo-icon{
   width:42px;height:42px;border-radius:10px;
   background:linear-gradient(135deg,var(--gold) 0%,#c98e00 100%);
@@ -371,6 +371,7 @@ footer p{color:var(--text2);font-size:13px}
 @media(max-width:768px){
   header{padding:12px 16px}
   .logo-text{font-size:16px}
+  .logo-img{height:30px}
   nav a:not(.nav-cta){display:none}
   .hero-content{padding:0 16px}
   .map-stats{gap:12px}
