@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CoinProwl - GPS PvP Battle Game</title>
 <meta name="description" content="Hunt, attack, and steal coins in a real-world GPS battle game. Walk, prowl, and dominate your area.">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+<link rel="shortcut icon" href="/assets/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+<meta property="og:title" content="CoinProwl - GPS PvP Battle Game">
+<meta property="og:description" content="Hunt, attack, and steal coins in a real-world GPS battle game. Play. Prowl. Earn.">
+<meta property="og:image" content="/assets/apple-touch-icon.png">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
@@ -31,6 +38,8 @@ header{
   display:flex;align-items:center;justify-content:space-between;
 }
 .logo{display:flex;align-items:center;gap:12px}
+.logo-img{height:38px;width:auto;display:block}
+.footer-logo-img{height:30px;width:auto;display:block}
 .logo-icon{
   width:42px;height:42px;border-radius:10px;
   background:linear-gradient(135deg,var(--gold) 0%,#c98e00 100%);
@@ -376,8 +385,7 @@ footer p{color:var(--text2);font-size:13px}
 <!-- HEADER -->
 <header>
   <div class="logo">
-    <div class="logo-icon">C</div>
-    <div class="logo-text">COIN<span>PROWL</span></div>
+    <img class="logo-img" src="/assets/coinprowl-logo.png" alt="CoinProwl">
   </div>
   <nav>
     <a href="#livemap-section">Live Map</a>
@@ -765,8 +773,7 @@ footer p{color:var(--text2);font-size:13px}
 <!-- FOOTER -->
 <footer>
   <div class="logo">
-    <div class="logo-icon" style="width:32px;height:32px;font-size:16px">C</div>
-    <div class="logo-text" style="font-size:16px">COIN<span>PROWL</span></div>
+    <img class="footer-logo-img" src="/assets/coinprowl-logo-tagline.png" alt="CoinProwl - Play. Prowl. Earn.">
   </div>
   <p>&copy; 2026 CoinProwl. All rights reserved. GPS PvP Battle Game.</p>
   <p style="margin-top:8px"><a href="https://anirudhatalmale6-alt.github.io/coinprowl-privacy/" style="color:var(--text2);text-decoration:underline;font-size:12px" target="_blank">Privacy Policy</a></p>
