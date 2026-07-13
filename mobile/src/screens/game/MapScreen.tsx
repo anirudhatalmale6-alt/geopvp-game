@@ -1449,7 +1449,7 @@ export default function MapScreen() {
                     const t = attackTarget;
                     setAttackTarget(null);
                     if (t?.userId) {
-                      Alert.alert('BLOCK PLAYER', `Block ${t.username}? They won't appear on your map and can't attack you.`, [
+                      Alert.alert('BLOCK PLAYER', `Block ${t.username}? You won't see them on your map anymore and you won't be able to attack them.\n\nHeads up: they can still see you and attack you. Blocking hides them from you — it does not protect you.`, [
                         { text: 'Cancel', style: 'cancel' },
                         { text: 'BLOCK', style: 'destructive', onPress: async () => {
                           try {

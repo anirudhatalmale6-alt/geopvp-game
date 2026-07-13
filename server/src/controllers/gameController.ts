@@ -252,7 +252,6 @@ export async function getNearbyPlayers(req: AuthRequest, res: Response): Promise
          AND gs.latitude BETWEEN $2 AND $3
          AND gs.longitude BETWEEN $4 AND $5
          AND gs.user_id NOT IN (SELECT blocked_id FROM blocked_users WHERE blocker_id = $1)
-         AND gs.user_id NOT IN (SELECT blocker_id FROM blocked_users WHERE blocked_id = $1)
 `,
       [userId, myLat - delta, myLat + delta, myLng - delta, myLng + delta],
     );
@@ -318,7 +317,6 @@ export async function getAllPlayers(req: AuthRequest, res: Response): Promise<vo
            AND gs.user_id != $1
            AND gs.latitude IS NOT NULL
            AND gs.user_id NOT IN (SELECT blocked_id FROM blocked_users WHERE blocker_id = $1)
-           AND gs.user_id NOT IN (SELECT blocker_id FROM blocked_users WHERE blocked_id = $1)
          ORDER BY (gs.latitude - $2)*(gs.latitude - $2) + (gs.longitude - $3)*(gs.longitude - $3) ASC
          LIMIT 1500`,
         [userId, myLat, myLng],
@@ -402,9 +400,13 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
         throw new Error('Cannot attack yourself.');
       }
 
-      // Check if either player has blocked the other
+      // Blocking is ONE-WAY by design: if you block someone, they disappear from
+      // your map and you can't attack them. But they can still see you and attack
+      // you. This keeps a real block mechanism (App Store requirement) while making
+      // sure block can never be abused as a shield to dodge attacks — blocking is a
+      // trade-off (you go blind to that player), not immunity.
       const blockCheck = await q(
-        `SELECT id FROM blocked_users WHERE (blocker_id = $1 AND blocked_id = $2) OR (blocker_id = $2 AND blocked_id = $1) LIMIT 1`,
+        `SELECT id FROM blocked_users WHERE blocker_id = $1 AND blocked_id = $2 LIMIT 1`,
         [attacker.user_id, defender.defender_user_id || defender.user_id],
       );
       if (blockCheck.rows.length > 0) {
