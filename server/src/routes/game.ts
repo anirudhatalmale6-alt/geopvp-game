@@ -8,6 +8,7 @@ import {
   getAllPlayers,
   attackPlayer,
   buyShield,
+  activateFreeShield,
   getWallet,
   getTransactions,
   getCombatStats,
@@ -38,6 +39,7 @@ router.get('/nearby', getNearbyPlayers);
 router.get('/players', getAllPlayers);
 router.post('/attack', attackPlayer);
 router.post('/shield', buyShield);
+router.post('/shield/free', activateFreeShield);
 
 // Stats
 router.get('/stats', getCombatStats);

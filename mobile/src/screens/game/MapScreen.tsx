@@ -22,6 +22,7 @@ import {
   getAllPlayers,
   attackPlayer,
   buyShield,
+  activateFreeShield,
   createShieldOrder,
   captureShieldOrder,
   verifyShieldReceipt,
@@ -1149,6 +1150,32 @@ export default function MapScreen() {
   }, []);
 
   const handleBuyShield = () => {
+    // Mythic Prowler perk: free shields from this buy-in get spent before any
+    // paid shield, and they ignore the paid 3-per-24h limit.
+    const freeShields = session?.shieldsRemaining ?? 0;
+    if (freeShields > 0) {
+      Alert.alert(
+        'Free Shield',
+        `MYTHIC PROWLER PERK\n\nYou have ${freeShields} free shield${freeShields === 1 ? '' : 's'} left this buy-in. Use one now? (${freeShields - 1} will remain)`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Use Free Shield',
+            onPress: async () => {
+              try {
+                const updated = await activateFreeShield();
+                setSession(updated);
+                addFeedItem('Free shield activated — Mythic Prowler', '#ffd700');
+              } catch (err: any) {
+                Alert.alert('Shield', err?.message ?? 'Could not activate shield.');
+              }
+            },
+          },
+        ],
+      );
+      return;
+    }
+
     const bought24h = session?.shieldsBought24h ?? 0;
     const remaining = 3 - bought24h;
     if (remaining <= 0) return;
@@ -1519,20 +1546,33 @@ export default function MapScreen() {
                   {nearestInRange ? `ATTACK ${nearestInRange.username.substring(0, 8).toUpperCase()}` : 'NO TARGET IN RANGE'}
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.shieldBtn, shieldIsActive && styles.shieldBtnActive, (session?.shieldsBought24h ?? 0) >= 3 && !shieldIsActive && styles.shieldBtnUsed]}
-                onPress={handleBuyShield}
-                disabled={shieldIsActive || (session?.shieldsBought24h ?? 0) >= 3}
-              >
-                <Ionicons
-                  name="shield"
-                  size={18}
-                  color={shieldIsActive ? colors.background : (session?.shieldsBought24h ?? 0) >= 3 ? colors.textMuted : colors.primary}
-                />
-                <Text style={{ fontSize: 9, color: shieldIsActive ? colors.background : colors.textMuted, fontWeight: '700' }}>
-                  {shieldIsActive ? 'ON' : (session?.shieldsBought24h ?? 0) >= 3 ? 'MAX' : '$1'}
-                </Text>
-              </TouchableOpacity>
+              {(() => {
+                // Free shields (Mythic Prowler) always take priority and are never
+                // blocked by the paid 3-per-24h cap.
+                const freeShields = session?.shieldsRemaining ?? 0;
+                const paidMaxedOut = (session?.shieldsBought24h ?? 0) >= 3;
+                const noneLeft = freeShields <= 0 && paidMaxedOut;
+                const label = shieldIsActive ? 'ON' : freeShields > 0 ? `FREE ${freeShields}` : paidMaxedOut ? 'MAX' : '$1';
+                const tint = shieldIsActive
+                  ? colors.background
+                  : freeShields > 0
+                    ? '#ffd700' // gold — Mythic perk
+                    : noneLeft
+                      ? colors.textMuted
+                      : colors.primary;
+                return (
+                  <TouchableOpacity
+                    style={[styles.shieldBtn, shieldIsActive && styles.shieldBtnActive, noneLeft && !shieldIsActive && styles.shieldBtnUsed]}
+                    onPress={handleBuyShield}
+                    disabled={shieldIsActive || noneLeft}
+                  >
+                    <Ionicons name="shield" size={18} color={tint} />
+                    <Text style={{ fontSize: 9, color: shieldIsActive ? colors.background : freeShields > 0 ? '#ffd700' : colors.textMuted, fontWeight: '700' }}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })()}
             </View>
           )}
         </View>

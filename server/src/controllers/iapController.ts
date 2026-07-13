@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { query } from '../config/database';
 import { AuthRequest } from '../middleware/auth';
 import { getCoinTier } from '../utils/coins';
+import { getFreeShieldsForBuyIn } from '../utils/rank';
 import { checkLocationBlocked } from '../utils/geofence';
 
 const APPLE_VERIFY_URL = 'https://buy.itunes.apple.com/verifyReceipt';
@@ -164,14 +165,17 @@ export async function verifyBuyIn(req: AuthRequest, res: Response): Promise<void
       [userId],
     );
 
+    // Mythic Prowler perk: free shields on every buy-in.
+    const freeShields = await getFreeShieldsForBuyIn(userId, mapCoins);
+
     // Create game session
     const sessionResult = await query(
       `INSERT INTO game_sessions (
          user_id, buyin_amount, coin_tier, map_coins,
          shields_purchased, shields_remaining
-       ) VALUES ($1, $2, $3, $4, 0, 0)
+       ) VALUES ($1, $2, $3, $4, 0, $5)
        RETURNING *`,
-      [userId, tierCents, tier.name, mapCoins],
+      [userId, tierCents, tier.name, mapCoins, freeShields],
     );
 
     const session = sessionResult.rows[0];

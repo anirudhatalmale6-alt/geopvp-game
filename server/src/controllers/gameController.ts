@@ -5,6 +5,7 @@ import { config } from '../config/env';
 import { AuthRequest } from '../middleware/auth';
 import { distanceMiles } from '../utils/geo';
 import { getCoinTier } from '../utils/coins';
+import { getFreeShieldsForBuyIn } from '../utils/rank';
 import { getIO } from '../socket/ioInstance';
 import { sendPushNotification } from '../utils/pushNotification';
 import { checkLocationBlocked, isBlockedState, getBlockedStates } from '../utils/geofence';
@@ -82,14 +83,18 @@ export async function createGameSession(req: AuthRequest, res: Response): Promis
     // Ensure wallet row exists
     await query(`INSERT INTO wallets (user_id, balance) VALUES ($1, 0) ON CONFLICT DO NOTHING`, [userId]);
 
-    // Create session — shields start at 0, purchased separately
+    // Mythic Prowler perk: free shields on every buy-in. Everyone else gets 0
+    // and buys shields as normal.
+    const freeShields = await getFreeShieldsForBuyIn(userId, mapCoins);
+
+    // Create session — shields_remaining holds free shields, purchased separately
     const sessionResult = await query(
       `INSERT INTO game_sessions (
          user_id, buyin_amount, coin_tier, map_coins,
          shields_purchased, shields_remaining
-       ) VALUES ($1, $2, $3, $4, 0, 0)
+       ) VALUES ($1, $2, $3, $4, 0, $5)
        RETURNING *`,
-      [userId, tierCents, tier.name, mapCoins],
+      [userId, tierCents, tier.name, mapCoins, freeShields],
     );
 
     const session = sessionResult.rows[0];
@@ -637,6 +642,71 @@ export async function attackPlayer(req: AuthRequest, res: Response): Promise<voi
 // ---------------------------------------------------------------------------
 // POST /api/game/shield  — buy/activate a shield
 // ---------------------------------------------------------------------------
+
+// POST /api/game/shield/free — activate one of the free shields granted by the
+// Mythic Prowler rank perk. Costs nothing and does NOT count against the paid
+// 3-per-24h limit; the natural cap is shields_remaining, which is refilled to 3
+// on each buy-in (see getFreeShieldsForBuyIn).
+export async function activateFreeShield(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const userId = req.user!.id;
+
+    const sessionResult = await query(
+      `SELECT * FROM game_sessions WHERE user_id = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1`,
+      [userId],
+    );
+
+    if (sessionResult.rows.length === 0) {
+      res.status(400).json({ error: 'No active session. Start a session first.' });
+      return;
+    }
+
+    const session = sessionResult.rows[0];
+
+    if (session.shield_active_until && new Date(session.shield_active_until) > new Date()) {
+      res.status(400).json({ error: 'Shield is already active.' });
+      return;
+    }
+
+    const freeShields = parseInt(session.shields_remaining, 10) || 0;
+    if (freeShields <= 0) {
+      res.status(400).json({ error: 'No free shields available.' });
+      return;
+    }
+
+    const durationMinutes = config.shieldDurationMinutes;
+    const shieldExpiry = new Date(Date.now() + durationMinutes * 60 * 1000);
+
+    // Decrement the free-shield credit and switch the shield on. The WHERE guard
+    // on shields_remaining makes double-spend impossible if two taps race.
+    const updated = await query(
+      `UPDATE game_sessions
+       SET shields_remaining = shields_remaining - 1,
+           shield_active_until = $1
+       WHERE id = $2 AND shields_remaining > 0
+       RETURNING *`,
+      [shieldExpiry, session.id],
+    );
+
+    if (updated.rows.length === 0) {
+      res.status(400).json({ error: 'No free shields available.' });
+      return;
+    }
+
+    // Audit row at zero cost. Deliberately typed 'shield_free', NOT 'shield', so
+    // it never counts toward the paid 3-shields-per-24h limit.
+    await query(
+      `INSERT INTO transactions (user_id, type, amount, currency, description)
+       VALUES ($1, 'shield_free', 0, 'prowl', $2)`,
+      [userId, `Free Shield (Mythic Prowler) — ${durationMinutes} minutes`],
+    );
+
+    res.json({ session: formatSession(updated.rows[0]) });
+  } catch (err) {
+    console.error('activateFreeShield error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}
 
 export async function buyShield(req: AuthRequest, res: Response): Promise<void> {
   try {

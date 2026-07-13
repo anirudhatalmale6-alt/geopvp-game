@@ -173,6 +173,12 @@ export async function buyShield(type: 'standard' | 'gold' = 'standard'): Promise
   return data.session;
 }
 
+/** Spend one of the free shields granted by the Mythic Prowler rank. No payment. */
+export async function activateFreeShield(): Promise<GameSession> {
+  const { data } = await api.post<{ session: GameSession }>('/game/shield/free');
+  return data.session;
+}
+
 // ---------------------------------------------------------------------------
 // Coin Drop API
 // ---------------------------------------------------------------------------
