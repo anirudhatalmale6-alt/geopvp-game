@@ -243,9 +243,12 @@ export interface Redemption {
   id: string;
   amount: number;
   method: string;
+  /** pending | completed | denied | failed — kept in step with the admin panel. */
   status: string;
   paypalEmail: string | null;
+  recipient: string | null;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface DebitCardInput {

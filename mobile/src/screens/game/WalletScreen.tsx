@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, fontSize } from '../../theme';
-import { getWallet, getTransactions, getCombatStats, redeemSweepCoins, WalletData, Transaction, CombatStats } from '../../api/game';
+import { getWallet, getTransactions, getCombatStats, getRedemptions, redeemSweepCoins, WalletData, Transaction, CombatStats, Redemption } from '../../api/game';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -29,6 +29,22 @@ function formatAmount(amount: number): string {
 function formatDate(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+/** Cash-out status as the player should see it, mirroring the admin panel. */
+function redemptionStatus(status: string): { label: string; color: string } {
+  switch (status) {
+    case 'completed': return { label: 'PAID',    color: colors.success };
+    case 'denied':    return { label: 'DENIED',  color: colors.error };
+    case 'failed':    return { label: 'FAILED',  color: colors.error };
+    default:          return { label: 'PENDING', color: colors.warning };
+  }
+}
+
+function methodLabel(method: string): string {
+  if (method === 'venmo') return 'Venmo';
+  if (method === 'debit') return 'Debit Card';
+  return 'PayPal';
 }
 
 function txIcon(type: string): { name: string; color: string } {
@@ -55,6 +71,7 @@ function txIcon(type: string): { name: string; color: string } {
 export default function WalletScreen() {
   const [wallet, setWallet] = useState<WalletData | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [redemptions, setRedemptions] = useState<Redemption[]>([]);
   const [stats, setStats] = useState<CombatStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -78,10 +95,16 @@ export default function WalletScreen() {
 
   const load = useCallback(async () => {
     try {
-      const [w, txs, s] = await Promise.all([getWallet(), getTransactions(), getCombatStats()]);
+      const [w, txs, s, reds] = await Promise.all([
+        getWallet(),
+        getTransactions(),
+        getCombatStats(),
+        getRedemptions(),
+      ]);
       setWallet(w);
       setTransactions(txs);
       setStats(s);
+      setRedemptions(reds);
     } catch {
       setTransactions([]);
     }
@@ -287,6 +310,34 @@ export default function WalletScreen() {
           <Text style={styles.statLabel}>SESSIONS</Text>
         </View>
       </View>
+
+      {/* Cash-outs — status comes straight from the admin panel, so a payout
+          marked PAID shows as PAID here on the next refresh. */}
+      {redemptions.length > 0 && (
+        <>
+          <View style={styles.txSection}>
+            <Text style={styles.txHeader}>CASH OUTS</Text>
+          </View>
+          {redemptions.map((r) => {
+            const st = redemptionStatus(r.status);
+            return (
+              <View key={r.id} style={styles.redeemItem}>
+                <View style={styles.redeemInfo}>
+                  <Text style={styles.redeemAmount}>${(r.amount / 100).toFixed(2)}</Text>
+                  <Text style={styles.redeemMeta}>
+                    {methodLabel(r.method)}
+                    {r.recipient ? ` · ${r.recipient}` : ''}
+                  </Text>
+                  <Text style={styles.txDate}>{formatDate(r.createdAt)}</Text>
+                </View>
+                <View style={[styles.statusPill, { backgroundColor: st.color + '20', borderColor: st.color + '60' }]}>
+                  <Text style={[styles.statusPillText, { color: st.color }]}>{st.label}</Text>
+                </View>
+              </View>
+            );
+          })}
+        </>
+      )}
 
       <View style={styles.txSection}>
         <Text style={styles.txHeader}>TRANSACTION HISTORY</Text>
@@ -677,6 +728,42 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  redeemItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  redeemInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  redeemAmount: {
+    fontSize: fontSize.md,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  redeemMeta: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+  },
+  statusPill: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+  },
+  statusPillText: {
+    fontSize: fontSize.xs,
+    fontWeight: '800',
+    letterSpacing: 1,
   },
   txIcon: {
     width: 42,

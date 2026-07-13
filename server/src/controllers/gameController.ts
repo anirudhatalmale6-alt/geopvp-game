@@ -1258,10 +1258,19 @@ export async function redeemSweepCoins(req: AuthRequest, res: Response): Promise
     const withdrawalId = withdrawalResult.rows[0].id;
 
     // Deduct sweep coins immediately (held until approved/denied)
-    await query(
+    const txResult = await query(
       `INSERT INTO transactions (user_id, type, amount, currency, description)
-       VALUES ($1, 'withdrawal', $2, 'sweep', $3)`,
+       VALUES ($1, 'withdrawal', $2, 'sweep', $3)
+       RETURNING id`,
       [userId, -amountCents, `Redemption pending: $${amountDollars} via ${methodLabel} (${recipientLabel})`],
+    );
+
+    // The wallet's history shows this description verbatim, so it would keep
+    // saying "pending" forever once the admin pays out. Remember which row to
+    // rewrite when the status changes.
+    await query(
+      `UPDATE withdrawals SET payout_details = payout_details || $1 WHERE id = $2`,
+      [JSON.stringify({ txId: txResult.rows[0].id }), withdrawalId],
     );
 
     res.json({
@@ -1298,7 +1307,11 @@ export async function getRedemptions(req: AuthRequest, res: Response): Promise<v
       method: row.method,
       status: row.status,
       paypalEmail: row.payout_details?.email ?? null,
+      // What the payout goes to — the PayPal email, the Venmo phone, or the
+      // masked card. Shown in the app's cash-out list.
+      recipient: row.payout_details?.recipient ?? null,
       createdAt: row.created_at,
+      updatedAt: row.updated_at,
     }));
 
     res.json({ redemptions });

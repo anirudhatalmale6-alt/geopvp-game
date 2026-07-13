@@ -716,6 +716,46 @@ export async function listWithdrawals(req: AuthRequest, res: Response): Promise<
   }
 }
 
+/**
+ * The player's wallet history renders a transaction's description verbatim, and
+ * a redemption is written as "Redemption pending: ..." at request time. Without
+ * this, the row still reads "pending" long after the money has been sent — which
+ * is exactly what it looked like to the first player who cashed out. Rewrite the
+ * prefix in place so the history follows the withdrawal's real status.
+ */
+async function setRedemptionLedgerStatus(
+  withdrawal: any,
+  status: 'paid' | 'denied' | 'failed',
+): Promise<void> {
+  const newPrefix = `Redemption ${status}:`;
+  const txId = withdrawal.payout_details?.txId;
+
+  if (txId) {
+    await query(
+      `UPDATE transactions
+       SET description = REPLACE(description, 'Redemption pending:', $1)
+       WHERE id = $2`,
+      [newPrefix, txId],
+    );
+    return;
+  }
+
+  // Withdrawals created before the txId link existed: match the exact ledger row
+  // written alongside the withdrawal (same user, same held amount, same moment).
+  await query(
+    `UPDATE transactions
+     SET description = REPLACE(description, 'Redemption pending:', $1)
+     WHERE user_id = $2
+       AND type = 'withdrawal'
+       AND currency = 'sweep'
+       AND amount = $3
+       AND description LIKE 'Redemption pending:%'
+       AND created_at BETWEEN $4::timestamptz - INTERVAL '10 seconds'
+                          AND $4::timestamptz + INTERVAL '10 seconds'`,
+    [newPrefix, withdrawal.user_id, -withdrawal.amount, withdrawal.created_at],
+  );
+}
+
 export async function approveWithdrawal(req: AuthRequest, res: Response): Promise<void> {
   if (!(await requireAdmin(req, res))) return;
 
@@ -763,6 +803,7 @@ export async function approveWithdrawal(req: AuthRequest, res: Response): Promis
             id,
           ],
         );
+        await setRedemptionLedgerStatus(withdrawal, 'paid');
         res.json({ success: true, message: `$${amountDollars} sent to ${details.network || 'debit'} card •••• ${details.last4 || ''}.` });
       } catch (payoutErr: any) {
         console.error('Tabapay payout error during approval:', payoutErr);
@@ -801,6 +842,7 @@ export async function approveWithdrawal(req: AuthRequest, res: Response): Promis
           id,
         ],
       );
+      await setRedemptionLedgerStatus(withdrawal, 'paid');
 
       res.json({ success: true, message: `$${amountDollars} sent to ${recipient} via ${method}.` });
     } catch (payoutErr: any) {
@@ -851,6 +893,7 @@ export async function markWithdrawalPaid(req: AuthRequest, res: Response): Promi
         id,
       ],
     );
+    await setRedemptionLedgerStatus(withdrawal, 'paid');
 
     res.json({ success: true, message: `Marked $${amountDollars} as paid manually.` });
   } catch (err) {
@@ -893,6 +936,7 @@ export async function denyWithdrawal(req: AuthRequest, res: Response): Promise<v
        WHERE id = $2`,
       [`Denied: ${reason}`, id],
     );
+    await setRedemptionLedgerStatus(withdrawal, 'denied');
 
     res.json({ success: true, message: 'Withdrawal denied. Sweep coins refunded to user.' });
   } catch (err) {
