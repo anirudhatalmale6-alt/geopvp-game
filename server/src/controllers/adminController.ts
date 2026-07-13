@@ -9,6 +9,7 @@ import { sendPayout } from '../services/paypal';
 import * as tabapay from '../services/tabapay';
 import { setBotHome } from '../bot/botAI';
 import { getIO } from '../socket/ioInstance';
+import { sendPushNotification } from '../utils/pushNotification';
 
 const spawnBotsSchema = z.object({
   count: z.number().int().min(1).max(2000),
@@ -756,6 +757,46 @@ async function setRedemptionLedgerStatus(
   );
 }
 
+/**
+ * Tell the player their cash-out was settled. Delivered as a push, which the app
+ * shows as a banner even while it's open, so the player finds out the moment the
+ * admin acts instead of having to go looking at the wallet screen.
+ */
+async function notifyRedemptionSettled(
+  withdrawal: any,
+  status: 'paid' | 'denied',
+): Promise<void> {
+  const amount = `$${(withdrawal.amount / 100).toFixed(2)}`;
+  const method = withdrawal.method === 'venmo'
+    ? 'Venmo'
+    : withdrawal.method === 'debit'
+      ? 'debit card'
+      : 'PayPal';
+
+  if (status === 'paid') {
+    await sendPushNotification(
+      withdrawal.user_id,
+      'Redemption Approved! 🎉',
+      `Your ${amount} cash out is on its way to your ${method}.`,
+    );
+  } else {
+    await sendPushNotification(
+      withdrawal.user_id,
+      'Redemption Denied',
+      `Your ${amount} cash out was denied. The sweep coins have been returned to your balance.`,
+    );
+  }
+}
+
+/** Close out a withdrawal: fix the wallet history line, then tell the player. */
+async function settleRedemption(
+  withdrawal: any,
+  status: 'paid' | 'denied',
+): Promise<void> {
+  await setRedemptionLedgerStatus(withdrawal, status);
+  await notifyRedemptionSettled(withdrawal, status);
+}
+
 export async function approveWithdrawal(req: AuthRequest, res: Response): Promise<void> {
   if (!(await requireAdmin(req, res))) return;
 
@@ -803,7 +844,7 @@ export async function approveWithdrawal(req: AuthRequest, res: Response): Promis
             id,
           ],
         );
-        await setRedemptionLedgerStatus(withdrawal, 'paid');
+        await settleRedemption(withdrawal, 'paid');
         res.json({ success: true, message: `$${amountDollars} sent to ${details.network || 'debit'} card •••• ${details.last4 || ''}.` });
       } catch (payoutErr: any) {
         console.error('Tabapay payout error during approval:', payoutErr);
@@ -842,7 +883,7 @@ export async function approveWithdrawal(req: AuthRequest, res: Response): Promis
           id,
         ],
       );
-      await setRedemptionLedgerStatus(withdrawal, 'paid');
+      await settleRedemption(withdrawal, 'paid');
 
       res.json({ success: true, message: `$${amountDollars} sent to ${recipient} via ${method}.` });
     } catch (payoutErr: any) {
@@ -893,7 +934,7 @@ export async function markWithdrawalPaid(req: AuthRequest, res: Response): Promi
         id,
       ],
     );
-    await setRedemptionLedgerStatus(withdrawal, 'paid');
+    await settleRedemption(withdrawal, 'paid');
 
     res.json({ success: true, message: `Marked $${amountDollars} as paid manually.` });
   } catch (err) {
@@ -936,7 +977,7 @@ export async function denyWithdrawal(req: AuthRequest, res: Response): Promise<v
        WHERE id = $2`,
       [`Denied: ${reason}`, id],
     );
-    await setRedemptionLedgerStatus(withdrawal, 'denied');
+    await settleRedemption(withdrawal, 'denied');
 
     res.json({ success: true, message: 'Withdrawal denied. Sweep coins refunded to user.' });
   } catch (err) {
