@@ -257,17 +257,23 @@ export interface DebitCardInput {
   zip: string;
 }
 
+/**
+ * @param recipient PayPal email, or — for Venmo — the US mobile number on the account.
+ * @param email     Venmo only: the email on the account (required alongside the phone).
+ */
 export async function redeemSweepCoins(
   recipient: string,
   amountCents: number,
   method: 'paypal' | 'venmo' | 'debit' = 'paypal',
   card?: DebitCardInput,
+  email?: string,
 ): Promise<RedeemResult> {
   const payload: Record<string, unknown> = { amountCents, method };
   if (method === 'debit') {
     payload.card = card;
   } else {
     payload.recipient = recipient;
+    if (method === 'venmo') payload.email = email;
   }
   const { data } = await api.post<RedeemResult>('/wallet/redeem', payload);
   return data;

@@ -61,6 +61,9 @@ export default function WalletScreen() {
   const [showRedeem, setShowRedeem] = useState(false);
   const [redeemMethod, setRedeemMethod] = useState<'paypal' | 'venmo' | 'debit'>('paypal');
   const [redeemRecipient, setRedeemRecipient] = useState('');
+  // Venmo needs BOTH: PayPal pays out to the phone number on the Venmo account,
+  // and the email is how we reach the player about the payout.
+  const [redeemEmail, setRedeemEmail] = useState('');
   const [redeemAmount, setRedeemAmount] = useState('');
   const [redeeming, setRedeeming] = useState(false);
   const [redeemError, setRedeemError] = useState<string | null>(null);
@@ -104,6 +107,7 @@ export default function WalletScreen() {
       return;
     }
     setRedeemRecipient('');
+    setRedeemEmail('');
     setRedeemAmount('');
     setCardName('');
     setCardNumber('');
@@ -176,24 +180,38 @@ export default function WalletScreen() {
       return;
     }
 
-    // PayPal / Venmo
+    // Venmo — PayPal sends the payout to the US mobile number on the account,
+    // and we collect the email too so we can reach the player about it.
     const recipient = redeemRecipient.trim();
-    if (!recipient) {
-      setRedeemError(redeemMethod === 'venmo'
-        ? 'Please enter your Venmo email or phone number.'
-        : 'Please enter your PayPal email address.');
-      return;
-    }
-    const isPhone = /^\+?\d[\d\s()-]{8,}$/.test(recipient);
-    if (!isPhone && !recipient.includes('@')) {
-      setRedeemError('Please enter a valid email address or phone number.');
-      return;
+    const email = redeemEmail.trim();
+    if (redeemMethod === 'venmo') {
+      const digits = recipient.replace(/\D/g, '');
+      const validUsPhone = digits.length === 10 || (digits.length === 11 && digits.startsWith('1'));
+      if (!validUsPhone) {
+        setRedeemError('Enter the 10-digit US mobile number on your Venmo account.');
+        return;
+      }
+      if (!/^\S+@\S+\.\S+$/.test(email)) {
+        setRedeemError('Enter the email address on your Venmo account.');
+        return;
+      }
+    } else {
+      // PayPal
+      if (!recipient) {
+        setRedeemError('Please enter your PayPal email address.');
+        return;
+      }
+      const isPhone = /^\+?\d[\d\s()-]{8,}$/.test(recipient);
+      if (!isPhone && !recipient.includes('@')) {
+        setRedeemError('Please enter a valid email address or phone number.');
+        return;
+      }
     }
 
     setRedeeming(true);
     setRedeemError(null);
     try {
-      const result = await redeemSweepCoins(recipient, cents, redeemMethod);
+      const result = await redeemSweepCoins(recipient, cents, redeemMethod, undefined, email);
       setShowRedeem(false);
       Alert.alert('Redemption Successful', result.message);
       await load();
@@ -341,7 +359,7 @@ export default function WalletScreen() {
             <View style={styles.methodToggle}>
               <TouchableOpacity
                 style={[styles.methodBtn, redeemMethod === 'paypal' && styles.methodBtnActive]}
-                onPress={() => { setRedeemMethod('paypal'); setRedeemRecipient(''); }}
+                onPress={() => { setRedeemMethod('paypal'); setRedeemRecipient(''); setRedeemEmail(''); }}
                 activeOpacity={0.8}
               >
                 <Ionicons name="logo-paypal" size={16} color={redeemMethod === 'paypal' ? colors.background : colors.textSecondary} />
@@ -349,7 +367,7 @@ export default function WalletScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.methodBtn, redeemMethod === 'venmo' && styles.methodBtnActiveVenmo]}
-                onPress={() => { setRedeemMethod('venmo'); setRedeemRecipient(''); }}
+                onPress={() => { setRedeemMethod('venmo'); setRedeemRecipient(''); setRedeemEmail(''); }}
                 activeOpacity={0.8}
               >
                 <Ionicons name="phone-portrait-outline" size={16} color={redeemMethod === 'venmo' ? colors.background : colors.textSecondary} />
@@ -425,16 +443,40 @@ export default function WalletScreen() {
                   </View>
                 </View>
               </>
-            ) : (
+            ) : redeemMethod === 'venmo' ? (
               <>
-                <Text style={styles.inputLabel}>
-                  {redeemMethod === 'venmo' ? 'VENMO EMAIL OR PHONE' : 'PAYPAL EMAIL'}
-                </Text>
+                <Text style={styles.inputLabel}>VENMO PHONE NUMBER</Text>
                 <TextInput
                   style={styles.modalInput}
-                  placeholder={redeemMethod === 'venmo' ? 'email or phone number' : 'your@email.com'}
+                  placeholder="(555) 123-4567"
                   placeholderTextColor={colors.textMuted}
-                  keyboardType={redeemMethod === 'venmo' ? 'default' : 'email-address'}
+                  keyboardType="phone-pad"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  value={redeemRecipient}
+                  onChangeText={setRedeemRecipient}
+                />
+
+                <Text style={styles.inputLabel}>VENMO EMAIL</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="your@email.com"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  value={redeemEmail}
+                  onChangeText={setRedeemEmail}
+                />
+              </>
+            ) : (
+              <>
+                <Text style={styles.inputLabel}>PAYPAL EMAIL</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="your@email.com"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
                   value={redeemRecipient}
@@ -481,6 +523,8 @@ export default function WalletScreen() {
             <Text style={styles.redeemDisclaimer}>
               {redeemMethod === 'debit'
                 ? 'Funds are sent to your debit card after approval, usually within minutes. Your card details are securely tokenized and never stored. Minimum $10.00.'
+                : redeemMethod === 'venmo'
+                ? 'Venmo cash-outs are sent to the US phone number on your Venmo account, so it must match exactly. We use your email to confirm the payout. Minimum $10.00.'
                 : 'Funds will be sent to your PayPal email. Processing may take a few minutes. Minimum $10.00.'}
             </Text>
           </View>

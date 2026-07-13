@@ -1032,7 +1032,7 @@ async function loadWithdrawals(status = 'pending') {
             <td>${w.username || w.email}</td>
             <td class="amount-neg">$${(w.amount / 100).toFixed(2)}</td>
             <td>${(w.method || 'paypal').toUpperCase()}</td>
-            <td class="mono">${details.recipient || '-'}</td>
+            <td class="mono">${details.recipient || '-'}${details.email ? `<br><span style="color:var(--text2);font-size:10px">${details.email}</span>` : ''}</td>
             <td>${formatTime(w.createdAt)}</td>
             <td>${actions}</td>
           </tr>`;

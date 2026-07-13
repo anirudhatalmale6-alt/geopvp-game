@@ -6,6 +6,7 @@ import { AuthRequest } from '../middleware/auth';
 import { distanceMiles } from '../utils/geo';
 import { getCoinTier } from '../utils/coins';
 import { getFreeShieldsForBuyIn } from '../utils/rank';
+import { normalizeUsPhone, formatUsPhone } from '../utils/phone';
 import { getIO } from '../socket/ioInstance';
 import { sendPushNotification } from '../utils/pushNotification';
 import { checkLocationBlocked, isBlockedState, getBlockedStates } from '../utils/geofence';
@@ -26,7 +27,10 @@ const updateLocationSchema = z.object({
 });
 
 const redeemSchema = z.object({
-  recipient: z.string().optional(), // PayPal/Venmo email or phone
+  recipient: z.string().optional(), // PayPal email, or the Venmo US mobile number
+  // Venmo only: PayPal pays out to the phone number, but we also collect the
+  // email so we can reach the player and reconcile the payout.
+  email: z.string().email('Please enter a valid email address.').optional(),
   amountCents: z.number().int().min(1000, 'Minimum redemption is $10.00'),
   method: z.enum(['paypal', 'venmo', 'debit']).default('paypal'),
   // Debit-card details (only for method === 'debit'). Tokenized immediately via
@@ -1139,8 +1143,12 @@ export async function redeemSweepCoins(req: AuthRequest, res: Response): Promise
       return;
     }
 
-    const { recipient, amountCents, method, card } = parsed.data;
+    const { recipient, email, amountCents, method, card } = parsed.data;
     const methodLabel = method === 'venmo' ? 'Venmo' : method === 'debit' ? 'Debit Card' : 'PayPal';
+
+    // Venmo pays out to a US mobile number, so normalise it up-front and keep
+    // the result for the payout call.
+    let venmoPhone: string | null = null;
 
     // Validate the recipient details required for the chosen method.
     if (method === 'debit') {
@@ -1150,6 +1158,18 @@ export async function redeemSweepCoins(req: AuthRequest, res: Response): Promise
       }
       if (!card) {
         res.status(400).json({ error: 'Debit card details are required.' });
+        return;
+      }
+    } else if (method === 'venmo') {
+      // PayPal requires a US mobile number to pay a Venmo account. We collect
+      // the email alongside it for contact and reconciliation.
+      venmoPhone = normalizeUsPhone(recipient || '');
+      if (!venmoPhone) {
+        res.status(400).json({ error: 'Please enter the 10-digit US mobile number on your Venmo account.' });
+        return;
+      }
+      if (!email || email.trim().length === 0) {
+        res.status(400).json({ error: 'Please enter the email address on your Venmo account.' });
         return;
       }
     } else if (!recipient || recipient.trim().length === 0) {
@@ -1218,6 +1238,11 @@ export async function redeemSweepCoins(req: AuthRequest, res: Response): Promise
         senderItemId,
       };
       recipientLabel = `${tokenized.network} debit •••• ${tokenized.last4}`;
+    } else if (method === 'venmo') {
+      // `recipient` is what the payout is actually sent to (the phone), so the
+      // admin approval path needs no Venmo-specific handling.
+      payoutDetails = { method, recipient: venmoPhone, phone: venmoPhone, email, senderItemId };
+      recipientLabel = `${formatUsPhone(venmoPhone!)} / ${email}`;
     } else {
       payoutDetails = { method, recipient, senderItemId };
       recipientLabel = recipient!;
