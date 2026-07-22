@@ -20,6 +20,9 @@ import {
   acknowledgePurchase,
   listenForPurchases,
   getLoadedProducts,
+  ensureProducts,
+  getLastError,
+  getPurchaseReceipt,
   type ProductPurchase,
 } from '../../services/iap';
 
@@ -71,7 +74,25 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [locationConsent, setLocationConsent] = useState(false);
+  const [preparingStore, setPreparingStore] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
+
+  // Re-check the App Store every time the buy-in screen opens (iOS). Products
+  // are loaded once at app startup, but if that first fetch came back empty
+  // (App Store still propagating a fresh approval, transient network, etc.) the
+  // screen would otherwise stay stuck forever. Re-fetching on open lets it
+  // self-heal the moment Apple has the items ready — no app restart needed.
+  useEffect(() => {
+    if (!visible || Platform.OS !== 'ios') return;
+    if (getLoadedProducts().length > 0) return;
+    let cancelled = false;
+    setPreparingStore(true);
+    setError(null);
+    ensureProducts().finally(() => {
+      if (!cancelled) setPreparingStore(false);
+    });
+    return () => { cancelled = true; };
+  }, [visible]);
 
   const [paypalUrl, setPaypalUrl] = useState<string | null>(null);
   const pendingOrderRef = useRef<string | null>(null);
@@ -84,14 +105,17 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
     const cleanup = listenForPurchases(
       async (purchase: ProductPurchase) => {
         const tierDollars = pendingTierRef.current;
-        if (!tierDollars || !purchase.transactionReceipt) return;
+        if (!tierDollars) return;
 
         setLoading(true);
         try {
+          const p: any = purchase;
+          const receipt = await getPurchaseReceipt();
+          if (!receipt) throw new Error('Could not read the App Store receipt.');
           await verifyBuyInReceipt(
-            purchase.transactionReceipt,
-            purchase.productId,
-            purchase.transactionId ?? '',
+            receipt,
+            p.productId,
+            p.transactionId ?? String(p.id ?? ''),
             tierDollars,
           );
           await acknowledgePurchase(purchase);
@@ -105,7 +129,9 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
         }
       },
       (err) => {
-        if (err.code !== 'E_USER_CANCELLED') {
+        // v15 reports cancellation as "user-cancelled"; keep the legacy code too.
+        const code = String(err?.code ?? '');
+        if (code !== 'user-cancelled' && code !== 'E_USER_CANCELLED') {
           setError('Purchase failed. Please try again.');
         }
         setLoading(false);
@@ -125,8 +151,18 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
     // PayPal's fixed fee eats ~half of a small buy-in. If products haven't
     // finished loading from the App Store yet, ask the user to retry.
     if (Platform.OS === 'ios') {
+      // One more live attempt to load products before giving up, in case the
+      // startup fetch missed them (e.g. App Store still propagating).
       if (getLoadedProducts().length === 0) {
-        setError('Connecting to the App Store… please wait a moment and try again.');
+        await ensureProducts();
+      }
+      if (getLoadedProducts().length === 0) {
+        const detail = getLastError();
+        setError(
+          detail
+            ? `Couldn't load the App Store items yet (${detail}). Please try again in a moment.`
+            : 'Connecting to the App Store… please wait a moment and try again.',
+        );
         setLoading(false);
         return;
       }
@@ -307,6 +343,13 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
             </Text>
           </TouchableOpacity>
 
+          {preparingStore && !error ? (
+            <View style={styles.infoBox}>
+              <ActivityIndicator color={colors.textSecondary} size="small" />
+              <Text style={styles.infoText}>Connecting to the App Store…</Text>
+            </View>
+          ) : null}
+
           {error ? (
             <View style={styles.errorBox}>
               <Ionicons name="warning" size={16} color={colors.error} />
@@ -316,9 +359,9 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
 
           {/* CTA Button */}
           <TouchableOpacity
-            style={[styles.buyBtn, { backgroundColor: tierColor }, (loading || !locationConsent) && styles.buyBtnDisabled]}
+            style={[styles.buyBtn, { backgroundColor: tierColor }, (loading || preparingStore || !locationConsent) && styles.buyBtnDisabled]}
             onPress={handleBuyIn}
-            disabled={loading || !locationConsent}
+            disabled={loading || preparingStore || !locationConsent}
             activeOpacity={0.85}
           >
             {loading ? (
@@ -521,6 +564,22 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: fontSize.sm,
     color: colors.error,
+  },
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.border + '20',
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border + '40',
+  },
+  infoText: {
+    flex: 1,
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
   },
   buyBtn: {
     borderRadius: borderRadius.md,

@@ -41,6 +41,7 @@ import {
   acknowledgePurchase,
   listenForPurchases,
   getLoadedProducts,
+  getPurchaseReceipt,
   type ProductPurchase,
 } from '../../services/iap';
 import { connectSocket, disconnectSocket, emitLocation, onPlayersUpdate, onBatchUpdate, onEliminated, onBotHit, onConnectionChange } from '../../api/socket';
@@ -1127,14 +1128,16 @@ export default function MapScreen() {
     const cleanup = listenForPurchases(
       async (purchase: ProductPurchase) => {
         if (!shieldIapPendingRef.current) return;
-        if (purchase.productId !== SHIELD_PRODUCT_ID && purchase.productId !== SHIELD_PREMIUM_PRODUCT_ID) return;
-        if (!purchase.transactionReceipt) return;
+        const p: any = purchase;
+        if (p.productId !== SHIELD_PRODUCT_ID && p.productId !== SHIELD_PREMIUM_PRODUCT_ID) return;
 
         try {
+          const receipt = await getPurchaseReceipt();
+          if (!receipt) { shieldIapPendingRef.current = false; return; }
           const result = await verifyShieldReceipt(
-            purchase.transactionReceipt,
-            purchase.productId,
-            purchase.transactionId ?? '',
+            receipt,
+            p.productId,
+            p.transactionId ?? String(p.id ?? ''),
           );
           await acknowledgePurchase(purchase);
           setSession(result.session);
