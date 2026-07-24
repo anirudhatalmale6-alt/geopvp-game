@@ -19,3 +19,7 @@ coinprowl-release.keystore
 /jets-ski-rentals/
 /ad-video/
 /BookingWizard.tsx
+
+# Android build artifacts (hosted directly on prod, never in repo)
+*.apk
+*.aab

@@ -45,42 +45,37 @@
       <a class="store ios" id="iosBtn" href="https://apps.apple.com/app/id6771944449">
         Download on the App Store
       </a>
-      <a class="store play" id="playBtn" href="https://play.google.com/store/apps/details?id=com.coinprowl.app">
-        Get it on Google Play
+      <a class="store play" id="playBtn" href="/coinprowl.apk" download>
+        Download for Android
       </a>
     </div>
 
     <div class="redir" id="redir"></div>
-    <div class="sub">Scanning opens the right store for your phone automatically.</div>
+    <div class="sub" id="sub">Scanning opens the right download for your phone automatically.</div>
   </div>
 
 <script>
-  // Flip to true the moment CoinProwl is live on the Google Play store.
-  var ANDROID_LIVE = false;
-
   var IOS_URL  = 'https://apps.apple.com/app/id6771944449';
-  var PLAY_URL = 'https://play.google.com/store/apps/details?id=com.coinprowl.app';
+  var APK_URL  = '/coinprowl.apk';
 
   var ua = navigator.userAgent || navigator.vendor || '';
   var isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   var isAndroid = /Android/i.test(ua);
+  var iosBtn = document.getElementById('iosBtn');
   var playBtn = document.getElementById('playBtn');
   var redir = document.getElementById('redir');
-
-  if (!ANDROID_LIVE) {
-    playBtn.className = 'store play soon';
-    playBtn.removeAttribute('href');
-    playBtn.innerHTML = 'Google Play <span class="soon-tag">&nbsp;&middot; Coming soon</span>';
-  }
+  var sub = document.getElementById('sub');
 
   if (isIOS) {
+    // iPhone/iPad: hide the Android option, send them to the App Store.
+    playBtn.style.display = 'none';
     redir.textContent = 'Opening the App Store…';
     setTimeout(function(){ window.location.replace(IOS_URL); }, 400);
-  } else if (isAndroid && ANDROID_LIVE) {
-    redir.textContent = 'Opening Google Play…';
-    setTimeout(function(){ window.location.replace(PLAY_URL); }, 400);
   } else if (isAndroid) {
-    redir.textContent = 'The Android app is coming soon — available now on iPhone.';
+    // Android: offer the direct APK download and explain the one-time setup.
+    iosBtn.style.display = 'none';
+    redir.textContent = 'Tap “Download for Android” to install CoinProwl.';
+    sub.innerHTML = 'After it downloads, open the file to install. Your phone may ask you to allow installs from your browser the first time — that\'s normal for apps downloaded outside the Play Store.';
   }
 </script>
 </body>
