@@ -96,19 +96,26 @@ export async function purchaseProduct(productId: string): Promise<void> {
   });
 }
 
-// The server verifies against Apple's classic /verifyReceipt endpoint, which
-// needs the base64 App Store receipt. Under StoreKit 2 the purchase object no
-// longer carries the receipt inline, so we read it from the device on demand
-// right after a purchase completes.
-export async function getPurchaseReceipt(): Promise<string | null> {
+// Under StoreKit 2 (react-native-iap v15 / Nitro) the completed purchase carries
+// a JWS-signed transaction in `purchaseToken`. This is the token the server
+// verifies — Apple no longer populates the legacy on-device base64 receipt, so
+// `getReceiptDataIOS()` comes back empty on modern builds (which is exactly what
+// produced the "Could not read the App Store receipt" error). We prefer the
+// StoreKit 2 token and only fall back to the legacy receipt for older devices.
+export async function getPurchaseReceipt(purchase?: any): Promise<string | null> {
   if (Platform.OS !== 'ios') return null;
+
+  // StoreKit 2 signed transaction (preferred).
+  const token = purchase?.purchaseToken;
+  if (typeof token === 'string' && token.length > 0) return token;
+
+  // Legacy StoreKit 1 fallback.
   try {
     const receipt = await getReceiptDataIOS();
     if (receipt) return receipt;
   } catch (err) {
     console.warn('[IAP] getReceiptDataIOS failed, will refresh:', err);
   }
-  // Under StoreKit 2 the on-device receipt can be missing until refreshed.
   try {
     const refreshed = await requestReceiptRefreshIOS();
     return refreshed || null;

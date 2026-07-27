@@ -5,6 +5,7 @@ import { AuthRequest } from '../middleware/auth';
 import { getCoinTier } from '../utils/coins';
 import { getFreeShieldsForBuyIn } from '../utils/rank';
 import { checkLocationBlocked } from '../utils/geofence';
+import { looksLikeJws, verifyStoreKit2Jws } from '../utils/appleJws';
 
 const APPLE_VERIFY_URL = 'https://buy.itunes.apple.com/verifyReceipt';
 const APPLE_SANDBOX_URL = 'https://sandbox.itunes.apple.com/verifyReceipt';
@@ -47,7 +48,25 @@ async function verifyAppleReceipt(receiptData: string): Promise<{
   valid: boolean;
   sandbox: boolean;
   latestReceipt?: any;
+  transactionId?: string;
+  productId?: string;
 }> {
+  // StoreKit 2 (current app builds) sends a JWS-signed transaction, not the
+  // legacy base64 receipt. Verify it offline against Apple's pinned root CA.
+  if (looksLikeJws(receiptData)) {
+    const jws = verifyStoreKit2Jws(receiptData);
+    if (!jws.valid) {
+      console.error('[IAP] StoreKit2 JWS verification failed:', jws.reason);
+    }
+    return {
+      valid: jws.valid,
+      sandbox: jws.sandbox,
+      transactionId: jws.transactionId,
+      productId: jws.productId,
+    };
+  }
+
+  // Legacy fallback: classic /verifyReceipt for older StoreKit 1 receipts.
   // Try production first
   let res = await fetch(APPLE_VERIFY_URL, {
     method: 'POST',
@@ -58,7 +77,7 @@ async function verifyAppleReceipt(receiptData: string): Promise<{
       'exclude-old-transactions': true,
     }),
   });
-  let data = await res.json();
+  let data = (await res.json()) as any;
 
   // Status 21007 means sandbox receipt sent to production — retry with sandbox
   if (data.status === 21007) {
@@ -71,7 +90,7 @@ async function verifyAppleReceipt(receiptData: string): Promise<{
         'exclude-old-transactions': true,
       }),
     });
-    data = await res.json();
+    data = (await res.json()) as any;
     if (data.status === 0) {
       return { valid: true, sandbox: true, latestReceipt: data };
     }
@@ -102,8 +121,20 @@ export async function verifyBuyIn(req: AuthRequest, res: Response): Promise<void
       return;
     }
 
-    const { receiptData, productId, transactionId, tierDollars } = parsed.data;
+    const parsedTier = parsed.data;
     const userId = req.user!.id;
+
+    // Verify with Apple first, then trust the transaction id / product id that
+    // Apple signed over the values the client claimed (defense in depth).
+    const verification = await verifyAppleReceipt(parsedTier.receiptData);
+    if (!verification.valid) {
+      res.status(400).json({ error: 'Receipt verification failed.' });
+      return;
+    }
+
+    const transactionId = verification.transactionId || parsedTier.transactionId;
+    const productId = verification.productId || parsedTier.productId;
+    const { tierDollars } = parsedTier;
 
     // Prevent replay
     if (await isTransactionProcessed(transactionId)) {
@@ -115,13 +146,6 @@ export async function verifyBuyIn(req: AuthRequest, res: Response): Promise<void
     const expectedProductId = `coinprowl_buyin_${tierDollars}`;
     if (productId !== expectedProductId) {
       res.status(400).json({ error: 'Product ID does not match tier.' });
-      return;
-    }
-
-    // Verify with Apple
-    const verification = await verifyAppleReceipt(receiptData);
-    if (!verification.valid) {
-      res.status(400).json({ error: 'Receipt verification failed.' });
       return;
     }
 
@@ -211,8 +235,17 @@ export async function verifyShield(req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
-    const { receiptData, productId, transactionId } = parsed.data;
+    const parsedShield = parsed.data;
     const userId = req.user!.id;
+
+    const verification = await verifyAppleReceipt(parsedShield.receiptData);
+    if (!verification.valid) {
+      res.status(400).json({ error: 'Receipt verification failed.' });
+      return;
+    }
+
+    const transactionId = verification.transactionId || parsedShield.transactionId;
+    const productId = verification.productId || parsedShield.productId;
 
     if (await isTransactionProcessed(transactionId)) {
       res.status(400).json({ error: 'This purchase has already been processed.' });
@@ -222,12 +255,6 @@ export async function verifyShield(req: AuthRequest, res: Response): Promise<voi
     const isGold = productId === 'coinprowl_shield_premium';
     if (productId !== 'coinprowl_shield' && !isGold) {
       res.status(400).json({ error: 'Invalid shield product ID.' });
-      return;
-    }
-
-    const verification = await verifyAppleReceipt(receiptData);
-    if (!verification.valid) {
-      res.status(400).json({ error: 'Receipt verification failed.' });
       return;
     }
 

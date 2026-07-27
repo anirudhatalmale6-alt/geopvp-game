@@ -110,7 +110,7 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
         setLoading(true);
         try {
           const p: any = purchase;
-          const receipt = await getPurchaseReceipt();
+          const receipt = await getPurchaseReceipt(purchase);
           if (!receipt) throw new Error('Could not read the App Store receipt.');
           await verifyBuyInReceipt(
             receipt,

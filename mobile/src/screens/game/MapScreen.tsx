@@ -1132,7 +1132,7 @@ export default function MapScreen() {
         if (p.productId !== SHIELD_PRODUCT_ID && p.productId !== SHIELD_PREMIUM_PRODUCT_ID) return;
 
         try {
-          const receipt = await getPurchaseReceipt();
+          const receipt = await getPurchaseReceipt(purchase);
           if (!receipt) { shieldIapPendingRef.current = false; return; }
           const result = await verifyShieldReceipt(
             receipt,
