@@ -7,6 +7,7 @@ import {
   finishTransaction,
   getReceiptDataIOS,
   requestReceiptRefreshIOS,
+  getPendingTransactionsIOS,
   purchaseUpdatedListener,
   purchaseErrorListener,
   type Purchase,
@@ -44,6 +45,44 @@ export async function setupIAP(): Promise<void> {
     connected = false;
     lastError = `init: ${describeError(err)}`;
     console.warn('[IAP] Init failed:', err);
+    return;
+  }
+
+  // Clear any transaction left unfinished by a previous run. StoreKit keeps an
+  // unfinished consumable transaction in its queue until finishTransaction() is
+  // called — and while one is pending for a given product, tapping that same
+  // tier again neither presents a fresh payment sheet nor emits a new purchase
+  // event, so the buy-in button spins forever. (This is exactly what stranded
+  // the $1 tier: it was bought in an early test round before the receipt fix
+  // landed, verification failed, so the transaction was never finished.)
+  // Flushing on startup unblocks those tiers. Safe to call every launch — the
+  // normal purchase flow finishes its transaction immediately, so nothing that
+  // still needs processing is ever discarded here.
+  await flushPendingTransactions();
+}
+
+// Finish (drain) every StoreKit transaction left unfinished from a prior run so
+// it stops blocking re-purchase of the same consumable. Returns how many it
+// cleared. Never throws — flushing is best-effort startup hygiene.
+export async function flushPendingTransactions(): Promise<number> {
+  if (Platform.OS !== 'ios') return 0;
+  try {
+    const pending = await getPendingTransactionsIOS();
+    if (!Array.isArray(pending) || pending.length === 0) return 0;
+    let cleared = 0;
+    for (const purchase of pending) {
+      try {
+        await finishTransaction({ purchase: purchase as Purchase, isConsumable: true });
+        cleared++;
+      } catch (err) {
+        console.warn('[IAP] Failed to finish a stranded transaction:', err);
+      }
+    }
+    if (cleared > 0) console.warn(`[IAP] Cleared ${cleared} stranded transaction(s) from a previous run.`);
+    return cleared;
+  } catch (err) {
+    console.warn('[IAP] Could not read pending transactions:', err);
+    return 0;
   }
 }
 

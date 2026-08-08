@@ -97,6 +97,16 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
   const [paypalUrl, setPaypalUrl] = useState<string | null>(null);
   const pendingOrderRef = useRef<string | null>(null);
   const pendingTierRef = useRef<number>(0);
+  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearWatchdog = () => {
+    if (watchdogRef.current) {
+      clearTimeout(watchdogRef.current);
+      watchdogRef.current = null;
+    }
+  };
+
+  useEffect(() => clearWatchdog, []);
 
   // IAP purchase listener (iOS only)
   useEffect(() => {
@@ -107,6 +117,7 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
         const tierDollars = pendingTierRef.current;
         if (!tierDollars) return;
 
+        clearWatchdog();
         setLoading(true);
         try {
           const p: any = purchase;
@@ -129,6 +140,7 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
         }
       },
       (err) => {
+        clearWatchdog();
         // v15 reports cancellation as "user-cancelled"; keep the legacy code too.
         const code = String(err?.code ?? '');
         if (code !== 'user-cancelled' && code !== 'E_USER_CANCELLED') {
@@ -169,8 +181,22 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
       try {
         const productId = getBuyInProductId(selectedTier.dollars);
         pendingTierRef.current = selectedTier.dollars;
+        // Safety net: the spinner is normally cleared by the purchase/error
+        // listener. If StoreKit ever returns without emitting either event, this
+        // stops the button from spinning forever. Harmless to a slow-but-valid
+        // purchase — when the user finishes Apple's sheet, the listener fires and
+        // re-drives the flow regardless.
+        clearWatchdog();
+        watchdogRef.current = setTimeout(() => {
+          if (pendingTierRef.current) {
+            pendingTierRef.current = 0;
+            setLoading(false);
+            setError('That took longer than expected. Please try again.');
+          }
+        }, 75000);
         await purchaseProduct(productId);
       } catch (err: any) {
+        clearWatchdog();
         setError(err.message || 'Failed to start purchase.');
         setLoading(false);
         pendingTierRef.current = 0;
