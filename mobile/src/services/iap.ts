@@ -26,9 +26,20 @@ export function getBuyInProductId(tierDollars: number): string {
 
 let purchaseUpdateSubscription: ReturnType<typeof purchaseUpdatedListener> | null = null;
 let purchaseErrorSubscription: ReturnType<typeof purchaseErrorListener> | null = null;
+let drainSubscription: ReturnType<typeof purchaseUpdatedListener> | null = null;
 let products: Product[] = [];
 let connected = false;
 let lastError: string | null = null;
+
+// True only while the buy-in screen is actively driving a purchase it intends to
+// verify and credit. The global drain listener below uses this to know which
+// transactions it may finish on sight (stray leftovers) versus which it must
+// leave alone (the live purchase, which the screen finishes itself after the
+// server verifies the receipt). Set via setPurchaseActive() from the screen.
+let purchaseActive = false;
+export function setPurchaseActive(active: boolean): void {
+  purchaseActive = active;
+}
 
 function describeError(err: any): string {
   if (!err) return 'unknown';
@@ -48,17 +59,39 @@ export async function setupIAP(): Promise<void> {
     return;
   }
 
-  // Clear any transaction left unfinished by a previous run. StoreKit keeps an
-  // unfinished consumable transaction in its queue until finishTransaction() is
-  // called — and while one is pending for a given product, tapping that same
-  // tier again neither presents a fresh payment sheet nor emits a new purchase
-  // event, so the buy-in button spins forever. (This is exactly what stranded
-  // the $1 tier: it was bought in an early test round before the receipt fix
-  // landed, verification failed, so the transaction was never finished.)
-  // Flushing on startup unblocks those tiers. Safe to call every launch — the
-  // normal purchase flow finishes its transaction immediately, so nothing that
-  // still needs processing is ever discarded here.
+  // Start the global drain BEFORE anything else can replay. StoreKit re-delivers
+  // every unfinished transaction through the purchase listener when the app
+  // launches / the connection opens. If nothing finishes those replays, an old
+  // consumable stays unfinished forever and — critically — while one sits
+  // unfinished for a given product, re-buying that SAME tier neither presents a
+  // fresh sheet nor emits a purchase event, so the buy-in button spins with no
+  // resolution. That is exactly what stranded the $1 tier: bought in an early
+  // test before the receipt fix, verification failed, the transaction was never
+  // finished, and getPendingTransactionsIOS() does not surface it. Listening for
+  // the replay and finishing it is what actually clears it.
+  startGlobalTransactionDrain();
+
+  // Belt-and-suspenders: also try the queue-query path (some stranded
+  // transactions surface here instead of via replay).
   await flushPendingTransactions();
+}
+
+// Finish stray StoreKit transactions the moment they replay, so a leftover from
+// a previous run can never sit unfinished and block re-purchase of that
+// consumable. Guarded by purchaseActive: while the buy-in screen is driving a
+// live purchase, that transaction is ITS to verify + finish (finishing it here
+// first would take the user's money without crediting), so we leave it alone.
+// Any transaction arriving when no purchase is active is by definition a
+// leftover — finish it and drop it (no credit; it isn't tied to a live buy-in).
+export function startGlobalTransactionDrain(): void {
+  if (Platform.OS !== 'ios') return;
+  if (drainSubscription) return;
+  drainSubscription = purchaseUpdatedListener((purchase) => {
+    if (purchaseActive) return;
+    finishTransaction({ purchase: purchase as Purchase, isConsumable: true })
+      .then(() => console.warn('[IAP] Drained a stray transaction from a previous run.'))
+      .catch((err) => console.warn('[IAP] Failed to drain a stray transaction:', err));
+  });
 }
 
 // Finish (drain) every StoreKit transaction left unfinished from a prior run so
@@ -186,8 +219,10 @@ export async function acknowledgePurchase(purchase: Purchase): Promise<void> {
 export async function teardownIAP(): Promise<void> {
   purchaseUpdateSubscription?.remove();
   purchaseErrorSubscription?.remove();
+  drainSubscription?.remove();
   purchaseUpdateSubscription = null;
   purchaseErrorSubscription = null;
+  drainSubscription = null;
   await endConnection();
   connected = false;
 }

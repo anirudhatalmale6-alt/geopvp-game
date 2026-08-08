@@ -23,6 +23,8 @@ import {
   ensureProducts,
   getLastError,
   getPurchaseReceipt,
+  flushPendingTransactions,
+  setPurchaseActive,
   type ProductPurchase,
 } from '../../services/iap';
 
@@ -115,7 +117,16 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
     const cleanup = listenForPurchases(
       async (purchase: ProductPurchase) => {
         const tierDollars = pendingTierRef.current;
-        if (!tierDollars) return;
+        if (!tierDollars) {
+          // A stray transaction with no active buy-in — e.g. a leftover from a
+          // previous run replaying on launch. Finish it so StoreKit stops
+          // re-delivering it and it can't block a future purchase of the same
+          // tier. Do NOT credit: it isn't tied to a live buy-in. (The global
+          // drain in iap.ts normally catches these first; this is a backstop for
+          // when the screen's own listener receives the replay.)
+          acknowledgePurchase(purchase).catch(() => {});
+          return;
+        }
 
         clearWatchdog();
         setLoading(true);
@@ -131,9 +142,11 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
           );
           await acknowledgePurchase(purchase);
           pendingTierRef.current = 0;
+          setPurchaseActive(false);
           onSessionCreated();
           onClose();
         } catch (err: any) {
+          setPurchaseActive(false);
           setError(err.message || 'Failed to verify purchase.');
         } finally {
           setLoading(false);
@@ -141,6 +154,7 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
       },
       (err) => {
         clearWatchdog();
+        setPurchaseActive(false);
         // v15 reports cancellation as "user-cancelled"; keep the legacy code too.
         const code = String(err?.code ?? '');
         if (code !== 'user-cancelled' && code !== 'E_USER_CANCELLED') {
@@ -180,6 +194,29 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
       }
       try {
         const productId = getBuyInProductId(selectedTier.dollars);
+
+        // Defensive: make sure THIS specific tier's product actually came back
+        // from the App Store. The list-empty check above only catches the case
+        // where *nothing* loaded; if Apple omitted just one SKU we'd otherwise
+        // call requestPurchase for a product StoreKit can't find and spin.
+        if (!getLoadedProducts().some(p => p.id === productId)) {
+          await ensureProducts();
+          if (!getLoadedProducts().some(p => p.id === productId)) {
+            setError('That buy-in isn’t available from the App Store right now. Please try again in a moment.');
+            setLoading(false);
+            return;
+          }
+        }
+
+        // Clear any transaction left unfinished for THIS product before starting
+        // a new one. The global drain + launch-time flush handle the common case,
+        // but flushing again right here closes the last gap. Done BEFORE marking
+        // the purchase active, so nothing tied to the new purchase exists yet.
+        await flushPendingTransactions();
+
+        // From here on a transaction that arrives is OURS to verify + finish, so
+        // tell the global drain to keep its hands off it.
+        setPurchaseActive(true);
         pendingTierRef.current = selectedTier.dollars;
         // Safety net: the spinner is normally cleared by the purchase/error
         // listener. If StoreKit ever returns without emitting either event, this
@@ -190,13 +227,15 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
         watchdogRef.current = setTimeout(() => {
           if (pendingTierRef.current) {
             pendingTierRef.current = 0;
+            setPurchaseActive(false);
             setLoading(false);
             setError('That took longer than expected. Please try again.');
           }
-        }, 75000);
+        }, 40000);
         await purchaseProduct(productId);
       } catch (err: any) {
         clearWatchdog();
+        setPurchaseActive(false);
         setError(err.message || 'Failed to start purchase.');
         setLoading(false);
         pendingTierRef.current = 0;
