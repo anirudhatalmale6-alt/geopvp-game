@@ -225,6 +225,58 @@ var currentZoom = 16;
 var isZoomedOut = false;
 
 var userDragging = false;
+// The last mode the player CHOSE via a button. If they were following
+// themselves and then panned around, we snap back to following after a few
+// idle seconds; if they deliberately switched to world view we leave them be.
+var lastExplicitMode = 'player';
+var autoFollowTimer = null;
+
+function post(msg){
+  try{ (window.ReactNativeWebView||window.parent).postMessage(JSON.stringify(msg),'*'); }catch(e){}
+}
+
+function recenterOnPlayer(animate){
+  var z = map.getZoom() < 13 ? 16 : map.getZoom();
+  map.setView(playerMarker.getLatLng(), z, animate ? {animate:true,duration:0.6} : {animate:false});
+}
+
+// Leaflet caches the container size. If the WebView lays out at one size and
+// settles at another (which happens on first mount, on rotation, and when the
+// keyboard/HUD shifts things), every setView() centres on the STALE size and
+// the player dot ends up parked off to one side instead of dead centre. Re-
+// measuring fixes the dot drifting away from the middle of the screen.
+function remeasure(){
+  map.invalidateSize({animate:false});
+  if(zoomMode === 'player' && !userDragging) recenterOnPlayer(false);
+}
+window.addEventListener('resize', remeasure);
+window.addEventListener('orientationchange', function(){ setTimeout(remeasure, 350); });
+setTimeout(remeasure, 250);
+setTimeout(remeasure, 1000);
+setTimeout(remeasure, 2500);
+
+// Free-look is temporary: after the player stops panning we glide back to them
+// so the map resumes following. Without this, one accidental swipe left the
+// camera stranded for the rest of the round.
+function scheduleAutoFollow(){
+  if(autoFollowTimer) clearTimeout(autoFollowTimer);
+  if(lastExplicitMode !== 'player') return;
+  autoFollowTimer = setTimeout(function(){
+    autoFollowTimer = null;
+    if(zoomMode !== 'free') return;
+    zoomMode = 'player';
+    userDragging = false;
+    recenterOnPlayer(true);
+    post({type:'freeLook',active:false});
+  }, 12000);
+}
+
+function enterFreeLook(){
+  userDragging = true;
+  zoomMode = 'free';
+  post({type:'freeLook',active:true});
+  scheduleAutoFollow();
+}
 
 map.on('zoomend',function(){
   currentZoom = map.getZoom();
@@ -234,20 +286,21 @@ map.on('zoomend',function(){
   if(isZoomedOut) el.classList.add('zoomed-out');
   else el.classList.remove('zoomed-out');
   if(wasZoomedOut !== isZoomedOut) refreshEnemyIcons();
+  if(zoomMode === 'free') scheduleAutoFollow();
 });
 
 map.on('dragstart',function(){
-  userDragging = true;
-  zoomMode = 'free';
-  (window.ReactNativeWebView||window.parent).postMessage(JSON.stringify({type:'freeLook',active:true}),'*');
+  enterFreeLook();
+});
+
+map.on('dragend',function(){
+  // Count the idle window from when the finger LEAVES the screen, not from
+  // when the pan started, so a long drag isn't cut short mid-gesture.
+  if(zoomMode === 'free') scheduleAutoFollow();
 });
 
 map.on('zoomstart',function(){
-  if(!userDragging){
-    userDragging = true;
-    zoomMode = 'free';
-    (window.ReactNativeWebView||window.parent).postMessage(JSON.stringify({type:'freeLook',active:true}),'*');
-  }
+  if(!userDragging) enterFreeLook();
 });
 
 function refreshEnemyIcons(){
@@ -303,7 +356,10 @@ window.addEventListener('message',function(e){
 
     if(d.type==='setZoom'){
       zoomMode = d.mode;
+      lastExplicitMode = d.mode;
       userDragging = false;
+      if(autoFollowTimer){ clearTimeout(autoFollowTimer); autoFollowTimer = null; }
+      map.invalidateSize({animate:false});
       if(d.mode==='world'){
         var bounds = [playerMarker.getLatLng()];
         Object.keys(enemyMarkers).forEach(function(k){bounds.push(enemyMarkers[k].getLatLng());});
@@ -319,6 +375,7 @@ window.addEventListener('message',function(e){
 
     if(d.type==='update'||d.type==='init'){
       if(d.type==='init'){
+        map.invalidateSize({animate:false});
         map.setView([d.lat,d.lng],16,{animate:false});
       } else if(zoomMode==='player' && !userDragging){
         // Keep the player locked dead-center — no animation so the camera can
@@ -625,6 +682,12 @@ export default function MapScreen() {
   const shieldOrderRef = useRef<string | null>(null);
   const [zoomedOut, setZoomedOut] = useState(false);
   const mapRef = useRef<any>(null);
+  // Snap the camera back onto the player and re-arm follow mode.
+  const recenterOnMe = useCallback(() => {
+    setFreeLook(false);
+    setZoomedOut(false);
+    if (mapRef.current) mapRef.current({ type: 'setZoom', mode: 'player' });
+  }, []);
   const locationSub = useRef<Location.LocationSubscription | null>(null);
   const locationFallbackRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastLocationUpdate = useRef<number>(Date.now());
@@ -1370,43 +1433,42 @@ export default function MapScreen() {
                 {location.lat.toFixed(5)}, {location.lng.toFixed(5)}
               </Text>
             </View>
-            {session && (
-              <View style={{ flexDirection: 'row', gap: spacing.xs }}>
-                {freeLook && (
-                  <TouchableOpacity
-                    style={[styles.zoomBtn, styles.zoomBtnActive]}
-                    onPress={() => {
-                      setFreeLook(false);
-                      setZoomedOut(false);
-                      if (mapRef.current) {
-                        mapRef.current({ type: 'setZoom', mode: 'player' });
-                      }
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="navigate" size={16} color={colors.background} />
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity
-                  style={[styles.zoomBtn, zoomedOut && styles.zoomBtnActive]}
-                  onPress={() => {
-                    const newMode = !zoomedOut;
-                    setZoomedOut(newMode);
-                    setFreeLook(false);
-                    if (mapRef.current) {
-                      mapRef.current({ type: 'setZoom', mode: newMode ? 'world' : 'player' });
-                    }
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons
-                    name={zoomedOut ? 'locate' : 'globe-outline'}
-                    size={16}
-                    color={zoomedOut ? colors.background : colors.primary}
-                  />
-                </TouchableOpacity>
-              </View>
-            )}
+            <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+              {/* Recentre on me — always available, so the camera can never be
+                  stranded away from the player with no way back. Lights up
+                  while the map is off-centre (free-look or world view). */}
+              <TouchableOpacity
+                style={[styles.zoomBtn, (freeLook || zoomedOut) && styles.zoomBtnActive]}
+                onPress={recenterOnMe}
+                activeOpacity={0.7}
+                accessibilityLabel="Centre map on my location"
+              >
+                <Ionicons
+                  name="locate"
+                  size={16}
+                  color={(freeLook || zoomedOut) ? colors.background : colors.primary}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.zoomBtn, zoomedOut && styles.zoomBtnActive]}
+                onPress={() => {
+                  const newMode = !zoomedOut;
+                  setZoomedOut(newMode);
+                  setFreeLook(false);
+                  if (mapRef.current) {
+                    mapRef.current({ type: 'setZoom', mode: newMode ? 'world' : 'player' });
+                  }
+                }}
+                activeOpacity={0.7}
+                accessibilityLabel={zoomedOut ? 'Back to close-up view' : 'Zoom out to world view'}
+              >
+                <Ionicons
+                  name={zoomedOut ? 'contract-outline' : 'globe-outline'}
+                  size={16}
+                  color={zoomedOut ? colors.background : colors.primary}
+                />
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
