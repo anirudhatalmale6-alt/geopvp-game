@@ -6,6 +6,9 @@
 <title>CoinProwl Admin</title>
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css"/>
 <script src="vendor/leaflet/leaflet.js"></script>
+<link rel="stylesheet" href="vendor/maplibre/maplibre-gl.css"/>
+<script src="vendor/maplibre/maplibre-gl.js"></script>
+<script src="vendor/maplibre/leaflet-maplibre-gl.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
@@ -448,7 +451,8 @@ if (TOKEN) {
 // ---- Map ----
 function initMap() {
   map = L.map('admin-map', { zoomControl: true }).setView([40.7128, -74.006], 14);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
+  // Same vector basemap the game and the public live map use — see /map-style.json.
+  L.maplibreGL({ style: '/map-style.json' }).addTo(map);
   map.on('click', onMapClick);
 }
 

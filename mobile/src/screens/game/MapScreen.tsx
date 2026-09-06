@@ -53,6 +53,14 @@ import { registerForPushNotifications } from '../../services/notifications';
 import { getTierColor } from '../../utils/tierColors';
 import { checkMockLocation } from '../../utils/anticheat';
 
+import DARK_MAP_STYLE from './coinprowl-dark-style.json';
+
+// Where the live basemap style is served from. Editing that file on the server
+// restyles every player's map on their next launch — no app release needed.
+const MAP_STYLE_URL = (
+  process.env.EXPO_PUBLIC_API_URL || 'https://api.coinprowl.com/api'
+).replace(/\/api\/?$/, '') + '/map-style.json';
+
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 const RANK_TIERS = [
@@ -116,6 +124,9 @@ function LeafletMap({ lat, lng, nearbyPlayers, session, coinDrops, commandRef }:
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css"/>
+<script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js"></script>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   html,body,#map{width:100%;height:100%;background:#0a0e1a}
@@ -211,9 +222,43 @@ function LeafletMap({ lat, lng, nearbyPlayers, session, coinDrops, commandRef }:
 <script>
 var map = L.map('map',{zoomControl:false,attributionControl:false}).setView([0,0],16);
 var zoomMode = 'player';
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
-  maxZoom:19
-}).addTo(map);
+// ---------------------------------------------------------------------------
+// Basemap
+//
+// This used to be CARTO's keyless raster tiles. In Sept 2026 CARTO started
+// stamping "API KEY REQUIRED" diagonally across every tile, which showed up
+// in the live game. The replacement is our own vector style drawn by MapLibre.
+//
+// The style is fetched from the server at runtime so the map's colours — or the
+// tile provider itself, if this one ever does the same thing — can be changed by
+// editing one file on the server. No app update, no store review. If the server
+// is unreachable we fall back to the copy baked into this build, so the map
+// always draws.
+var FALLBACK_STYLE = ${JSON.stringify(DARK_MAP_STYLE)};
+var STYLE_URL = '${MAP_STYLE_URL}';
+
+function addBasemap(style){
+  try{
+    L.maplibreGL({ style: style }).addTo(map);
+  }catch(e){
+    // MapLibre needs WebGL. On a device that can't give us a context, fall back
+    // to plain raster tiles so the player still gets a map to play on.
+    post({type:'basemapFallback', reason:String(e && e.message || e)});
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',{
+      maxZoom:16
+    }).addTo(map);
+  }
+}
+
+(function(){
+  var settled=false;
+  function go(s){ if(settled)return; settled=true; addBasemap(s); }
+  var timer=setTimeout(function(){ go(FALLBACK_STYLE); }, 4000);
+  fetch(STYLE_URL,{cache:'no-cache'})
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(s){ clearTimeout(timer); go(s && s.version ? s : FALLBACK_STYLE); })
+    .catch(function(){ clearTimeout(timer); go(FALLBACK_STYLE); });
+})();
 
 var playerIcon = L.divIcon({className:'',html:'<div class="player-pulse"></div><div class="player-marker"></div>',iconSize:[14,14],iconAnchor:[7,7]});
 var playerMarker = L.marker([0,0],{icon:playerIcon}).addTo(map);

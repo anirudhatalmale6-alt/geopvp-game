@@ -44,6 +44,32 @@ app.get('/health', (_req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Basemap style
+//
+// The game map, the public live map and the admin map all draw their base layer
+// from this one file. It used to be CARTO's keyless raster tiles, until CARTO
+// began stamping "API KEY REQUIRED" across them, which showed up mid-game for
+// every player.
+//
+// Serving it from here (rather than baking it into the app) means the map's
+// colours — or the tile provider itself, if this one ever does the same — can be
+// changed by editing public/website/map-style.json and restarting. No app
+// release, no store review. The mobile client falls back to the copy bundled in
+// its build if this is unreachable, so the map always draws.
+//
+// This needs an explicit route: the SPA catch-all below answers unknown paths
+// with index.html and a 200, which would otherwise hand clients HTML that looks
+// like a successful style fetch.
+const mapStylePath = path.resolve(__dirname, '../public/website/map-style.json');
+app.get('/map-style.json', (_req, res) => {
+  res.type('application/json');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.sendFile(mapStylePath, (err) => {
+    if (err && !res.headersSent) res.status(404).json({ error: 'map style not found' });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Serve admin dashboard
 // ---------------------------------------------------------------------------
 const adminPath = path.resolve(__dirname, '../public/admin');

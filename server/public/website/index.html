@@ -26,6 +26,9 @@
 <meta name="twitter:image" content="https://coinprowl.com/assets/og-image.png">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css" />
+<script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js"></script>
 <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -855,10 +858,13 @@ footer p{color:var(--text2);font-size:13px}
   });
   map.attributionControl.setPrefix(false); // drop the Leaflet flag/prefix, keep tile credit
 
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
-    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
-    subdomains:'abcd',
-    maxZoom:18,
+  // Basemap. CARTO began stamping "API KEY REQUIRED" across their keyless tiles,
+  // so the base layer is now our own vector style served from this same origin
+  // (map-style.json) and drawn by MapLibre. Changing the map's look — or swapping
+  // the tile provider entirely — is a one-file edit here, with no client release.
+  L.maplibreGL({
+    style: '/map-style.json',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://openfreemap.org/">OpenFreeMap</a>',
   }).addTo(map);
 
   const markers = new Map();
