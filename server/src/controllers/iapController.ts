@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import { z } from 'zod';
-import { query } from '../config/database';
+import { query, transaction } from '../config/database';
 import { AuthRequest } from '../middleware/auth';
 import { getCoinTier } from '../utils/coins';
 import { getFreeShieldsForBuyIn } from '../utils/rank';
@@ -15,8 +15,21 @@ const verifyBuyInSchema = z.object({
   receiptData: z.string().min(1),
   productId: z.string().min(1),
   transactionId: z.string().min(1),
-  tierDollars: z.number().int().min(1).max(25),
+  // Optional. A purchase the app is replaying (one that was paid for but never
+  // credited — app killed mid-flow, network dropped, backgrounded during
+  // Apple's sheet) has no screen state behind it to say which tier it was, so
+  // the client can't send this. We derive it from the product id Apple signed,
+  // which is the authoritative value anyway.
+  tierDollars: z.number().int().min(1).max(25).optional(),
 });
+
+// "coinprowl_buyin_7" -> 7. Returns null for anything that isn't a buy-in SKU.
+function tierFromProductId(productId: string): number | null {
+  const m = /^coinprowl_buyin_(\d{1,2})$/.exec(productId);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return n >= 1 && n <= 25 ? n : null;
+}
 
 const verifyShieldSchema = z.object({
   receiptData: z.string().min(1),
@@ -134,28 +147,27 @@ export async function verifyBuyIn(req: AuthRequest, res: Response): Promise<void
 
     const transactionId = verification.transactionId || parsedTier.transactionId;
     const productId = verification.productId || parsedTier.productId;
-    const { tierDollars } = parsedTier;
 
-    // Prevent replay
-    if (await isTransactionProcessed(transactionId)) {
-      res.status(400).json({ error: 'This purchase has already been processed.' });
+    // The tier always comes from the product id Apple signed. The client may
+    // send one too, but it is only ever used to cross-check.
+    const tierDollars = tierFromProductId(productId);
+    if (tierDollars === null) {
+      res.status(400).json({ error: 'Not a buy-in product.' });
       return;
     }
-
-    // Validate product ID matches tier
-    const expectedProductId = `coinprowl_buyin_${tierDollars}`;
-    if (productId !== expectedProductId) {
+    if (parsedTier.tierDollars !== undefined && parsedTier.tierDollars !== tierDollars) {
       res.status(400).json({ error: 'Product ID does not match tier.' });
       return;
     }
 
-    // Record the IAP transaction
-    await query(
-      `INSERT INTO iap_transactions (transaction_id, user_id, product_id, type, tier_dollars, status, sandbox)
-       VALUES ($1, $2, $3, 'buyin', $4, 'COMPLETED', $5)
-       ON CONFLICT (transaction_id) DO NOTHING`,
-      [transactionId, userId, productId, tierDollars, verification.sandbox],
-    );
+    // Already credited. This is a SUCCESS for the caller, not an error: the app
+    // replays unfinished transactions until the server confirms they landed, and
+    // a 400 here would make it treat a paid-and-credited purchase as failed and
+    // replay it forever.
+    if (await isTransactionProcessed(transactionId)) {
+      res.status(200).json({ alreadyProcessed: true });
+      return;
+    }
 
     // Geo check
     const lastLoc = await query(
@@ -173,51 +185,64 @@ export async function verifyBuyIn(req: AuthRequest, res: Response): Promise<void
       }
     }
 
-    // Deactivate any existing active session
-    await query(
-      `UPDATE game_sessions SET is_active = false WHERE user_id = $1 AND is_active = true`,
-      [userId],
-    );
-
     const tierCents = tierDollars * 100;
     const tier = getCoinTier(tierCents);
     const mapCoins = tierDollars * 10;
 
-    // Ensure wallet row exists
-    await query(
-      `INSERT INTO wallets (user_id, balance) VALUES ($1, 0) ON CONFLICT DO NOTHING`,
-      [userId],
-    );
-
     // Mythic Prowler perk: free shields on every buy-in.
     const freeShields = await getFreeShieldsForBuyIn(userId, mapCoins);
 
-    // Create game session
-    const sessionResult = await query(
-      `INSERT INTO game_sessions (
-         user_id, buyin_amount, coin_tier, map_coins,
-         shields_purchased, shields_remaining
-       ) VALUES ($1, $2, $3, $4, 0, $5)
-       RETURNING *`,
-      [userId, tierCents, tier.name, mapCoins, freeShields],
-    );
+    // Mark the purchase spent and hand over the coins in ONE database
+    // transaction. These used to be separate statements, so a failure partway
+    // through could record the purchase as COMPLETED while crediting nothing —
+    // and because that row is what blocks replays, the money became
+    // unrecoverable. All of it commits or none of it does.
+    const session = await transaction(async (q) => {
+      // The INSERT is the lock: a second concurrent verify of the same
+      // transaction id hits the unique constraint and credits nothing.
+      const claimed = await q(
+        `INSERT INTO iap_transactions (transaction_id, user_id, product_id, type, tier_dollars, status, sandbox)
+         VALUES ($1, $2, $3, 'buyin', $4, 'COMPLETED', $5)
+         ON CONFLICT (transaction_id) DO NOTHING
+         RETURNING id`,
+        [transactionId, userId, productId, tierDollars, verification.sandbox],
+      );
+      if (claimed.rows.length === 0) return null; // raced; already credited
 
-    const session = sessionResult.rows[0];
+      await q(
+        `UPDATE game_sessions SET is_active = false WHERE user_id = $1 AND is_active = true`,
+        [userId],
+      );
+      await q(
+        `INSERT INTO wallets (user_id, balance) VALUES ($1, 0) ON CONFLICT DO NOTHING`,
+        [userId],
+      );
+      const sessionResult = await q(
+        `INSERT INTO game_sessions (
+           user_id, buyin_amount, coin_tier, map_coins,
+           shields_purchased, shields_remaining
+         ) VALUES ($1, $2, $3, $4, 0, $5)
+         RETURNING *`,
+        [userId, tierCents, tier.name, mapCoins, freeShields],
+      );
+      await q(
+        `INSERT INTO transactions (user_id, type, amount, currency, description)
+         VALUES ($1, 'buyin', $2, 'prowl', $3)`,
+        [userId, -tierCents, `Purchased ${mapCoins} Prowl Coins ($${tierDollars} ${tier.name} tier) via Apple IAP`],
+      );
+      await q(
+        `INSERT INTO prowl_balances (user_id, balance, updated_at)
+         VALUES ($1, $2, now())
+         ON CONFLICT (user_id) DO UPDATE SET balance = prowl_balances.balance + $2, updated_at = now()`,
+        [userId, mapCoins],
+      );
+      return sessionResult.rows[0];
+    });
 
-    // Record transaction
-    await query(
-      `INSERT INTO transactions (user_id, type, amount, currency, description)
-       VALUES ($1, 'buyin', $2, 'prowl', $3)`,
-      [userId, -tierCents, `Purchased ${mapCoins} Prowl Coins ($${tierDollars} ${tier.name} tier) via Apple IAP`],
-    );
-
-    // Credit Prowl Coins
-    await query(
-      `INSERT INTO prowl_balances (user_id, balance, updated_at)
-       VALUES ($1, $2, now())
-       ON CONFLICT (user_id) DO UPDATE SET balance = prowl_balances.balance + $2, updated_at = now()`,
-      [userId, mapCoins],
-    );
+    if (!session) {
+      res.status(200).json({ alreadyProcessed: true });
+      return;
+    }
 
     res.json({ session: formatSession(session) });
   } catch (err: any) {

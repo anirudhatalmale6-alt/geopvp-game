@@ -368,14 +368,15 @@ export async function verifyBuyInReceipt(
   receiptData: string,
   productId: string,
   transactionId: string,
-  tierDollars: number,
-): Promise<{ session: GameSession }> {
-  const { data } = await api.post<{ session: GameSession }>('/iap/buyin/verify', {
-    receiptData,
-    productId,
-    transactionId,
-    tierDollars,
-  });
+  // Omitted when replaying a purchase that was paid for but never credited —
+  // there's no screen state behind it to say which tier it was. The server
+  // derives the tier from the product id Apple signed.
+  tierDollars?: number,
+): Promise<{ session?: GameSession; alreadyProcessed?: boolean }> {
+  const { data } = await api.post<{ session?: GameSession; alreadyProcessed?: boolean }>(
+    '/iap/buyin/verify',
+    { receiptData, productId, transactionId, ...(tierDollars ? { tierDollars } : {}) },
+  );
   return data;
 }
 

@@ -18,6 +18,7 @@ import {
   getBuyInProductId,
   purchaseProduct,
   acknowledgePurchase,
+  redeemAndFinish,
   listenForPurchases,
   getLoadedProducts,
   ensureProducts,
@@ -118,13 +119,16 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
       async (purchase: ProductPurchase) => {
         const tierDollars = pendingTierRef.current;
         if (!tierDollars) {
-          // A stray transaction with no active buy-in — e.g. a leftover from a
-          // previous run replaying on launch. Finish it so StoreKit stops
-          // re-delivering it and it can't block a future purchase of the same
-          // tier. Do NOT credit: it isn't tied to a live buy-in. (The global
-          // drain in iap.ts normally catches these first; this is a backstop for
-          // when the screen's own listener receives the replay.)
-          acknowledgePurchase(purchase).catch(() => {});
+          // A transaction arriving with no buy-in in flight. It has still been
+          // PAID FOR — this is the second charge of a double-tap, or a purchase
+          // that landed after we gave up waiting, or a replay from a previous
+          // run. Redeem it through the server (which reads the tier from the
+          // product id Apple signed and won't credit the same purchase twice),
+          // and only then finish it.
+          //
+          // This branch used to just acknowledge and drop the transaction, which
+          // took the user's money and gave nothing back.
+          redeemAndFinish(purchase).catch(() => {});
           return;
         }
 
