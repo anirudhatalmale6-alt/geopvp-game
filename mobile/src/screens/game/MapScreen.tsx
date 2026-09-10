@@ -124,8 +124,8 @@ function LeafletMap({ lat, lng, nearbyPlayers, session, coinDrops, commandRef }:
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css"/>
-<script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css"/>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js"></script>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
@@ -237,16 +237,53 @@ var zoomMode = 'player';
 var FALLBACK_STYLE = ${JSON.stringify(DARK_MAP_STYLE)};
 var STYLE_URL = '${MAP_STYLE_URL}';
 
+var glLayer = null;
+
+function useRasterFallback(reason){
+  post({type:'basemapFallback', reason:String(reason)});
+  if(glLayer){ try{ map.removeLayer(glLayer); }catch(e){} glLayer = null; }
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',{
+    maxZoom:16
+  }).addTo(map);
+}
+
+// The GL basemap is a separate camera bolted onto Leaflet's. If the two stop
+// agreeing, the map still LOOKS fine — it draws roads and labels as usual — but
+// every marker sits at the wrong place on it, and nothing throws.
+//
+// That shipped once. maplibre-gl 5.x is not compatible with the 0.0.22 Leaflet
+// plugin: the GL camera silently stayed at its initial view while Leaflet moved,
+// so players saw their own dot a thousand miles out to sea. The version is
+// pinned below, but this app cannot be hot-fixed — a bad CDN resolve would sit
+// in front of players until the next store review. So verify the two cameras
+// actually agree, and if they ever do not, throw the GL layer away and use
+// raster tiles, which are drawn by Leaflet itself and cannot drift.
+function watchBasemapSync(){
+  var checks = 0;
+  map.on('moveend', function(){
+    if(!glLayer || checks > 6) return;
+    var gl = glLayer.getMaplibreMap && glLayer.getMaplibreMap();
+    if(!gl) return;
+    var want = map.getCenter(), got = gl.getCenter();
+    // Ignore the opening state, when both sit at [0,0] and agreeing proves
+    // nothing. Only judge once Leaflet has actually gone somewhere.
+    if(Math.abs(want.lat) < 0.01 && Math.abs(want.lng) < 0.01) return;
+    checks++;
+    if(Math.abs(got.lat - want.lat) > 0.001 || Math.abs(got.lng - want.lng) > 0.001){
+      useRasterFallback('gl camera desynced: leaflet ' + want.lat.toFixed(4) + ',' +
+        want.lng.toFixed(4) + ' vs gl ' + got.lat.toFixed(4) + ',' + got.lng.toFixed(4));
+    }
+  });
+}
+
 function addBasemap(style){
   try{
-    L.maplibreGL({ style: style }).addTo(map);
+    glLayer = L.maplibreGL({ style: style }).addTo(map);
+    watchBasemapSync();
   }catch(e){
     // MapLibre needs WebGL. On a device that can't give us a context, fall back
     // to plain raster tiles so the player still gets a map to play on.
-    post({type:'basemapFallback', reason:String(e && e.message || e)});
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',{
-      maxZoom:16
-    }).addTo(map);
+    useRasterFallback(e && e.message || e);
   }
 }
 
