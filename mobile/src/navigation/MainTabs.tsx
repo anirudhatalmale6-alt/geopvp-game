@@ -7,6 +7,11 @@ import MapScreen from '../screens/game/MapScreen';
 import WalletScreen from '../screens/game/WalletScreen';
 import RanksScreen from '../screens/game/RanksScreen';
 import ProfileScreen from '../screens/game/ProfileScreen';
+import PlayOnPhoneScreen from '../web/PlayOnPhoneScreen';
+import { isWeb, isPhoneBrowser } from '../web/platform';
+
+// a computer browser gets everything but the map (see PlayOnPhoneScreen)
+const MapTab = isWeb && !isPhoneBrowser() ? PlayOnPhoneScreen : MapScreen;
 
 const Tab = createBottomTabNavigator();
 
@@ -31,7 +36,9 @@ export default function MainTabs() {
           backgroundColor: '#111827',
           borderTopColor: colors.border,
           borderTopWidth: 1,
-          height: Platform.OS === 'ios' ? 82 : 62,
+          // website: the browser's default 49 px left the labels 4 px tall; the iPhone notch / home bar are padded
+          // around the whole page in the web index.html (env(safe-area-inset-*)), not here
+          height: Platform.OS === 'ios' ? 82 : Platform.OS === 'web' ? 64 : 62,
           paddingBottom: Platform.OS === 'ios' ? 24 : 8,
           paddingTop: 8,
         },
@@ -65,7 +72,7 @@ export default function MainTabs() {
     >
       <Tab.Screen
         name="Map"
-        component={MapScreen}
+        component={MapTab}
         options={{
           headerShown: false,
           tabBarLabel: 'MAP',

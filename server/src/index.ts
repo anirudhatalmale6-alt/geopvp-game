@@ -84,6 +84,23 @@ app.get(['/download', '/get', '/app'], (_req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// The game in the browser: coinprowl.com/play (built by mobile/scripts/build-web.py)
+// index.html / manifest must never be cached (a new build changes the bundle name); the hashed bundle and
+// assets can be cached for good.
+// ---------------------------------------------------------------------------
+const playPath = path.resolve(__dirname, '../public/play');
+app.use('/play', express.static(playPath, {
+  setHeaders(res, filePath) {
+    if (/index\.html$|\.webmanifest$/.test(filePath)) res.setHeader('Cache-Control', 'no-cache');
+    else if (/[\\/](_expo|assets)[\\/]/.test(filePath)) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  },
+}));
+app.get(['/play', '/play/*'], (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(path.join(playPath, 'index.html'));
+});
+
+// ---------------------------------------------------------------------------
 // Serve CoinProwl website
 // ---------------------------------------------------------------------------
 const websitePath = path.resolve(__dirname, '../public/website');

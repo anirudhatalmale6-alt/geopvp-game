@@ -43,7 +43,11 @@
       ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "name": "CoinProwl",
+      "shortName": "CoinProwl",
+      "themeColor": "#0a0e1a",
+      "backgroundColor": "#0a0e1a"
     },
     "plugins": [
       "expo-secure-store",
@@ -70,6 +74,9 @@
         "projectId": "11126288-80da-4f3a-ace6-3a26ed62bd4b"
       }
     },
-    "owner": "arialtravel"
+    "owner": "arialtravel",
+    "experiments": {
+      "baseUrl": "/play"
+    }
   }
 }

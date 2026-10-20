@@ -1,0 +1,30 @@
+{
+  "name": "CoinProwl",
+  "short_name": "CoinProwl",
+  "description": "GPS PvP battle game. Play. Prowl. Earn.",
+  "id": "/play/",
+  "start_url": "/play/",
+  "scope": "/play/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0e1a",
+  "theme_color": "#0a0e1a",
+  "icons": [
+    {
+      "src": "/play/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/play/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/play/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

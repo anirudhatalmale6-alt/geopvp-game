@@ -8,6 +8,10 @@ import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { colors } from './src/theme';
 import { setupIAP, loadProducts, teardownIAP } from './src/services/iap';
 import GeoRestrictedScreen from './src/screens/game/GeoRestrictedScreen';
+import { AlertHost, installWebAlert } from './src/web/webAlert';
+import { isWeb, isPhoneBrowser } from './src/web/platform';
+
+installWebAlert();
 
 import LoginScreen from './src/screens/auth/LoginScreen';
 import SignUpScreen from './src/screens/auth/SignUpScreen';
@@ -114,9 +118,12 @@ function AppNavigator() {
   return (
     <NavigationContainer theme={DarkTheme}>
       {isAuthenticated ? (
-        <GeoRestrictedScreen>
-          <MainStack />
-        </GeoRestrictedScreen>
+        // a computer browser only gets the account side (no map), so there is no location to check
+        isWeb && !isPhoneBrowser() ? <MainStack /> : (
+          <GeoRestrictedScreen>
+            <MainStack />
+          </GeoRestrictedScreen>
+        )
       ) : (
         <AuthStack />
       )}
@@ -134,6 +141,7 @@ export default function App() {
     <AuthProvider>
       <StatusBar style="light" />
       <AppNavigator />
+      <AlertHost />
     </AuthProvider>
   );
 }

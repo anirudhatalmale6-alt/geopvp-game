@@ -28,6 +28,7 @@ import {
   setPurchaseActive,
   type ProductPurchase,
 } from '../../services/iap';
+import { isWeb, WEB_BUY_MESSAGE } from '../../web/platform';
 
 interface TierOption {
   dollars: number;
@@ -175,6 +176,13 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
   const handleBuyIn = async () => {
     setLoading(true);
     setError(null);
+
+    // website: no in-browser checkout yet — coins are bought in the app, the account is the same
+    if (isWeb) {
+      setError(WEB_BUY_MESSAGE);
+      setLoading(false);
+      return;
+    }
 
     // iOS: coins are ALWAYS bought through Apple in-app purchase. We never fall
     // back to PayPal on iOS — Apple requires IAP for in-app currency, and

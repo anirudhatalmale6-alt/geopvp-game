@@ -10,6 +10,15 @@ import {
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius, fontSize } from '../../theme';
+import { checkGeoFence } from '../../api/game';
+import { isWeb } from '../../web/platform';
+
+// Web: browsers can't reverse-geocode, so the country check is a set of boxes (lower 48, Alaska, Hawaii,
+// Puerto Rico) and the state check is the server's own geofence — the same one the buy-in endpoints enforce.
+const US_BOXES: [number, number, number, number][] = [
+  [24.4, 49.4, -125.0, -66.9], [51.0, 71.6, -180.0, -129.9], [18.9, 22.3, -160.3, -154.8], [17.9, 18.6, -67.3, -65.2],
+];
+const inUS = (lat: number, lng: number) => US_BOXES.some(([a, b, c, d]) => lat >= a && lat <= b && lng >= c && lng <= d);
 
 const RESTRICTED_STATES = [
   'Arizona',
@@ -49,6 +58,15 @@ export default function GeoRestrictedScreen({ children }: Props) {
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       });
+
+      if (isWeb) {
+        const { latitude, longitude } = location.coords;
+        if (!inUS(latitude, longitude)) { setStateName(''); setStatus('outside_us'); return; }
+        const fence = await checkGeoFence(latitude, longitude);
+        if (fence.blocked) { setStateName(fence.state || fence.stateCode || ''); setStatus('restricted'); }
+        else setStatus('allowed');
+        return;
+      }
 
       const [geocode] = await Location.reverseGeocodeAsync({
         latitude: location.coords.latitude,
@@ -149,6 +167,11 @@ export default function GeoRestrictedScreen({ children }: Props) {
         <Text style={styles.message}>
           CoinProwl requires location access to verify you're in an eligible region. Please enable location permissions to continue.
         </Text>
+        {isWeb && (
+          <Text style={styles.submessage}>
+            In your browser: tap the icon next to the web address, set Location to Allow, then tap Try Again. On iPhone also check Settings → Privacy → Location Services → Safari Websites → While Using.
+          </Text>
+        )}
         <TouchableOpacity style={styles.retryButton} onPress={checkLocation}>
           <Ionicons name="refresh" size={20} color={colors.text} />
           <Text style={styles.retryText}>Try Again</Text>

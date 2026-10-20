@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -54,6 +54,8 @@ import { getTierColor } from '../../utils/tierColors';
 import { checkMockLocation } from '../../utils/anticheat';
 
 import DARK_MAP_STYLE from './coinprowl-dark-style.json';
+import { isWeb, WEB_BUY_MESSAGE } from '../../web/platform';
+import { holdScreenOn } from '../../web/wakeLock';
 
 // Where the live basemap style is served from. Editing that file on the server
 // restyles every player's map on their next launch — no app release needed.
@@ -561,6 +563,12 @@ window.addEventListener('message',function(e){
 
   const webViewRef = useRef<any>(null);
 
+  // Website: load the map page from a blob: URL, not srcDoc. MapLibre draws the streets in web workers, and
+  // those never start inside a srcdoc frame — the style never finishes loading and the map stays black (no
+  // error). A blob: page is a normal same-origin document, so the workers run.
+  const webMapUrl = useMemo(() => (Platform.OS === 'web' ? URL.createObjectURL(new Blob([html], { type: 'text/html' })) : ''), [html]);
+  useEffect(() => () => { if (webMapUrl) URL.revokeObjectURL(webMapUrl); }, [webMapUrl]);
+
   const sendCommand = useCallback((cmd: any) => {
     const payload = JSON.stringify(cmd);
     if (Platform.OS === 'web') {
@@ -673,7 +681,7 @@ window.addEventListener('message',function(e){
     return (
       <iframe
         ref={iframeRef as any}
-        srcDoc={html}
+        src={webMapUrl}
         style={{
           width: '100%',
           height: '100%',
@@ -712,6 +720,7 @@ window.addEventListener('message',function(e){
 // ---------------------------------------------------------------------------
 
 export default function MapScreen() {
+  useEffect(() => holdScreenOn(), []);   // website: keep the screen on so the browser keeps GPS running
   const [session, setSession] = useState<GameSession | null>(null);
   const [nearbyPlayers, setNearbyPlayers] = useState<NearbyPlayer[]>([]);
   const [coinDrops, setCoinDrops] = useState<CoinDrop[]>([]);
@@ -1329,6 +1338,7 @@ export default function MapScreen() {
     if (remaining <= 0) return;
 
     const purchaseShield = async (type: 'standard' | 'gold') => {
+      if (isWeb) { Alert.alert('Shields', WEB_BUY_MESSAGE); return; }
       const productId = type === 'gold' ? SHIELD_PREMIUM_PRODUCT_ID : SHIELD_PRODUCT_ID;
       if (Platform.OS === 'ios' && getLoadedProducts().length > 0) {
         try {

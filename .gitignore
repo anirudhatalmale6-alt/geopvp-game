@@ -23,3 +23,6 @@ coinprowl-release.keystore
 # Android build artifacts (hosted directly on prod, never in repo)
 *.apk
 *.aab
+
+# the web build (coinprowl.com/play) keeps its fonts/icons under assets/node_modules/ — they must ship
+!server/public/play/assets/node_modules/
