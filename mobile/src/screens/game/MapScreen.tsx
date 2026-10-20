@@ -1657,7 +1657,8 @@ export default function MapScreen() {
         })()}
 
         {/* Spacer pushes action buttons to bottom */}
-        <View style={{ flex: 1 }} />
+        {/* spacer over the map: must let touches through (on the web it swallowed pinch-zoom and drag) */}
+        <View style={{ flex: 1 }} pointerEvents="none" />
 
         {/* Action buttons at bottom */}
         <View style={styles.actionRow} pointerEvents="auto">
