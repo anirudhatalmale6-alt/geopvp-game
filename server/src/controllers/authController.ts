@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { query } from '../config/database';
 import { config } from '../config/env';
 import { AuthRequest } from '../middleware/auth';
-import { sendVerificationEmail, sendPasswordResetEmail } from '../utils/email';
+import { sendVerificationEmail, sendPasswordResetEmail, emailConfigured } from '../utils/email';
 
 // ---------------------------------------------------------------------------
 // Zod schemas
@@ -169,7 +169,7 @@ export async function signup(req: Request, res: Response): Promise<void> {
     );
 
     // In dev mode (no real SMTP), auto-verify and return tokens
-    const devMode = config.smtp.pass === 'placeholder_for_now';
+    const devMode = !emailConfigured();
     if (devMode) {
       await query(
         'UPDATE users SET is_verified = true, verification_code = NULL, verification_expires = NULL WHERE id = $1',
@@ -274,7 +274,7 @@ export async function resendCode(req: Request, res: Response): Promise<void> {
       [verificationCode, codeExpiry, user.id],
     );
 
-    const devMode = config.smtp.pass === 'placeholder_for_now';
+    const devMode = !emailConfigured();
     if (!devMode) {
       await sendVerificationEmail(email, verificationCode);
     }
@@ -405,6 +405,13 @@ export async function forgotPassword(req: Request, res: Response): Promise<void>
 
     const { email } = parsed.data;
 
+    // No mail account set up yet: say so, instead of "a code has been sent" and a code that never arrives
+    if (!emailConfigured()) {
+      const msg = 'Password reset by email is not available right now. Please contact support.';
+      res.status(503).json({ error: msg, message: msg });
+      return;
+    }
+
     // Always return success to not reveal if email exists
     const result = await query(
       'SELECT id FROM users WHERE email = $1',
@@ -420,10 +427,7 @@ export async function forgotPassword(req: Request, res: Response): Promise<void>
         [resetCode, codeExpiry, result.rows[0].id],
       );
 
-      const devMode = config.smtp.pass === 'placeholder_for_now';
-      if (!devMode) {
-        await sendPasswordResetEmail(email, resetCode);
-      }
+      await sendPasswordResetEmail(email, resetCode);
     }
 
     res.json({ message: 'If that email is registered, a reset code has been sent.' });

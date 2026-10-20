@@ -56,6 +56,7 @@ head = f'''
     <meta name="description" content="CoinProwl - GPS PvP battle game. Log in and play in your browser." />
     <style>
       html, body {{ background: {BG}; }}
+      input:focus, textarea:focus {{ outline: none; }}   /* the app draws its own focus border */
       /* iPhone home-screen app: keep the game clear of the notch and the home bar */
       #root {{ box-sizing: border-box; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }}
     </style>

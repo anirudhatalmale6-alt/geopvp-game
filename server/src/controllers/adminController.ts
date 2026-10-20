@@ -1,3 +1,4 @@
+import { loadMailSettings, saveMailSettings, verifyMailSettings, sendTestEmail, MailSettings } from '../utils/email';
 import { Response } from 'express';
 import { z } from 'zod';
 import crypto from 'crypto';
@@ -983,5 +984,58 @@ export async function denyWithdrawal(req: AuthRequest, res: Response): Promise<v
   } catch (err) {
     console.error('denyWithdrawal error:', err);
     res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// EMAIL tab: the mail account the sign-up / password reset codes are sent from.
+// The password goes browser -> this server only; it is never returned to the browser.
+// ---------------------------------------------------------------------------
+
+export async function getEmailSettings(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    if (!(await requireAdmin(req, res))) return;
+    const s = loadMailSettings();
+    res.json({ configured: !!s, host: s?.host || 'smtp.ionos.com', port: s?.port || 587, user: s?.user || '', from: s?.from || '' });
+  } catch (err) {
+    console.error('getEmailSettings error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+export async function saveEmailSettings(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    if (!(await requireAdmin(req, res))) return;
+    const b = req.body || {};
+    const user = String(b.user || '').trim(), pass = String(b.pass || ''), host = String(b.host || 'smtp.ionos.com').trim();
+    const port = parseInt(b.port, 10) || 587;
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(user)) { res.status(400).json({ error: 'Enter the full email address of the mailbox.' }); return; }
+    // keep the saved password if the field was left empty (changing only the address / sender name)
+    const prev = loadMailSettings();
+    const s: MailSettings = { host, port, secure: port === 465, user, pass: pass || (prev && prev.user === user ? prev.pass : ''), from: `CoinProwl <${user}>` };
+    if (!s.pass) { res.status(400).json({ error: 'Enter the mailbox password.' }); return; }
+    try {
+      await verifyMailSettings(s);
+    } catch (e: any) {
+      res.status(400).json({ error: 'The mail server refused these details: ' + String(e && (e.response || e.message) || e).slice(0, 200) });
+      return;
+    }
+    saveMailSettings(s);
+    res.json({ ok: true, configured: true, user });
+  } catch (err) {
+    console.error('saveEmailSettings error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+export async function testEmailSettings(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    if (!(await requireAdmin(req, res))) return;
+    const to = String((req.body || {}).to || '').trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) { res.status(400).json({ error: 'Enter an email address to send the test to.' }); return; }
+    await sendTestEmail(to);
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(400).json({ error: 'Sending failed: ' + String(e && (e.response || e.message) || e).slice(0, 200) });
   }
 }

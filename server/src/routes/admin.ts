@@ -24,6 +24,9 @@ import {
   markWithdrawalPaid,
   adminLogin,
   adminLogout,
+  getEmailSettings,
+  saveEmailSettings,
+  testEmailSettings,
 } from '../controllers/adminController';
 
 const router = Router();
@@ -51,6 +54,9 @@ router.get('/withdrawals', listWithdrawals);
 router.post('/withdrawals/:id/approve', approveWithdrawal);
 router.post('/withdrawals/:id/mark-paid', markWithdrawalPaid);
 router.post('/withdrawals/:id/deny', denyWithdrawal);
+router.get('/email-settings', getEmailSettings);
+router.post('/email-settings', saveEmailSettings);
+router.post('/email-settings/test', testEmailSettings);
 router.post('/login', adminLogin);
 router.post('/logout', adminLogout);
 

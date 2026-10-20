@@ -1,17 +1,60 @@
-import nodemailer from 'nodemailer';
+import fs from 'fs';
+import path from 'path';
+import nodemailer, { Transporter } from 'nodemailer';
 import { config } from '../config/env';
 
-const transporter = nodemailer.createTransport({
-  host: config.smtp.host,
-  port: config.smtp.port,
-  secure: config.smtp.secure,
-  auth: {
-    user: config.smtp.user,
-    pass: config.smtp.pass,
-  },
-});
+// ---------------------------------------------------------------------------
+// The mail account the codes are sent from.
+//
+// Set from the admin panel (EMAIL tab): the owner types the mailbox password there himself, it is checked
+// against the mail server, then kept in this file on the server only (chmod 600, never in git, never sent
+// back to the browser). If the file is absent, the .env SMTP_* values are used — unless SMTP_PASS is still the
+// launch placeholder, which means no email at all (sign-ups are auto-verified and password reset can't work).
+// ---------------------------------------------------------------------------
+const SETTINGS_FILE = path.resolve(__dirname, '../../.email-settings.json');
 
-const fromAddress = config.smtp.from || `${config.appName} <${config.smtp.user}>`;
+export interface MailSettings { host: string; port: number; secure: boolean; user: string; pass: string; from?: string }
+
+export function loadMailSettings(): MailSettings | null {
+  try {
+    const s = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
+    if (s && s.user && s.pass && s.host) return s;
+  } catch { /* not set up from the panel */ }
+  if (config.smtp.pass && config.smtp.pass !== 'placeholder_for_now') return { ...config.smtp };
+  return null;
+}
+
+export function emailConfigured(): boolean {
+  return loadMailSettings() !== null;
+}
+
+function makeTransport(s: MailSettings): Transporter {
+  // timeouts: a mail server that stops answering must fail the request, not hang it (nodemailer waits minutes)
+  return nodemailer.createTransport({
+    host: s.host, port: s.port, secure: s.secure, auth: { user: s.user, pass: s.pass },
+    connectionTimeout: 15000, greetingTimeout: 10000, socketTimeout: 20000,
+  });
+}
+
+/** Log in to the mail server with these settings (throws with the server's reason if it refuses). */
+export async function verifyMailSettings(s: MailSettings): Promise<void> {
+  await makeTransport(s).verify();
+}
+
+export function saveMailSettings(s: MailSettings): void {
+  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(s), { mode: 0o600 });
+  fs.chmodSync(SETTINGS_FILE, 0o600);
+  cached = null;
+}
+
+let cached: { key: string; t: Transporter } | null = null;
+function current(): { t: Transporter; from: string } {
+  const s = loadMailSettings();
+  if (!s) throw new Error('Email is not set up');
+  const key = JSON.stringify(s);
+  if (!cached || cached.key !== key) cached = { key, t: makeTransport(s) };
+  return { t: cached.t, from: s.from || `${config.appName} <${s.user}>` };
+}
 
 function codeTemplate(title: string, code: string, message: string): string {
   return `
@@ -62,8 +105,9 @@ function codeTemplate(title: string, code: string, message: string): string {
 }
 
 export async function sendVerificationEmail(to: string, code: string): Promise<void> {
-  await transporter.sendMail({
-    from: fromAddress,
+  const { t, from } = current();
+  await t.sendMail({
+    from,
     to,
     subject: `${config.appName} - Verify Your Email`,
     html: codeTemplate(
@@ -75,8 +119,9 @@ export async function sendVerificationEmail(to: string, code: string): Promise<v
 }
 
 export async function sendPasswordResetEmail(to: string, code: string): Promise<void> {
-  await transporter.sendMail({
-    from: fromAddress,
+  const { t, from } = current();
+  await t.sendMail({
+    from,
     to,
     subject: `${config.appName} - Password Reset`,
     html: codeTemplate(
@@ -84,5 +129,15 @@ export async function sendPasswordResetEmail(to: string, code: string): Promise<
       code,
       'Enter this code in the app to reset your password.'
     ),
+  });
+}
+
+export async function sendTestEmail(to: string): Promise<void> {
+  const { t, from } = current();
+  await t.sendMail({
+    from,
+    to,
+    subject: `${config.appName} - Email is working`,
+    html: codeTemplate('Email is working', 'OK', 'Players will now get their sign-up and password reset codes by email.'),
   });
 }

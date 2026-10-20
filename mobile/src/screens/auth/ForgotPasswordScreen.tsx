@@ -201,6 +201,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
+    minWidth: 0,   // web: an <input> has a ~170px built-in width; without this it spills out of narrow boxes
     color: colors.text,
     fontSize: fontSize.md,
     paddingVertical: spacing.md,

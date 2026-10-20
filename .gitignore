@@ -26,3 +26,6 @@ coinprowl-release.keystore
 
 # the web build (coinprowl.com/play) keeps its fonts/icons under assets/node_modules/ — they must ship
 !server/public/play/assets/node_modules/
+
+# mail account set from the admin panel (server only)
+server/.email-settings.json

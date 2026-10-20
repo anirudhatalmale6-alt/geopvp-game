@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -34,6 +34,8 @@ export default function SignUpScreen({ navigation }: Props) {
   const [dobMonth, setDobMonth] = useState('');
   const [dobDay, setDobDay] = useState('');
   const [dobYear, setDobYear] = useState('');
+  const dayRef = useRef<TextInput>(null);
+  const yearRef = useRef<TextInput>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -181,11 +183,11 @@ export default function SignUpScreen({ navigation }: Props) {
           <View style={styles.dobRow}>
             <View style={[styles.inputWrapper, styles.dobInput]}>
               <TextInput
-                style={styles.input}
+                style={[styles.input, styles.dobText]}
                 placeholder="MM"
                 placeholderTextColor={colors.textMuted}
                 value={dobMonth}
-                onChangeText={(t) => setDobMonth(t.replace(/[^0-9]/g, '').slice(0, 2))}
+                onChangeText={(t) => { const v = t.replace(/[^0-9]/g, '').slice(0, 2); setDobMonth(v); if (v.length === 2) dayRef.current?.focus(); }}
                 keyboardType="number-pad"
                 maxLength={2}
                 editable={!loading}
@@ -194,11 +196,12 @@ export default function SignUpScreen({ navigation }: Props) {
             <Text style={styles.dobSlash}>/</Text>
             <View style={[styles.inputWrapper, styles.dobInput]}>
               <TextInput
-                style={styles.input}
+                ref={dayRef}
+                style={[styles.input, styles.dobText]}
                 placeholder="DD"
                 placeholderTextColor={colors.textMuted}
                 value={dobDay}
-                onChangeText={(t) => setDobDay(t.replace(/[^0-9]/g, '').slice(0, 2))}
+                onChangeText={(t) => { const v = t.replace(/[^0-9]/g, '').slice(0, 2); setDobDay(v); if (v.length === 2) yearRef.current?.focus(); }}
                 keyboardType="number-pad"
                 maxLength={2}
                 editable={!loading}
@@ -207,7 +210,8 @@ export default function SignUpScreen({ navigation }: Props) {
             <Text style={styles.dobSlash}>/</Text>
             <View style={[styles.inputWrapper, styles.dobInputYear]}>
               <TextInput
-                style={styles.input}
+                ref={yearRef}
+                style={[styles.input, styles.dobText]}
                 placeholder="YYYY"
                 placeholderTextColor={colors.textMuted}
                 value={dobYear}
@@ -386,6 +390,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
+    minWidth: 0,   // web: an <input> has a ~170px built-in width; without this it spills out of narrow boxes
     color: colors.text,
     fontSize: fontSize.md,
     paddingVertical: spacing.md,
@@ -416,6 +421,10 @@ const styles = StyleSheet.create({
     flex: 1.5,
     marginBottom: 0,
     justifyContent: 'center',
+  },
+  dobText: {
+    textAlign: 'center',
+    paddingHorizontal: 0,
   },
   dobSlash: {
     fontSize: fontSize.lg,

@@ -30,7 +30,7 @@ a{color:var(--primary);text-decoration:none}
 .sidebar-header .badge{font-size:9px;background:var(--primary);color:var(--bg);padding:2px 6px;border-radius:4px;font-weight:800;letter-spacing:1px}
 
 /* Tabs — fixed 4-column grid so labels never overlap/scramble on smaller (laptop) screens */
-.tabs{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--border)}
+.tabs{display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid var(--border)}
 .tab{padding:9px 4px;text-align:center;font-size:9px;font-weight:700;letter-spacing:0.5px;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;transition:color .2s,border-color .2s;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-right:1px solid var(--border)}
 .tab:nth-child(4n){border-right:none}
 .tab:hover{color:var(--text2)}
@@ -207,6 +207,7 @@ a{color:var(--primary);text-decoration:none}
       <div class="tab" data-tab="users" onclick="switchTab('users')">USERS</div>
       <div class="tab" data-tab="drops" onclick="switchTab('drops')">DROPS</div>
       <div class="tab" data-tab="withdrawals" onclick="switchTab('withdrawals')">PAYOUTS</div>
+      <div class="tab" data-tab="email" onclick="switchTab('email')">EMAIL</div>
     </div>
 
     <!-- Overview Panel -->
@@ -338,6 +339,33 @@ a{color:var(--primary);text-decoration:none}
         <button class="mode-btn" onclick="loadWithdrawals('denied')" id="wdDeniedBtn">DENIED</button>
       </div>
       <div id="withdrawalsList"></div>
+    </div>
+
+    <!-- Email: the mailbox the sign-up and password-reset codes are sent from -->
+    <div class="panel" id="panel-email">
+      <div class="section-title">EMAIL FOR PLAYER CODES</div>
+      <div id="emailStatus" style="font-size:12px;margin-bottom:10px;color:var(--text2)">Loading…</div>
+      <p style="font-size:11px;color:var(--text2);line-height:1.5;margin-bottom:10px">
+        Sign-up and password reset codes are emailed from this mailbox. Create one in your IONOS email
+        (for example <b>noreply@coinprowl.com</b>), then enter it here. The password is checked with the mail
+        server and stored only on the CoinProwl server — it is never shown again.
+      </p>
+      <div class="drop-controls">
+        <label>MAILBOX ADDRESS</label>
+        <input type="email" id="mailUser" placeholder="noreply@coinprowl.com" autocomplete="off">
+        <label>MAILBOX PASSWORD</label>
+        <input type="password" id="mailPass" placeholder="password of that mailbox" autocomplete="new-password">
+        <div class="row">
+          <div><label style="font-size:10px">Mail server</label><input type="text" id="mailHost" value="smtp.ionos.com"></div>
+          <div><label style="font-size:10px">Port</label><input type="number" id="mailPort" value="587"></div>
+        </div>
+        <button class="btn btn-primary btn-sm" id="mailSaveBtn" onclick="saveEmailSettings()">SAVE &amp; CHECK</button>
+        <div id="mailSaveMsg" style="font-size:11px;margin:6px 0 12px"></div>
+        <label>SEND A TEST EMAIL TO</label>
+        <input type="email" id="mailTestTo" placeholder="your own email">
+        <button class="btn btn-outline btn-sm" onclick="testEmailSettings()">SEND TEST</button>
+        <div id="mailTestMsg" style="font-size:11px;margin-top:6px"></div>
+      </div>
     </div>
   </div>
 
@@ -948,12 +976,44 @@ function switchTab(name) {
   if (name === 'withdrawals') {
     loadWithdrawals(currentWdStatus || 'pending');
   }
+  if (name === 'email') loadEmailSettings();
   if (name === 'users') {
     // Always reload the user list when opening the tab — it's not on the
     // auto-refresh timer, so this guarantees fresh data (and recovers if the
     // initial login-time load was ever interrupted).
     refreshUsers();
   }
+}
+
+// ---- Email settings ----
+function escapeHtml(t) { return String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function mailMsg(id, text, ok) { const el = document.getElementById(id); el.textContent = text; el.style.color = ok ? 'var(--green, #22c55e)' : 'var(--red, #ef4444)'; }
+async function loadEmailSettings() {
+  const d = await apiFetch('/api/admin/email-settings');
+  const st = document.getElementById('emailStatus');
+  if (!d || d.error) { st.textContent = 'Could not load: ' + ((d && d.error) || 'error'); return; }
+  st.innerHTML = d.configured
+    ? '<span style="color:var(--green, #22c55e)">● Email is working</span> — codes are sent from <b>' + escapeHtml(d.user) + '</b>'
+    : '<span style="color:var(--red, #ef4444)">● Not set up</span> — password reset cannot send codes, and sign-ups skip email verification';
+  if (d.user) document.getElementById('mailUser').value = d.user;
+  document.getElementById('mailHost').value = d.host || 'smtp.ionos.com';
+  document.getElementById('mailPort').value = d.port || 587;
+}
+async function saveEmailSettings() {
+  const btn = document.getElementById('mailSaveBtn'); btn.disabled = true; mailMsg('mailSaveMsg', 'Checking with the mail server…', true);
+  const d = await apiFetch('/api/admin/email-settings', { method: 'POST', body: JSON.stringify({
+    user: document.getElementById('mailUser').value, pass: document.getElementById('mailPass').value,
+    host: document.getElementById('mailHost').value, port: document.getElementById('mailPort').value }) });
+  btn.disabled = false;
+  document.getElementById('mailPass').value = '';
+  if (d && d.ok) { mailMsg('mailSaveMsg', 'Saved. The mail server accepted the login.', true); loadEmailSettings(); }
+  else mailMsg('mailSaveMsg', (d && d.error) || 'Failed', false);
+}
+async function testEmailSettings() {
+  mailMsg('mailTestMsg', 'Sending…', true);
+  const d = await apiFetch('/api/admin/email-settings/test', { method: 'POST', body: JSON.stringify({ to: document.getElementById('mailTestTo').value }) });
+  if (d && d.ok) mailMsg('mailTestMsg', 'Sent — check that inbox (and spam).', true);
+  else mailMsg('mailTestMsg', (d && d.error) || 'Failed', false);
 }
 
 // ---- Utility ----
