@@ -13,7 +13,3 @@ export function isPhoneBrowser(): boolean {
   // iPadOS reports itself as a Mac: tell it apart by touch
   return /Macintosh/.test(ua) && (navigator as any).maxTouchPoints > 1;
 }
-
-/** web: also show the URL-based message ("buy coins in the app") */
-export const WEB_BUY_MESSAGE =
-  'Buying coins on the website is coming soon. For now, buy in from the CoinProwl app, then play here with the same account.';

@@ -28,7 +28,8 @@ import {
   setPurchaseActive,
   type ProductPurchase,
 } from '../../services/iap';
-import { isWeb, WEB_BUY_MESSAGE } from '../../web/platform';
+import { isWeb } from '../../web/platform';
+import { startWebCheckout } from '../../web/paypalWeb';
 
 interface TierOption {
   dollars: number;
@@ -177,10 +178,15 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
     setLoading(true);
     setError(null);
 
-    // website: no in-browser checkout yet — coins are bought in the app, the account is the same
+    // website: PayPal checkout in this same page (comes back to coinprowl.com/play, finished in MapScreen)
     if (isWeb) {
-      setError(WEB_BUY_MESSAGE);
-      setLoading(false);
+      try {
+        const order = await createBuyInOrder(selectedTier.dollars, true);
+        startWebCheckout('buyin', order.orderId, order.approvalUrl);
+      } catch (err: any) {
+        setError(err.message || 'Failed to start payment. Please try again.');
+        setLoading(false);
+      }
       return;
     }
 

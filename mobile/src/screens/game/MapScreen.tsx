@@ -25,6 +25,7 @@ import {
   activateFreeShield,
   createShieldOrder,
   captureShieldOrder,
+  captureBuyInOrder,
   verifyShieldReceipt,
   getCoinDrops,
   collectCoinDrop,
@@ -54,7 +55,8 @@ import { getTierColor } from '../../utils/tierColors';
 import { checkMockLocation } from '../../utils/anticheat';
 
 import DARK_MAP_STYLE from './coinprowl-dark-style.json';
-import { isWeb, WEB_BUY_MESSAGE } from '../../web/platform';
+import { isWeb } from '../../web/platform';
+import { startWebCheckout, takeWebCheckoutReturn } from '../../web/paypalWeb';
 import { holdScreenOn } from '../../web/wakeLock';
 
 // Where the live basemap style is served from. Editing that file on the server
@@ -950,6 +952,33 @@ export default function MapScreen() {
     } catch {}
   }, []);
 
+  // Website: back from PayPal (coinprowl.com/play?pp=ok&kind=...&token=<order>) — finish the purchase here
+  useEffect(() => {
+    if (!isWeb) return;
+    const r = takeWebCheckoutReturn();
+    if (!r) return;
+    if (r.status === 'cancel' || !r.orderId) { Alert.alert('Payment cancelled', 'No money was taken.'); return; }
+    (async () => {
+      try {
+        if (r.kind === 'shield') {
+          const res = await captureShieldOrder(r.orderId);
+          setSession(res.session);
+          Alert.alert('Shield active', 'Your shield is on. You are protected from attacks.');
+        } else {
+          await captureBuyInOrder(r.orderId);
+          await refreshSession();
+          setShowBuyIn(false);
+          Alert.alert('You are in!', 'Payment complete. Your coins are on the map. Good hunting!');
+        }
+      } catch (e: any) {
+        const msg = String(e?.message || '');
+        Alert.alert('Payment', msg.includes('not completed')
+          ? "It looks like the payment wasn't completed. Please try again."
+          : msg || 'Could not finish the payment. If money was taken, contact support with the time of purchase.');
+      }
+    })();
+  }, [refreshSession]);
+
   // While the player has NO active session (e.g. sitting on the buy-in screen),
   // poll for one every few seconds. This lets an admin-granted / pre-loaded
   // balance drop them straight into the game with no app reopen required.
@@ -1338,7 +1367,11 @@ export default function MapScreen() {
     if (remaining <= 0) return;
 
     const purchaseShield = async (type: 'standard' | 'gold') => {
-      if (isWeb) { Alert.alert('Shields', WEB_BUY_MESSAGE); return; }
+      if (isWeb) {
+        try { const order = await createShieldOrder(type, true); startWebCheckout('shield', order.orderId, order.approvalUrl); }
+        catch (e: any) { Alert.alert('Shield', e?.message || 'Could not start the payment. Please try again.'); }
+        return;
+      }
       const productId = type === 'gold' ? SHIELD_PREMIUM_PRODUCT_ID : SHIELD_PRODUCT_ID;
       if (Platform.OS === 'ios' && getLoadedProducts().length > 0) {
         try {

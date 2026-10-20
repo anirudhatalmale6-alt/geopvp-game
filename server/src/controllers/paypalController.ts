@@ -4,11 +4,12 @@ import { query } from '../config/database';
 import { AuthRequest } from '../middleware/auth';
 import { getCoinTier } from '../utils/coins';
 import { getFreeShieldsForBuyIn } from '../utils/rank';
-import { createOrder, captureOrder } from '../services/paypal';
+import { createOrder, captureOrder, WEB_RETURN } from '../services/paypal';
 import { checkLocationBlocked } from '../utils/geofence';
 
 const createBuyInOrderSchema = z.object({
   tierDollars: z.number().int().min(1).max(25),
+  web: z.boolean().optional(),   // website checkout: PayPal returns to coinprowl.com/play
 });
 
 const captureOrderSchema = z.object({
@@ -17,6 +18,7 @@ const captureOrderSchema = z.object({
 
 const createShieldOrderSchema = z.object({
   type: z.enum(['standard', 'gold']).default('standard'),
+  web: z.boolean().optional(),
 });
 
 function formatSession(row: any) {
@@ -58,6 +60,7 @@ export async function createBuyInOrder(req: AuthRequest, res: Response): Promise
       tierDollars.toFixed(2),
       `CoinProwl ${tier.name} Buy-In — ${mapCoins} Prowl Coins`,
       `buyin-${userId}-${Date.now()}`,
+      parsed.data.web ? WEB_RETURN('buyin') : undefined,
     );
 
     // Store pending order in DB
@@ -223,6 +226,7 @@ export async function createShieldOrder(req: AuthRequest, res: Response): Promis
       shieldPrice.toFixed(2),
       shieldLabel,
       `shield-${userId}-${Date.now()}`,
+      parsed.success && parsed.data.web ? WEB_RETURN('shield') : undefined,
     );
 
     await query(

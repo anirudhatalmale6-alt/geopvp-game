@@ -340,8 +340,8 @@ export interface PayPalOrderResult {
   approvalUrl: string;
 }
 
-export async function createBuyInOrder(tierDollars: number): Promise<PayPalOrderResult> {
-  const { data } = await api.post<PayPalOrderResult>('/paypal/buyin/create', { tierDollars });
+export async function createBuyInOrder(tierDollars: number, web = false): Promise<PayPalOrderResult> {
+  const { data } = await api.post<PayPalOrderResult>('/paypal/buyin/create', web ? { tierDollars, web } : { tierDollars });
   return data;
 }
 
@@ -350,8 +350,8 @@ export async function captureBuyInOrder(orderId: string): Promise<{ session: Gam
   return data;
 }
 
-export async function createShieldOrder(type: 'standard' | 'gold' = 'standard'): Promise<PayPalOrderResult> {
-  const { data } = await api.post<PayPalOrderResult>('/paypal/shield/create', { type });
+export async function createShieldOrder(type: 'standard' | 'gold' = 'standard', web = false): Promise<PayPalOrderResult> {
+  const { data } = await api.post<PayPalOrderResult>('/paypal/shield/create', web ? { type, web } : { type });
   return data;
 }
 

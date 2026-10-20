@@ -107,10 +107,18 @@ export interface CreateOrderResult {
   approvalUrl: string;
 }
 
+// The app's in-app browser watches for the api.coinprowl.com return page. The website can't watch another
+// window, so its orders come back to coinprowl.com/play itself (PayPal adds &token=<order id>&PayerID=...).
+export const WEB_RETURN = (kind: string) => ({
+  returnUrl: `https://coinprowl.com/play/?pp=ok&kind=${kind}`,
+  cancelUrl: `https://coinprowl.com/play/?pp=cancel&kind=${kind}`,
+});
+
 export async function createOrder(
   amountUsd: string,
   description: string,
   referenceId: string,
+  urls?: { returnUrl: string; cancelUrl: string },
 ): Promise<CreateOrderResult> {
   const token = await getAccessToken();
 
@@ -136,8 +144,8 @@ export async function createOrder(
         brand_name: 'CoinProwl',
         shipping_preference: 'NO_SHIPPING',
         user_action: 'PAY_NOW',
-        return_url: 'https://api.coinprowl.com/api/paypal/return',
-        cancel_url: 'https://api.coinprowl.com/api/paypal/cancel',
+        return_url: urls?.returnUrl || 'https://api.coinprowl.com/api/paypal/return',
+        cancel_url: urls?.cancelUrl || 'https://api.coinprowl.com/api/paypal/cancel',
       },
     }),
   });
