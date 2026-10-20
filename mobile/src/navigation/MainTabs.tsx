@@ -38,9 +38,10 @@ export default function MainTabs() {
           borderTopWidth: 1,
           // website: the browser's default 49 px left the labels 4 px tall; the iPhone notch / home bar are padded
           // around the whole page in the web index.html (env(safe-area-inset-*)), not here
-          height: Platform.OS === 'ios' ? 82 : Platform.OS === 'web' ? 64 : 62,
-          paddingBottom: Platform.OS === 'ios' ? 24 : 8,
-          paddingTop: 8,
+          // web: each tab gets icon (28) + 5px padding top/bottom + the label line; anything under ~74 clipped it
+          height: Platform.OS === 'ios' ? 82 : Platform.OS === 'web' ? 76 : 62,
+          paddingBottom: Platform.OS === 'ios' ? 24 : Platform.OS === 'web' ? 12 : 8,
+          paddingTop: Platform.OS === 'web' ? 6 : 8,
         },
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: '#4b5563',

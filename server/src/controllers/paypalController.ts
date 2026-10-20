@@ -4,7 +4,7 @@ import { query } from '../config/database';
 import { AuthRequest } from '../middleware/auth';
 import { getCoinTier } from '../utils/coins';
 import { getFreeShieldsForBuyIn } from '../utils/rank';
-import { createOrder, captureOrder, WEB_RETURN } from '../services/paypal';
+import { createOrder, captureOrder, WEB_RETURN, withProcessingFee } from '../services/paypal';
 import { checkLocationBlocked } from '../utils/geofence';
 
 const createBuyInOrderSchema = z.object({
@@ -56,11 +56,13 @@ export async function createBuyInOrder(req: AuthRequest, res: Response): Promise
     const tier = getCoinTier(tierCents);
     const mapCoins = tierDollars * 10;
 
+    const web = !!parsed.data.web;
+    const charge = web ? withProcessingFee(tierDollars) : { totalUsd: tierDollars, feeUsd: 0 };
     const result = await createOrder(
-      tierDollars.toFixed(2),
-      `CoinProwl ${tier.name} Buy-In — ${mapCoins} Prowl Coins`,
+      charge.totalUsd.toFixed(2),
+      `CoinProwl ${tier.name} Buy-In — ${mapCoins} Prowl Coins${web ? ' (incl. processing fee)' : ''}`,
       `buyin-${userId}-${Date.now()}`,
-      parsed.data.web ? WEB_RETURN('buyin') : undefined,
+      web ? WEB_RETURN('buyin') : undefined,
     );
 
     // Store pending order in DB
@@ -222,11 +224,13 @@ export async function createShieldOrder(req: AuthRequest, res: Response): Promis
     const shieldLabel = isGold ? 'CoinProwl Gold Shield — 2 hour protection' : 'CoinProwl Shield — 10 minute protection';
     const orderType = isGold ? 'shield_gold' : 'shield';
 
+    const webShield = parsed.success && !!parsed.data.web;
+    const shieldCharge = webShield ? withProcessingFee(shieldPrice) : { totalUsd: shieldPrice, feeUsd: 0 };
     const result = await createOrder(
-      shieldPrice.toFixed(2),
-      shieldLabel,
+      shieldCharge.totalUsd.toFixed(2),
+      shieldLabel + (webShield ? ' (incl. processing fee)' : ''),
       `shield-${userId}-${Date.now()}`,
-      parsed.success && parsed.data.web ? WEB_RETURN('shield') : undefined,
+      webShield ? WEB_RETURN('shield') : undefined,
     );
 
     await query(

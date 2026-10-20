@@ -56,6 +56,9 @@ head = f'''
     <meta name="description" content="CoinProwl - GPS PvP battle game. Log in and play in your browser." />
     <style>
       html, body {{ background: {BG}; }}
+      /* size the app to the VISIBLE screen: on iPhone Safari 100% reaches under the floating address bar,
+         which hid the bottom tab labels */
+      @supports (height: 100dvh) {{ html, body, #root {{ height: 100dvh; }} }}
       input:focus, textarea:focus {{ outline: none; }}   /* the app draws its own focus border */
       /* iPhone home-screen app: keep the game clear of the notch and the home bar */
       #root {{ box-sizing: border-box; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }}

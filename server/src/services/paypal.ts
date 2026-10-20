@@ -114,6 +114,15 @@ export const WEB_RETURN = (kind: string) => ({
   cancelUrl: `https://coinprowl.com/play/?pp=cancel&kind=${kind}`,
 });
 
+// Website checkouts pass PayPal's fee on to the player (Jet, 20/10/2026): the total is set so that after
+// PayPal takes 2.9% + $0.49 the full buy-in / shield price is left. Shown to the player before paying.
+// The app (mobile/src/web/fees.ts) uses the same formula for the price it displays.
+export function withProcessingFee(amountUsd: number): { totalUsd: number; feeUsd: number } {
+  const cents = Math.round(amountUsd * 100);
+  const total = Math.ceil((cents + 49) / (1 - 0.029));
+  return { totalUsd: total / 100, feeUsd: (total - cents) / 100 };
+}
+
 export async function createOrder(
   amountUsd: string,
   description: string,

@@ -34,6 +34,9 @@
     <meta name="description" content="CoinProwl - GPS PvP battle game. Log in and play in your browser." />
     <style>
       html, body { background: #0a0e1a; }
+      /* size the app to the VISIBLE screen: on iPhone Safari 100% reaches under the floating address bar,
+         which hid the bottom tab labels */
+      @supports (height: 100dvh) { html, body, #root { height: 100dvh; } }
       input:focus, textarea:focus { outline: none; }   /* the app draws its own focus border */
       /* iPhone home-screen app: keep the game clear of the notch and the home bar */
       #root { box-sizing: border-box; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
@@ -47,6 +50,6 @@
     </noscript>
     <!-- The root element for your Expo app. -->
     <div id="root"></div>
-  <script src="/play/_expo/static/js/web/index-5fb72e73ef594975fcc4f0aaa9aa9a53.js" defer></script>
+  <script src="/play/_expo/static/js/web/index-1371c9b364c4a36cd35256ee96882e50.js" defer></script>
 </body>
 </html>

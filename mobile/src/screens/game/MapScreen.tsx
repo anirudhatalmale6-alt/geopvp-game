@@ -57,6 +57,7 @@ import { checkMockLocation } from '../../utils/anticheat';
 import DARK_MAP_STYLE from './coinprowl-dark-style.json';
 import { isWeb } from '../../web/platform';
 import { startWebCheckout, takeWebCheckoutReturn } from '../../web/paypalWeb';
+import { withProcessingFee, usd } from '../../web/fees';
 import { holdScreenOn } from '../../web/wakeLock';
 
 // Where the live basemap style is served from. Editing that file on the server
@@ -1395,11 +1396,11 @@ export default function MapScreen() {
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Shield — $0.99 (10 min)',
+          text: isWeb ? `Shield — ${usd(withProcessingFee(0.99).totalUsd)} incl. fee (10 min)` : 'Shield — $0.99 (10 min)',
           onPress: () => purchaseShield('standard'),
         },
         {
-          text: 'Gold Shield — $4.99 (2 hrs)',
+          text: isWeb ? `Gold Shield — ${usd(withProcessingFee(4.99).totalUsd)} incl. fee (2 hrs)` : 'Gold Shield — $4.99 (2 hrs)',
           onPress: () => purchaseShield('gold'),
         },
       ],

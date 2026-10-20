@@ -30,6 +30,7 @@ import {
 } from '../../services/iap';
 import { isWeb } from '../../web/platform';
 import { startWebCheckout } from '../../web/paypalWeb';
+import { withProcessingFee, usd } from '../../web/fees';
 
 interface TierOption {
   dollars: number;
@@ -412,6 +413,13 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
             </View>
           </View>
 
+          {/* Website: PayPal's processing fee is added on top, shown before paying */}
+          {isWeb && (
+            <Text style={styles.feeNote}>
+              + {usd(withProcessingFee(selectedTier.dollars).feeUsd)} PayPal processing fee · Total {usd(withProcessingFee(selectedTier.dollars).totalUsd)}
+            </Text>
+          )}
+
           {/* Location consent */}
           <TouchableOpacity
             style={[styles.consentRow, locationConsent && styles.consentRowActive]}
@@ -453,7 +461,7 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
               <>
                 <Ionicons name="flash" size={18} color={isDarkTier ? '#fff' : colors.background} style={{ marginRight: 8 }} />
                 <Text style={[styles.buyBtnText, isDarkTier && { color: '#fff' }]}>
-                  ENTER BATTLEFIELD — ${selectedTier.dollars}
+                  ENTER BATTLEFIELD — {isWeb ? usd(withProcessingFee(selectedTier.dollars).totalUsd) : `$${selectedTier.dollars}`}
                 </Text>
               </>
             )}
@@ -476,6 +484,13 @@ export default function BuyInModal({ visible, onClose, onSessionCreated, elimina
 }
 
 const styles = StyleSheet.create({
+  feeNote: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: -6,
+    marginBottom: 10,
+  },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.85)',
