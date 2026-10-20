@@ -22,6 +22,7 @@ export async function getDeviceId(): Promise<string> {
     raw + 'coinprowl-salt-2026',
   );
 
-  cachedDeviceId = hash;
-  return hash;
+  // the website is marked as such: the server keeps the one-phone lock for app logins only
+  cachedDeviceId = Platform.OS === 'web' ? 'web:' + hash : hash;
+  return cachedDeviceId;
 }

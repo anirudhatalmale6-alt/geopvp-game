@@ -7,6 +7,9 @@ import { config } from '../config/env';
 import { AuthRequest } from '../middleware/auth';
 import { sendVerificationEmail, sendPasswordResetEmail, emailConfigured } from '../utils/email';
 
+// device ids sent by the website start with 'web:' (mobile/src/utils/device.ts)
+const isWebDevice = (d?: string | null) => !!d && d.startsWith('web:');
+
 // ---------------------------------------------------------------------------
 // Zod schemas
 // ---------------------------------------------------------------------------
@@ -152,12 +155,14 @@ export async function signup(req: Request, res: Response): Promise<void> {
     const verificationCode = generateCode();
     const codeExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
-    // Insert user with device lock
+    // Insert user with device lock (phones only: a sign-up on the website must not lock the account to a browser,
+    // or the player could never log in from the app)
+    const lockDevice = deviceId && !isWebDevice(deviceId) ? deviceId : null;
     const result = await query(
       `INSERT INTO users (username, email, password_hash, date_of_birth, verification_code, verification_expires, device_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id`,
-      [username.toLowerCase(), email.toLowerCase(), hashedPassword, dateOfBirth, verificationCode, codeExpiry, deviceId || null],
+      [username.toLowerCase(), email.toLowerCase(), hashedPassword, dateOfBirth, verificationCode, codeExpiry, lockDevice],
     );
 
     const userId = result.rows[0].id;
@@ -322,14 +327,18 @@ export async function login(req: Request, res: Response): Promise<void> {
     // Device lock: if account has a registered device, reject logins from other devices
     // Skip device lock for the Apple review test account
     const isReviewAccount = user.email === 'applereview@coinprowl.com';
-    if (!isReviewAccount && user.device_id && deviceId && user.device_id !== deviceId) {
+    // The website (coinprowl.com/play) is the player's second way in, next to their one phone: browser logins
+    // neither hit the phone lock nor claim it. Two devices sending different positions for the same session
+    // are still caught by the GPS speed check.
+    const fromWeb = isWebDevice(deviceId);
+    if (!isReviewAccount && !fromWeb && user.device_id && deviceId && user.device_id !== deviceId) {
       console.warn(`[AntiCheat] Device mismatch for ${user.email}: expected ${user.device_id.slice(0, 8)}..., got ${deviceId.slice(0, 8)}...`);
       res.status(403).json({ error: 'This account is locked to another device. Contact support if you need to transfer.' });
       return;
     }
 
     // If user has no device_id yet (legacy account), bind it now
-    if (!isReviewAccount && !user.device_id && deviceId) {
+    if (!isReviewAccount && !fromWeb && !user.device_id && deviceId) {
       await query('UPDATE users SET device_id = $1 WHERE id = $2', [deviceId, user.id]);
     }
 
