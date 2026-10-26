@@ -10,8 +10,10 @@ import { setupIAP, loadProducts, teardownIAP } from './src/services/iap';
 import GeoRestrictedScreen from './src/screens/game/GeoRestrictedScreen';
 import { AlertHost, installWebAlert } from './src/web/webAlert';
 import { isWeb, isPhoneBrowser } from './src/web/platform';
+import { rememberRefFromUrl } from './src/api/referrals';
 
 installWebAlert();
+rememberRefFromUrl();   // website: coinprowl.com/r/CODE lands on /play/?ref=CODE — keep it for sign-up
 
 import LoginScreen from './src/screens/auth/LoginScreen';
 import SignUpScreen from './src/screens/auth/SignUpScreen';

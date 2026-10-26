@@ -6,6 +6,7 @@ import { getCoinTier } from '../utils/coins';
 import { getFreeShieldsForBuyIn } from '../utils/rank';
 import { createOrder, captureOrder, WEB_RETURN, withProcessingFee } from '../services/paypal';
 import { checkLocationBlocked } from '../utils/geofence';
+import { onPaidBuyInSafe } from '../services/referrals';
 
 const createBuyInOrderSchema = z.object({
   tierDollars: z.number().int().min(1).max(25),
@@ -191,6 +192,10 @@ export async function captureBuyInOrder(req: AuthRequest, res: Response): Promis
        ON CONFLICT (user_id) DO UPDATE SET balance = prowl_balances.balance + $2, updated_at = now()`,
       [userId, mapCoins],
     );
+
+    // invite rewards (10% to the inviter, welcome coins to a new friend) — never fails the purchase
+    const welcome = await onPaidBuyInSafe(userId, tierCents, session.id, `paypal:${orderId}`);
+    if (welcome) session.map_coins = Number(session.map_coins) + welcome;
 
     res.json({ session: formatSession(session) });
   } catch (err: any) {

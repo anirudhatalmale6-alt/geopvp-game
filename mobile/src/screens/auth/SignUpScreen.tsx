@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fontSize, spacing, borderRadius, fonts } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
+import { rememberedRef, forgetRef } from '../../api/referrals';
 
 const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'https://api.coinprowl.com/api';
 
@@ -34,6 +35,7 @@ export default function SignUpScreen({ navigation }: Props) {
   const [dobMonth, setDobMonth] = useState('');
   const [dobDay, setDobDay] = useState('');
   const [dobYear, setDobYear] = useState('');
+  const [referralCode, setReferralCode] = useState(() => rememberedRef());   // website: from an invite link
   const dayRef = useRef<TextInput>(null);
   const yearRef = useRef<TextInput>(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -104,14 +106,16 @@ export default function SignUpScreen({ navigation }: Props) {
           email: email.trim().toLowerCase(),
           password,
           dateOfBirth,
+          ...(referralCode.trim() ? { referralCode: referralCode.trim() } : {}),
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Sign up failed');
+        throw new Error(data.message || data.error || 'Sign up failed');   // the server sends `error`
       }
+      forgetRef();
 
       if (data.token) {
         await login(email.trim().toLowerCase(), password);
@@ -273,6 +277,21 @@ export default function SignUpScreen({ navigation }: Props) {
                 color={colors.textSecondary}
               />
             </TouchableOpacity>
+          </View>
+
+          {/* Friend's invite code (optional) — filled in automatically from an invite link on the website */}
+          <View style={styles.inputWrapper}>
+            <Ionicons name="gift-outline" size={20} color={colors.primary} style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Invite code (optional)"
+              placeholderTextColor={colors.textMuted}
+              value={referralCode}
+              onChangeText={(t) => setReferralCode(t.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16))}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              editable={!loading}
+            />
           </View>
 
           {/* Password Requirements Box */}

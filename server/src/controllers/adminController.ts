@@ -1039,3 +1039,38 @@ export async function testEmailSettings(req: AuthRequest, res: Response): Promis
     res.status(400).json({ error: 'Sending failed: ' + String(e && (e.response || e.message) || e).slice(0, 200) });
   }
 }
+
+// ---------------------------------------------------------------------------
+// REFERRALS tab: who invited whom, what has been paid out
+// ---------------------------------------------------------------------------
+export async function getReferralStats(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    if (!(await requireAdmin(req, res))) return;
+    const [totals, top, recent] = await Promise.all([
+      query(
+        `SELECT (SELECT COUNT(*)::int FROM users WHERE referred_by IS NOT NULL) AS referred_users,
+                (SELECT COUNT(DISTINCT referred_by)::int FROM users WHERE referred_by IS NOT NULL) AS inviters,
+                (SELECT COALESCE(SUM(reward_cents),0)::int FROM referral_rewards) AS paid_cents,
+                (SELECT COALESCE(SUM(buyin_cents),0)::int FROM referral_rewards) AS referred_buyin_cents`,
+      ),
+      query(
+        `SELECT u.username, u.referral_code,
+                (SELECT COUNT(*)::int FROM users f WHERE f.referred_by = u.id) AS friends,
+                COALESCE((SELECT SUM(r.reward_cents)::int FROM referral_rewards r WHERE r.referrer_id = u.id), 0) AS earned_cents,
+                COALESCE((SELECT SUM(r.buyin_cents)::int FROM referral_rewards r WHERE r.referrer_id = u.id), 0) AS buyin_cents
+           FROM users u
+          WHERE EXISTS (SELECT 1 FROM users f WHERE f.referred_by = u.id)
+          ORDER BY earned_cents DESC, friends DESC LIMIT 25`,
+      ),
+      query(
+        `SELECT r.created_at, r.buyin_cents, r.reward_cents, i.username AS inviter, f.username AS friend
+           FROM referral_rewards r JOIN users i ON i.id = r.referrer_id JOIN users f ON f.id = r.friend_id
+          ORDER BY r.created_at DESC LIMIT 30`,
+      ),
+    ]);
+    res.json({ totals: totals.rows[0], top: top.rows, recent: recent.rows });
+  } catch (err) {
+    console.error('getReferralStats error:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+}

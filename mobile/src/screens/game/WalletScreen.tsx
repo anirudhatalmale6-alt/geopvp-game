@@ -59,6 +59,8 @@ function txIcon(type: string): { name: string; color: string } {
     case 'salvage':      return { name: 'wallet-outline',    color: colors.success };
     case 'bonus_sweep':  return { name: 'gift-outline',      color: colors.success };
     case 'daily_bonus':  return { name: 'sunny-outline',     color: '#ffd700' };
+    case 'referral':     return { name: 'people',            color: colors.success };
+    case 'referral_welcome': return { name: 'gift-outline',  color: '#ffd700' };
     default:             return { name: 'swap-horizontal',   color: colors.textSecondary };
   }
 }
@@ -359,7 +361,7 @@ export default function WalletScreen() {
         renderItem={({ item }) => {
           const icon = txIcon(item.type);
           const isPositive = item.amount > 0;
-          const hideDollar = item.type === 'attack_loss' || item.type === 'shield';
+          const hideDollar = item.type === 'attack_loss' || item.type === 'shield' || item.type === 'referral_welcome';   // welcome = map coins, not dollars
           return (
             <View style={styles.txItem}>
               <View style={[styles.txIcon, { backgroundColor: icon.color + '20' }]}>

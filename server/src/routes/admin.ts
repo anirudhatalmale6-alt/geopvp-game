@@ -27,6 +27,7 @@ import {
   getEmailSettings,
   saveEmailSettings,
   testEmailSettings,
+  getReferralStats,
 } from '../controllers/adminController';
 
 const router = Router();
@@ -57,6 +58,7 @@ router.post('/withdrawals/:id/deny', denyWithdrawal);
 router.get('/email-settings', getEmailSettings);
 router.post('/email-settings', saveEmailSettings);
 router.post('/email-settings/test', testEmailSettings);
+router.get('/referrals', getReferralStats);
 router.post('/login', adminLogin);
 router.post('/logout', adminLogout);
 

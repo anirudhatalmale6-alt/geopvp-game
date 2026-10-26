@@ -14,6 +14,9 @@ import iapRoutes from './routes/iap';
 import { setupGameSocket } from './socket/gameSocket';
 import { setIO } from './socket/ioInstance';
 import { startBotAI } from './bot/botAI';
+import referralRoutes from './routes/referrals';
+import { REFERRAL_SCHEMA } from './services/referrals';
+import { query as dbQuery } from './config/database';
 
 const app = express();
 
@@ -37,6 +40,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/paypal', paypalRoutes);
 app.use('/api/iap', iapRoutes);
+app.use('/api/referrals', referralRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {
@@ -81,6 +85,14 @@ app.use('/admin', express.static(adminPath));
 const downloadPage = path.resolve(__dirname, '../public/download/index.html');
 app.get(['/download', '/get', '/app'], (_req, res) => {
   res.sendFile(downloadPage);
+});
+
+// ---------------------------------------------------------------------------
+// Invite links: coinprowl.com/r/CODE -> the game in the browser with the code filled in on sign-up
+// ---------------------------------------------------------------------------
+app.get('/r/:code', (req, res) => {
+  const code = String(req.params.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
+  res.redirect(302, code ? `/play/?ref=${code}` : '/play/');
 });
 
 // ---------------------------------------------------------------------------
@@ -144,5 +156,10 @@ startBotAI(io);
 server.listen(config.port, () => {
   console.log(`[${config.appName}] Server running on port ${config.port}`);
 });
+
+// referral columns/table (idempotent; the schema has no other migration runner on the live server)
+dbQuery(REFERRAL_SCHEMA)
+  .then(() => console.log('[Referral] schema ready'))
+  .catch((err) => console.error('[Referral] schema setup FAILED — referral endpoints will error:', err));
 
 export { app, server, io };

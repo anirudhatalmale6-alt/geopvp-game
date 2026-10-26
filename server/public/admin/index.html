@@ -208,6 +208,7 @@ a{color:var(--primary);text-decoration:none}
       <div class="tab" data-tab="drops" onclick="switchTab('drops')">DROPS</div>
       <div class="tab" data-tab="withdrawals" onclick="switchTab('withdrawals')">PAYOUTS</div>
       <div class="tab" data-tab="email" onclick="switchTab('email')">EMAIL</div>
+      <div class="tab" data-tab="referrals" onclick="switchTab('referrals')">INVITES</div>
     </div>
 
     <!-- Overview Panel -->
@@ -339,6 +340,16 @@ a{color:var(--primary);text-decoration:none}
         <button class="mode-btn" onclick="loadWithdrawals('denied')" id="wdDeniedBtn">DENIED</button>
       </div>
       <div id="withdrawalsList"></div>
+    </div>
+
+    <!-- Invites: referral program (10% of a friend's buy-ins for 90 days, in Sweep coins) -->
+    <div class="panel" id="panel-referrals">
+      <div class="section-title">INVITE PROGRAM</div>
+      <div class="stats-grid" id="refTotals"></div>
+      <div class="section-title" style="margin-top:12px">TOP INVITERS</div>
+      <div id="refTop" style="font-size:11px"></div>
+      <div class="section-title" style="margin-top:12px">LATEST REWARDS</div>
+      <div id="refRecent" style="font-size:11px"></div>
     </div>
 
     <!-- Email: the mailbox the sign-up and password-reset codes are sent from -->
@@ -977,12 +988,32 @@ function switchTab(name) {
     loadWithdrawals(currentWdStatus || 'pending');
   }
   if (name === 'email') loadEmailSettings();
+  if (name === 'referrals') loadReferrals();
   if (name === 'users') {
     // Always reload the user list when opening the tab — it's not on the
     // auto-refresh timer, so this guarantees fresh data (and recovers if the
     // initial login-time load was ever interrupted).
     refreshUsers();
   }
+}
+
+// ---- Invites (referrals) ----
+const cents = c => '$' + (Number(c || 0) / 100).toFixed(2);
+async function loadReferrals() {
+  const d = await apiFetch('/api/admin/referrals');
+  if (!d || d.error) { document.getElementById('refTotals').textContent = 'Could not load: ' + ((d && d.error) || 'error'); return; }
+  const t = d.totals || {};
+  const card = (v, l, cls) => '<div class="stat-card"><div class="stat-value ' + (cls || '') + '">' + v + '</div><div class="stat-label">' + l + '</div></div>';
+  document.getElementById('refTotals').innerHTML =
+    card(t.referred_users || 0, 'INVITED PLAYERS', 'green') + card(t.inviters || 0, 'INVITERS', '') +
+    card(cents(t.referred_buyin_cents), 'BUY-INS BY INVITED', 'gold') + card(cents(t.paid_cents), 'REWARDS PAID', 'red');
+  const row = (a, b, c) => '<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)"><span>' + a + '</span><span style="color:var(--text2)">' + b + '</span><span>' + c + '</span></div>';
+  document.getElementById('refTop').innerHTML = (d.top || []).length
+    ? d.top.map(u => row('<b>' + escapeHtml(u.username) + '</b> <span style="color:var(--text3)">' + escapeHtml(u.referral_code || '') + '</span>', u.friends + ' friends', cents(u.earned_cents))).join('')
+    : '<p style="color:var(--text3)">No invites yet.</p>';
+  document.getElementById('refRecent').innerHTML = (d.recent || []).length
+    ? d.recent.map(r => row(escapeHtml(r.inviter) + ' ← ' + escapeHtml(r.friend), cents(r.buyin_cents) + ' buy-in', '+' + cents(r.reward_cents))).join('')
+    : '<p style="color:var(--text3)">No rewards paid yet.</p>';
 }
 
 // ---- Email settings ----

@@ -1,4 +1,5 @@
 import { pool } from '../config/database';
+import { REFERRAL_SCHEMA } from '../services/referrals';
 
 const migration = `
 CREATE TABLE IF NOT EXISTS users (
@@ -130,7 +131,7 @@ CREATE INDEX IF NOT EXISTS idx_attacks_attacker ON attacks(attacker_id);
 CREATE INDEX IF NOT EXISTS idx_attacks_defender ON attacks(defender_id);
 CREATE INDEX IF NOT EXISTS idx_coin_drops_active ON coin_drops(is_active) WHERE is_active = true;
 CREATE INDEX IF NOT EXISTS idx_withdrawals_status ON withdrawals(status);
-`;
+` + REFERRAL_SCHEMA;
 
 async function migrate() {
   console.log('Running database migration...');

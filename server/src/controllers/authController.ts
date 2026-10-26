@@ -6,6 +6,7 @@ import { query } from '../config/database';
 import { config } from '../config/env';
 import { AuthRequest } from '../middleware/auth';
 import { sendVerificationEmail, sendPasswordResetEmail, emailConfigured } from '../utils/email';
+import { linkReferral } from '../services/referrals';
 
 // device ids sent by the website start with 'web:' (mobile/src/utils/device.ts)
 const isWebDevice = (d?: string | null) => !!d && d.startsWith('web:');
@@ -28,6 +29,7 @@ const signupSchema = z.object({
     .regex(/[0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/, 'Password must contain at least one number or symbol'),
   dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date of birth must be YYYY-MM-DD'),
   deviceId: z.string().min(1, 'Device ID is required').optional(),
+  referralCode: z.string().max(32).optional(),
 });
 
 const verifyEmailSchema = z.object({
@@ -172,6 +174,11 @@ export async function signup(req: Request, res: Response): Promise<void> {
       'INSERT INTO wallets (user_id, balance) VALUES ($1, 0)',
       [userId],
     );
+
+    // joined with a friend's invite code (a bad code never blocks the sign-up)
+    if (parsed.data.referralCode) {
+      try { await linkReferral(userId, parsed.data.referralCode); } catch (e) { console.error('[Referral] link at signup failed', e); }
+    }
 
     // In dev mode (no real SMTP), auto-verify and return tokens
     const devMode = !emailConfigured();

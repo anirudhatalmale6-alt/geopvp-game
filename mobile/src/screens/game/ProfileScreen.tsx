@@ -21,6 +21,7 @@ import { api } from '../../api/client';
 import { getCombatStats, CombatStats, getWallet, getBlockedUsers, unblockUser, BlockedUser } from '../../api/game';
 import { getNotificationPermissionStatus, registerForPushNotifications } from '../../services/notifications';
 import { deleteAccount as deleteAccountApi } from '../../api/auth';
+import InviteFriendsCard from '../../components/InviteFriendsCard';
 
 // ---------------------------------------------------------------------------
 // Avatar color from username
@@ -380,6 +381,10 @@ export default function ProfileScreen() {
           </View>
         )}
       </View>
+
+      {/* Invite friends (referrals) */}
+      <Text style={styles.sectionTitle}>INVITE FRIENDS</Text>
+      <InviteFriendsCard />
 
       {/* Stats grid */}
       <Text style={styles.sectionTitle}>COMBAT STATS</Text>

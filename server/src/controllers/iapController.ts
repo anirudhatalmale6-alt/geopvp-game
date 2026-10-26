@@ -6,6 +6,7 @@ import { getCoinTier } from '../utils/coins';
 import { getFreeShieldsForBuyIn } from '../utils/rank';
 import { checkLocationBlocked } from '../utils/geofence';
 import { looksLikeJws, verifyStoreKit2Jws } from '../utils/appleJws';
+import { onPaidBuyInSafe } from '../services/referrals';
 
 const APPLE_VERIFY_URL = 'https://buy.itunes.apple.com/verifyReceipt';
 const APPLE_SANDBOX_URL = 'https://sandbox.itunes.apple.com/verifyReceipt';
@@ -243,6 +244,10 @@ export async function verifyBuyIn(req: AuthRequest, res: Response): Promise<void
       res.status(200).json({ alreadyProcessed: true });
       return;
     }
+
+    // invite rewards (10% to the inviter, welcome coins to a new friend) — never fails the purchase
+    const welcome = await onPaidBuyInSafe(userId, tierCents, session.id, `apple:${transactionId}`);
+    if (welcome) session.map_coins = Number(session.map_coins) + welcome;
 
     res.json({ session: formatSession(session) });
   } catch (err: any) {
