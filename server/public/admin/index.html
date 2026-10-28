@@ -824,6 +824,7 @@ function renderUsers() {
         <div class="user-name">${u.username} ${u.isAdmin ? '<span class="admin-badge">ADMIN</span>' : ''}${tag}</div>
         <div class="user-email">${u.email}</div>
       </div>
+      <button class="btn btn-outline btn-sm" style="width:auto;padding:5px 8px;flex-shrink:0;margin-right:6px" title="Player got a new phone / reinstalled the app and sees 'locked to another device': clear the lock so their next login sets the new phone" onclick="resetDevice('${u.id}')">📱</button>
       ${right}
     </div>`;
   }).join('') || `<p style="color:var(--text3);font-size:11px;text-align:center;padding:20px">${
@@ -831,6 +832,15 @@ function renderUsers() {
       ? (usersLoaded ? 'No users yet' : 'Loading users…')
       : 'No accounts match this filter'
   }</p>`;
+}
+
+// "This account is locked to another device": a new phone or a reinstalled app gets a new device id.
+async function resetDevice(userId) {
+  const u = usersById[userId];
+  if (!u) { toast('Account not found — refresh and try again'); return; }
+  if (!confirm(`Reset the phone lock for ${u.username}?\n\nUse this when a player got a new phone or reinstalled the app and sees "This account is locked to another device". Their next login from the app sets their phone.`)) return;
+  const d = await apiFetch('/api/admin/users/' + userId + '/reset-device', { method: 'POST' });
+  toast(d && d.ok ? `Phone lock cleared for ${u.username}` : ((d && d.error) || 'Failed'));
 }
 
 // Pre-load a starting coin balance onto an account before they play.
